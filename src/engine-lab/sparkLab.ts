@@ -179,7 +179,7 @@ export async function startSparkLab(display: HTMLCanvasElement, o: LabOptions): 
       } finally {
         busy--
       }
-      return { which: 'spark', backend: 'webgl', blobs, deform: 0, project: 0, order: 0, draw: q(t, 0.5), cpuSkin: 0, cpuSort: 0 }
+      return { which: 'spark', backend: 'webgl', blobs, deform: 0, project: 0, order: 0, draw: q(t, 0.5), cpuSkin: 0, cpuSort: 0, gpuClock: false }
     },
     dispose() {
       stopped = true

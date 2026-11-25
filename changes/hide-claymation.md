@@ -1,0 +1,2 @@
+- Claymation is hidden from the style pickers while it is reworked; links with `?style=clay` and saved scenes still open in it.
+- Engine: `HIDDEN_STYLES`, `PICKED_STYLES` and `offered` say which styles a picker offers.

@@ -1,0 +1,1 @@
+Time-lapse, a new experiment (unlisted for now): one scene through a day in each of the four seasons in about thirty seconds, lit live by each season's sun and moon, with the shared weather, winter snow that piles up and melts, and lamps that come on at dusk.

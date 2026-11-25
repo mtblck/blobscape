@@ -75,9 +75,14 @@ export const BLOCK_SIZES = { min: 1, max: 8 }
 /** A subject cut on no grid gets blocks as if its longest side were this many cells. */
 export const BLOCK_SPAN = 96
 
-/** The side of one cell for a subject: the grid it was cut on, or a share of its longest side. */
-export function gridOf(spacing: number | undefined, centers: ArrayLike<number>, count: number): number {
+/**
+ * The side of one cell for a subject: the grid the page says it was cut on, else the grid the cut records (`Built.grid`,
+ * from voxel.ts), else a share of its longest side. A guessed cell that is not the cut's own grid falls between the
+ * blobs' rows and leaves rows of empty cells, so blocks drawn from a cut always snap to its grid.
+ */
+export function gridOf(spacing: number | undefined, centers: ArrayLike<number>, count: number, own?: number): number {
   if (spacing && spacing > 0) return spacing
+  if (own && own > 0) return own
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
   for (let i = 0; i < count * 3; i++) { lo[i % 3] = Math.min(lo[i % 3], centers[i]); hi[i % 3] = Math.max(hi[i % 3], centers[i]) }
   const longest = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])

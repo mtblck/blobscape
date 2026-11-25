@@ -46,6 +46,8 @@ const initial: LabOptions = {
   cut: params.get('cut') === 'clean' ? 'clean' : params.get('cut') === 'rough' ? 'rough' : undefined,
   sh: params.get('sh') === '1',
   radix: params.get('sort') === 'radix',
+  exact: params.get('shape') === 'exact',
+  peel: params.has('peel') ? Math.max(0, Math.min(6, Number(params.get('peel')) || 0)) : undefined,
   offscreen: params.get('offscreen') === '1',
 }
 const COUNTS = [20000, 100000, 200000, 500000]
@@ -76,6 +78,25 @@ function App() {
   const canvas = useRef<HTMLCanvasElement>(null)
   const [opts, setOpts] = useState(initial)
   const [lab, setLab] = useState<Lab>()
+  // drag to turn the view, pinch (or the wheel) to come nearer: mouse and touch alike
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const spread = () => { const [a, b] = [...pointers.current.values()]; return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0 }
+  const onDown = (e: React.PointerEvent) => { e.currentTarget.setPointerCapture(e.pointerId); pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY }) }
+  const onUp = (e: React.PointerEvent) => { pointers.current.delete(e.pointerId) }
+  const onMove = (e: React.PointerEvent) => {
+    const was = pointers.current.get(e.pointerId)
+    if (!was || !lab) return
+    const before = spread()
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const o = lab.orbit
+    if (pointers.current.size >= 2) {
+      const after = spread()
+      if (before > 0 && after > 0) lab.orbit = { ...o, distance: Math.max(0.3, Math.min(40, o.distance * before / after)) }
+    } else {
+      lab.orbit = { ...o, azimuth: o.azimuth - (e.clientX - was.x) * 0.4, elevation: Math.max(-80, Math.min(85, o.elevation + (e.clientY - was.y) * 0.3)) }
+    }
+  }
+  const onWheel = (e: React.WheelEvent) => { if (lab) lab.orbit = { ...lab.orbit, distance: Math.max(0.3, Math.min(40, lab.orbit.distance * Math.exp(e.deltaY * 0.001))) } }
   const [error, setError] = useState<string>()
   const [results, setResults] = useState<BenchResult[]>([])
   const [timing, setTiming] = useState(false)
@@ -87,7 +108,7 @@ function App() {
     let live: Lab | undefined, gone = false
     setLab(undefined)
     setError(undefined)
-    const q = new URLSearchParams({ which: opts.which, n: String(opts.count), walk: opts.walk ? '1' : '0', mode: opts.mode, webgl: opts.webgl ? '1' : '0', herd: String(opts.herd), lod: opts.lod ? '1' : '0', edits: opts.edits ? '1' : '0', sh: opts.sh ? '1' : '0', sort: opts.radix ? 'radix' : 'bins', ...(opts.offscreen ? { offscreen: '1' } : {}) })
+    const q = new URLSearchParams({ which: opts.which, n: String(opts.count), walk: opts.walk ? '1' : '0', mode: opts.mode, webgl: opts.webgl ? '1' : '0', herd: String(opts.herd), lod: opts.lod ? '1' : '0', edits: opts.edits ? '1' : '0', sh: opts.sh ? '1' : '0', sort: opts.radix ? 'radix' : 'bins', ...(opts.exact ? { shape: 'exact' } : {}), ...(opts.peel !== undefined ? { peel: String(opts.peel) } : {}), ...(opts.offscreen ? { offscreen: '1' } : {}) })
     history.replaceState(null, '', `?${q}`)
     startLab(canvas.current!, opts).then((l) => {
       if (gone) { l.dispose(); return }
@@ -168,7 +189,7 @@ function App() {
           <p className="mt-1 max-w-[65ch] text-ink-muted">A blob fox, drawn by Blobscape's own engine, by three.js's built-in splat renderer or by Spark with its own skinning, and timed. Open it on a phone and press Time it.</p>
         </div>
         <div className="case relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-[#0d0f16] sm:aspect-[16/9]">
-          <canvas key={`${opts.which}-${opts.webgl}-${opts.count}-${opts.herd}-${opts.lod}-${opts.edits}-${opts.sh}-${opts.radix}-${opts.which === 'spark' ? opts.mode : ''}`} ref={canvas} className="h-full w-full touch-none" aria-label="A blob fox trotting on the spot" />
+          <canvas key={`${opts.which}-${opts.webgl}-${opts.count}-${opts.herd}-${opts.lod}-${opts.edits}-${opts.sh}-${opts.radix}-${opts.which === 'spark' ? opts.mode : ''}`} ref={canvas} className="h-full w-full cursor-grab touch-none active:cursor-grabbing" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel} aria-label="A blob fox trotting on the spot" />
           <p className="absolute bottom-2.5 left-3 text-sm text-white/70" aria-live="polite">{error ? `Couldn't start: ${error}` : lab ? lab.info : 'Starting…'}</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -214,7 +235,7 @@ function App() {
           <section aria-labelledby="steps-title" className="flex flex-col gap-2">
             <h2 id="steps-title" className="text-lg font-semibold text-ink">Each step</h2>
             <p className="text-sm text-ink-muted">
-              Milliseconds per step of a walking frame, each waited for on its own (median of 20).
+              Milliseconds per step of a walking frame (median of 20): read off the GPU's own clock where the browser offers one (marked GPU clock), else each waited for on its own.
               Move, project and sort run on the GPU with WebGPU; with WebGL each blob is moved as it's drawn, and the CPU moves centers and sorts.
             </p>
             <div className="overflow-x-auto">
@@ -223,7 +244,7 @@ function App() {
               <tbody>
                 {steps.map((r, i) => (
                   <tr key={i} className="border-t border-rule">
-                    <td className="py-1 pr-3">{NAMES[r.which as Which] ?? r.which} · {r.backend}</td>
+                    <td className="py-1 pr-3">{NAMES[r.which as Which] ?? r.which} · {r.backend}{r.gpuClock ? ' · GPU clock' : ''}</td>
                     <td className="pr-3">{r.blobs.toLocaleString()}</td>
                     <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.deform.toFixed(1) : '–'}</td>
                     <td className="pr-3">{r.backend === 'webgpu' && r.which === 'engine' ? r.project.toFixed(1) : '–'}</td>

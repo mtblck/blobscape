@@ -1,7 +1,7 @@
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import { Chip, Field } from '../shared/ui.tsx'
 import type { Palette } from './diorama/scene.ts'
-import { STYLES, isPixelStyle, type Style } from './diorama/styles.ts'
+import { PICKED_STYLES, STYLES, isPixelStyle, type Style } from './diorama/styles.ts'
 import { GlitchControls } from './diorama/GlitchControls.tsx'
 import type { GlitchChoice } from './glitchLooks.ts'
 import type { Finish, PixelSettings } from './styleSettings.ts'
@@ -43,7 +43,7 @@ export function StyleControls({ style, onStyle, pixel, setPixel, glitch, setGlit
     <>
       <Field label="Drawn as">
         <div className="flex flex-wrap gap-1.5" data-testid={`${prefix}-styles`}>
-          {STYLES.map((l) => <Chip key={l.id} active={style === l.id} onClick={() => onStyle(l.id)}>{l.label}</Chip>)}
+          {PICKED_STYLES.map((l) => <Chip key={l.id} active={style === l.id} onClick={() => onStyle(l.id)}>{l.label}</Chip>)}
         </div>
         <p className="mt-1.5 text-xs text-ink-faint">{STYLES.find((l) => l.id === style)?.note}{more ? ` ${more}` : ''}</p>
       </Field>

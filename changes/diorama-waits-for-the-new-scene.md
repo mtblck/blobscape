@@ -1,0 +1,1 @@
+Diorama keeps its waiting mark up until the scene it has just cut is really drawn, instead of dropping it while a phone still had the buffers to fill and the cubes and shaders to build; switching scenes also copies the old picture less often and makes a scene's cubes once rather than twice.

@@ -21,6 +21,8 @@ export interface WashLook {
   paper?: readonly [number, number, number]
   /** A wash behind the subject, top and bottom (sRGB 0–1), laid short of the paper's edge. Left out, the paper is bare. */
   sky?: readonly [readonly [number, number, number], readonly [number, number, number]]
+  /** Whether the wash behind stops short of the paper's edge, leaving a border of bare paper (true). False lays it to the edge. */
+  border?: boolean
 }
 
 /** The paper (sRGB 0–1): a warm white. */

@@ -67,6 +67,9 @@ const swung = (orbit: Orbit, swing: number, loop: number, t: number): Orbit => (
  * by the engine's pixel mode (splat-engine/pixelPass.ts): the scene rendered
  * small, snapped to a palette, and scaled up in whole pixels.
  */
+/** How often at most the picture on show is copied while the next scene is cut, for the transition to start from (ms). */
+const KEEP_EVERY = 250
+
 /** What one blob holds: a center, three sizes, a facing, a color and an opacity, each number four bytes. */
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
@@ -85,6 +88,12 @@ export function PixelDiorama() {
   // water mirrors the scene where the GPU sorts (WebGPU); `?mirror=0` leaves it the sky alone
   const mirrored = stage?.backend === 'webgpu' && new URLSearchParams(location.search).get('mirror') !== '0'
   const [drawn, setDrawn] = useState(false)
+  // Whether a frame holding the scene that is in the view now has really been drawn. Handing a cut scene to the stage
+  // is not the end of the wait: its buffers have to be filled, its cubes made and its shaders built, which on a phone
+  // took seconds after the waiting mark had gone (Matt, 2026-11-25), so the mark stays up until `shown()` resolves.
+  const [seenBuilt, setSeenBuilt] = useState<Built>()
+  /** The built scene the stage was last given, so only a new cut waits for a frame (a switch like Rock the view does not). */
+  const given = useRef<Built | undefined>(undefined)
   const [failed, setFailed] = useState<string>()
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
   const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
@@ -237,6 +246,8 @@ export function PixelDiorama() {
     return w
   }, [weathered, calm, offscreen])
   const shown = useMemo(() => dress(cutShown), [dress, cutShown])
+  // told by which cut was seen, not by a switch: the render that first holds a new cut must already count it as not yet drawn
+  const arrived = !!scene && seenBuilt === scene.built
   // What the view is drawn in lags what is picked while the scene is cut again for it (a style that lights the scene
   // itself wants it cut with no light baked in; a time of day wants its lamps lit or out): the picture on show keeps
   // its own style until the new cut is on the stage, so the bare blobs never show in between (Matt saw them, 2026-11-21)
@@ -339,6 +350,11 @@ export function PixelDiorama() {
     const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
     const own = ownClouds(scene.of)
     stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(flames ? [flames.actor] : []), ...(fall?.actors ?? [])])
+    // a new cut is not on screen until a frame holding it is through the GPU: the waiting mark stays up until then
+    if (given.current !== scene.built) {
+      const mine = given.current = scene.built
+      void stage.shown().then(() => { if (given.current === mine) setSeenBuilt(mine) })
+    }
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
     wet.current = pond && (() => {
@@ -419,6 +435,11 @@ export function PixelDiorama() {
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
   const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, palette: (shown.of ?? shown).palette.colors, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined }, drawnKept)
+  // The color behind the canvas is the new scene's as soon as its cut is in hand, a moment before the canvas holds
+  // anything but the old scene: it showed behind the old picture, then the transition laid the old picture and its
+  // own backdrop back over it, then gave way to the new (Matt saw the backdrop change, change back and change again,
+  // 2026-11-25). So it waits with the waiting mark, until a frame of the new scene is drawn.
+  const ground = useHeld(drawing.ground, arrived)
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -679,8 +700,13 @@ export function PixelDiorama() {
     sheet.height = cv.height
     const ctx = sheet.getContext('2d', { alpha: false })!
     const kept = { sheet, got: false, stop: () => {} }
+    // Copying the view costs a read of the whole canvas, and the picture hardly moves while the new scene is cut:
+    // at most one copy this often, so the wait is the cut's own and not the copies' (Matt, 2026-11-25).
+    let last = 0
     const copy = () => {
-      if (sheet.width < 2) return
+      const now = performance.now()
+      if (sheet.width < 2 || (kept.got && now - last < KEEP_EVERY)) return
+      last = now
       paintView(ctx, box, sheet.width, sheet.height, (el) => (el === overlayCanvas.current ? undefined : el))
       kept.got = true
     }
@@ -794,8 +820,8 @@ export function PixelDiorama() {
     }
   }
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
-  const loading = !failed && (!drawn || !scene)
-  const loadingLabel = stage ? 'Cutting the scene into blobs…' : 'Starting the splat engine…'
+  const loading = !failed && (!drawn || !scene || !arrived)
+  const loadingLabel = stage ? (scene ? 'Drawing the scene…' : 'Cutting the scene into blobs…') : 'Starting the splat engine…'
 
   return (
     <div className="pb-4">
@@ -827,7 +853,7 @@ export function PixelDiorama() {
           </ViewPopup>
         }
         view={<>
-              {drawing.ground && <div aria-hidden className="absolute inset-0" style={{ background: drawing.ground }} data-testid="diorama-ground" />}
+              {ground && <div aria-hidden className="absolute inset-0" style={{ background: ground }} data-testid="diorama-ground" />}
               <canvas
                 ref={canvas}
                 role="application"

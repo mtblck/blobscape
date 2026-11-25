@@ -102,7 +102,7 @@ export function FourWays() {
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
     import('./creature/stage.ts')
-      .then(({ CreatureStage }) => CreatureStage.start(stageCanvas.current!, { offscreen, lights: true, webgl: params().get('webgl') === '1', shadowDensity: Number(params().get('density') ?? SHADOW_DENSITY) }))
+      .then(({ CreatureStage }) => CreatureStage.start(stageCanvas.current!, { offscreen, lights: true, timer: true, webgl: params().get('webgl') === '1', shadowDensity: Number(params().get('density') ?? SHADOW_DENSITY) }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
@@ -223,8 +223,10 @@ export function FourWays() {
       if (stage && built && shown('blobscape') && now - lastTimed > 1000) {
         lastTimed = now
         timing = true
-        // several frames to one wait where a frame is quick (see `timed`), one where it is slow
-        stage.timed((spent.current.blobscape ?? 100) > 25 ? 1 : 8).then((took) => { spent.current.blobscape = spent.current.blobscape === undefined ? took : spent.current.blobscape * 0.7 + took * 0.3 }, () => {}).finally(() => { timing = false })
+        // the GPU's own clock where it has one (a frame takes the longer of the CPU's share and the GPU's, which overlap); else several frames to one wait where a frame is quick (see `timed`), one where it is slow
+        const frames = (spent.current.blobscape ?? 100) > 25 ? 1 : 8
+        const took = stage.timesGpu ? stage.gpuTimes(frames).then((g) => (g ? Math.max(g.cpu, g.compute + g.render) : stage.timed(frames))) : stage.timed(frames)
+        took.then((took) => { spent.current.blobscape = spent.current.blobscape === undefined ? took : spent.current.blobscape * 0.7 + took * 0.3 }, () => {}).finally(() => { timing = false })
       }
     }
     raf = requestAnimationFrame(tick)

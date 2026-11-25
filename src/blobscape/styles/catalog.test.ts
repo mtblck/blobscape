@@ -57,10 +57,10 @@ test('the address sets what it names and nothing unsound', () => {
   assert.equal(fromAddress(PIXEL, PIXEL.start, q('px=5')).size, 2)
 })
 
-test('a phone starts blocks a size up, unless the address says', () => {
+test('blocks start at 1× on every device, unless the address says', () => {
   assert.equal(drawnStart().blocks.size, 1, 'blocks start at the grid the scene was cut on')
-  assert.equal(drawnStart(undefined, { coarse: true }).blocks.size, BLOCKS_DEF.start.size + 1)
-  assert.equal(drawnStart(new URLSearchParams('block=1'), { coarse: true }).blocks.size, 1)
+  assert.equal(drawnStart(undefined, { coarse: true }).blocks.size, 1, 'a phone starts at 1× too')
+  assert.equal(drawnStart(new URLSearchParams('block=3'), { coarse: true }).blocks.size, 3)
 })
 
 test('kept settings come back whole, and anything unsound in them is left as it starts', () => {
@@ -161,9 +161,9 @@ test('every page with brush looks, a time of day or weather draws them through t
 })
 
 test('every drawn style but knitting paints from a palette named in the address, and starts in full color', async () => {
-  const { ASCII, BOX_ART, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, KNIT_DEF, fromAddress } = await import('./catalog.ts')
+  const { ASCII, BOX_ART, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, HALFTONE_DEF, KNIT_DEF, CLAY_DEF, BLUEPRINT_DEF, THERMAL_DEF, CUTOUT_DEF, MOSAIC_DEF, CRT_DEF, fromAddress } = await import('./catalog.ts')
   const q = new URLSearchParams('palette=pico8')
-  for (const def of [MARKS, ASCII, BOX_ART, CEL_DEF, BLOCKS_DEF, NEON_DEF, GLASS_DEF, WASH_DEF] as StyleDef<{ palette: string }>[]) {
+  for (const def of [MARKS, ASCII, BOX_ART, CEL_DEF, BLOCKS_DEF, NEON_DEF, GLASS_DEF, WASH_DEF, HALFTONE_DEF, CLAY_DEF, BLUEPRINT_DEF, THERMAL_DEF, CUTOUT_DEF, MOSAIC_DEF, CRT_DEF] as StyleDef<{ palette: string }>[]) {
     assert.equal(def.start.palette, 'none', def.id)
     assert.equal(fromAddress(def, def.start, q).palette, 'pico8', def.id)
     assert.equal(fromAddress(def, def.start, new URLSearchParams('palette=<b>')).palette, 'none', `${def.id} keeps only an id`)

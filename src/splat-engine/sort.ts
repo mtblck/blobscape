@@ -1,13 +1,20 @@
-import { DynamicDrawUsage, StorageBufferAttribute } from 'three/webgpu'
+import { DynamicDrawUsage, IndirectStorageBufferAttribute, StorageBufferAttribute } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Break, Fn, If, Loop, atomicAdd, atomicLoad, atomicStore, instanceIndex, invocationLocalIndex, select, storage, uint, workgroupArray, workgroupBarrier } = TSL
+const { Break, Fn, If, Loop, Return, atomicAdd, atomicLoad, atomicStore, instanceIndex, invocationLocalIndex, select, storage, uint, workgroupArray, workgroupBarrier } = TSL
 
 const SCAN = 256
 /** Bins holding up to this many blobs are put in index order after the scatter (see `settleNode`). */
 const SETTLE = 48
+/**
+ * The key of a blob the project pass found nothing to draw of (off screen, behind the camera, cut away or dropped by
+ * the level of detail): it is not counted, not sorted and not drawn. Past every bin, so no bin is ever this.
+ */
+export const CULLED = 0xffffffff
+/** The draw's indirect arguments: index count (two triangles), instance count (the blobs drawn), first index, base vertex, first instance. */
+const DRAW_ARGS = [6, 0, 0, 0, 0]
 
 /**
  * A counting sort over depth keys, in three passes that the engine drives:
@@ -24,6 +31,10 @@ const SETTLE = 48
  *    bin of up to `SETTLE` blobs in index order, as the CPU sort does. Bigger
  *    bins (a wall seen dead on) are left as they fell.
  *
+ * A blob keyed `CULLED` is left out of all of it: the prefix also writes how many
+ * blobs were counted into `drawArgs`, which the world draws from indirectly, so
+ * the order holds only what is drawn and nothing past it is read.
+ *
  * three.js's `CountingSort` does the prefix in a single thread looping over
  * every bin, and works the key out twice; on a phone the serial loop is a
  * fixed cost of thousands of dependent memory round trips a frame.
@@ -33,6 +44,10 @@ export class DepthSort {
   readonly bins: number
   readonly keysAttr: StorageBufferAttribute
   readonly orderAttr: StorageBufferAttribute
+  /** The draw's indirect arguments (`DRAW_ARGS`), its instance count written by the prefix pass each sort. */
+  readonly drawArgs: IndirectStorageBufferAttribute
+  /** How many blobs the last CPU sort kept (WebGL): the rest were `CULLED`. */
+  kept: number
   private readonly attrs: StorageBufferAttribute[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly keysW: any; readonly histogram: any; readonly orderRead: any
@@ -54,7 +69,10 @@ export class DepthSort {
     const offsetAttr = new StorageBufferAttribute(new Uint32Array(bins), 1)
     // where the scatter drops each blob, before the settle pass writes the final order
     const scatterAttr = new StorageBufferAttribute(new Uint32Array(n), 1)
-    this.attrs = [this.keysAttr, this.orderAttr, histAttr, offsetAttr, scatterAttr]
+    this.drawArgs = new IndirectStorageBufferAttribute(new Uint32Array(DRAW_ARGS), 1)
+    this.drawArgs.array[1] = n
+    this.kept = n
+    this.attrs = [this.keysAttr, this.orderAttr, histAttr, offsetAttr, scatterAttr, this.drawArgs]
     this.cpuCounts = new Uint32Array(bins)
 
     this.keysW = storage(this.keysAttr, 'uint', n)
@@ -65,6 +83,8 @@ export class DepthSort {
     const fellW = storage(scatterAttr, 'uint', n)
     const fellR = storage(scatterAttr, 'uint', n).toReadOnly()
     this.orderRead = storage(this.orderAttr, 'uint', n).toReadOnly()
+    const argsW = storage(this.drawArgs, 'uint', DRAW_ARGS.length)
+    const argsR = storage(this.drawArgs, 'uint', DRAW_ARGS.length).toReadOnly()
 
     const per = bins / SCAN
     const hist = this.histogram
@@ -86,6 +106,8 @@ export class DepthSort {
         workgroupBarrier()
       }
       const at = shared.element(lid).sub(own).toVar()
+      // the last thread's inclusive sum is every blob counted: how many the draw takes
+      If(lid.equal(uint(SCAN - 1)), () => { argsW.element(1).assign(shared.element(lid)) })
       Loop({ start: uint(0), end: uint(per), type: 'uint', condition: '<' }, ({ i }: { i: unknown }) => {
         const k = first.add(i)
         const c = atomicLoad(hist.element(k)).toVar()
@@ -96,12 +118,18 @@ export class DepthSort {
     })().compute(SCAN, [SCAN]).setName('DepthSortPrefix')
 
     this.scatterNode = Fn(() => {
-      const slot = atomicAdd(offsets.element(keysR.element(instanceIndex)), uint(1))
-      fellW.element(slot).assign(instanceIndex)
+      const key = keysR.element(instanceIndex).toVar()
+      If(key.notEqual(uint(CULLED)), () => {
+        const slot = atomicAdd(offsets.element(key), uint(1))
+        fellW.element(slot).assign(instanceIndex)
+      })
     })().compute(n, [workgroup]).setName('DepthSortScatter')
 
     this.settleNode = Fn(() => {
       const j = instanceIndex
+      // slots past the blobs counted hold last frame's leftovers, and nothing draws them
+      const kept = argsR.element(1).toVar()
+      If(j.greaterThanEqual(kept), () => { Return() })
       const id = fellR.element(j).toVar()
       const key = keysR.element(id).toVar()
       // how many of this bin lie before and after this slot (a bin is a run of equal keys)
@@ -112,7 +140,7 @@ export class DepthSort {
         before.addAssign(1)
       })
       Loop({ start: uint(1), end: uint(SETTLE + 1), type: 'uint', condition: '<' }, ({ i }: { i: unknown }) => {
-        If(j.add(i).greaterThanEqual(uint(n)), () => { Break() })
+        If(j.add(i).greaterThanEqual(kept), () => { Break() })
         If(keysR.element(fellR.element(j.add(i))).notEqual(key), () => { Break() })
         after.addAssign(1)
       })
@@ -138,16 +166,20 @@ export class DepthSort {
     renderer.compute(this.settleNode as never)
   }
 
-  /** The same sort on the CPU, from keys already in `keysAttr`. Stable: equal keys keep index order. */
+  /**
+   * The same sort on the CPU, from keys already in `keysAttr`. Stable: equal keys keep index order. Blobs keyed
+   * `CULLED` are left out: how many were kept is `kept`, and the order holds them first.
+   */
   sortCPU(keys: Uint32Array = this.keysAttr.array as Uint32Array) {
     const counts = this.cpuCounts
     counts.fill(0)
     const n = this.count
-    for (let i = 0; i < n; i++) counts[keys[i]]++
+    for (let i = 0; i < n; i++) if (keys[i] !== CULLED) counts[keys[i]]++
     let sum = 0
     for (let b = 0; b < this.bins; b++) { const c = counts[b]; counts[b] = sum; sum += c }
+    this.kept = sum
     const order = this.orderAttr.array as Uint32Array
-    for (let i = 0; i < n; i++) order[counts[keys[i]]++] = i
+    for (let i = 0; i < n; i++) if (keys[i] !== CULLED) order[counts[keys[i]]++] = i
     this.orderAttr.needsUpdate = true
     const pbo = (this.orderAttr as unknown as { pbo?: { needsUpdate: boolean } }).pbo
     if (pbo) pbo.needsUpdate = true

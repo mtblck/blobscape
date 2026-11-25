@@ -7,7 +7,9 @@ const ROOT = { name: 'root', parent: -1, head: [0, 0, 0] as [number, number, num
 
 test('a ball becomes one layer of cells on its surface, about its area over a cell', () => {
   const s = 0.05, r = 1
-  const { blobs } = buildVoxels({ bones: [ROOT], parts: [{ shape: sphere([0, 0, 0], r), color: [1, 1, 1], bone: 'root' }], spacing: s })
+  const { blobs, grid } = buildVoxels({ bones: [ROOT], parts: [{ shape: sphere([0, 0, 0], r), color: [1, 1, 1], bone: 'root' }], spacing: s })
+  // the cut says its grid, so blocks drawn from it snap to the same cells
+  assert.equal(grid, s)
   for (let i = 0; i < blobs.count; i++) {
     const d = Math.hypot(blobs.center[i * 3], blobs.center[i * 3 + 1], blobs.center[i * 3 + 2])
     assert.ok(d <= r + 1e-6 && d > r - s - 1e-6, `cell at ${d}`)

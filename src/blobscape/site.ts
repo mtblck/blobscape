@@ -28,6 +28,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'globe',
+    title: 'Snow Globe',
+    url: '/experiments/snow-globe/',
+    cover: '/covers/snow-globe.webp',
+    tags: ['watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-25',
+    updated: '2026-11-25',
+    body: 'A little scene sealed under a glass dome of water and snow. Tap it, or shake your phone, and the snow swirls up and drifts back down over a quarter of a minute, settling on the snowman\'s hat, the cabin\'s roof and the presents.',
+  },
+  {
     id: 'bouquet',
     title: 'Seasonal Bouquets',
     url: '/experiments/seasonal-bouquets/',

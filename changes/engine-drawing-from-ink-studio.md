@@ -1,0 +1,1 @@
+The engine leaves blobs it can't see out of the sort and the draw, times its GPU work where the browser allows, and can draw blobs in their true shape close up and put see-through blobs in the right order where they cross.

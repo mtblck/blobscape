@@ -1,0 +1,2 @@
+- Scan Studio: Take out the light it was scanned in finds the light a scan was made in from its own light and shade and divides it out, so a lamp or the new Sun and moon preset (the shared sky at the hour you pick) lights the scan's paint instead of adding to its old light.
+- Scene Creator: a splat scan opened as the land has its scanned light taken out and takes the scene's own sun, moon and lamps.

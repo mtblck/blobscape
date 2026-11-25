@@ -26,17 +26,25 @@ import { NEON_EMIT, type NeonLook } from '../splat-core/neon.ts'
 import { GlassPass } from './glassPass.ts'
 import type { GlassLook } from '../splat-core/glass.ts'
 import { WashPass } from './washPass.ts'
+import { HalftonePass } from './halftonePass.ts'
+import { FilterPass } from './filterPass.ts'
+import { THERMAL_EMIT, type FilterLook } from '../splat-core/filters.ts'
+import type { HalftoneLook } from '../splat-core/halftone.ts'
 import { KnitPass } from './knitPass.ts'
+import { AnaglyphPass } from './anaglyphPass.ts'
+import type { AnaglyphLook } from '../splat-core/anaglyph.ts'
 import { stitchSize, type KnitLook } from '../splat-core/knit.ts'
 import type { WashLook } from '../splat-core/wash.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
+import { SplatPeel } from './peel.ts'
 import { SplatMirror } from './mirror.ts'
 import type { MirrorImage, MirrorPlane } from './reflect.ts'
 import type { OpticsLook } from '../splat-core/optics.ts'
 import { BlockView } from './blockView.ts'
-import type { BlockLook } from './blocks.ts'
+import type { BlockHole, BlockLook } from './blocks.ts'
+import type { FarRule } from './lod.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
 /** How many times a second a stage draws its mirror's picture again, at most (`Stage.setMirror`). */
@@ -66,6 +74,12 @@ export interface Actor {
   lies?: boolean
   /** The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`. */
   blockCell?: number
+  /** While the stage draws blocks, the square (x and z, rest units) whose cubes are not drawn, where a finer cut is laid in (blocks.ts `BlockSource.hole`). */
+  hole?: BlockHole
+  /** Its blobs never change in place, so while the stage draws blocks its cubes are made once and kept (blocks.ts `BlockSource.keepCubes`). */
+  keepCubes?: boolean
+  /** As big as a world: while the stage draws blocks, its squares far away are drawn with cubes two or four times as big (blocks.ts `BlockSource.far`). */
+  far?: boolean
 }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
@@ -100,6 +114,26 @@ export interface StageOptions {
   webgl?: boolean
   /** Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on). */
   cleanCuts?: boolean
+  /** Builds each world to draw blobs in their true shape on screen (`EngineOptions.exactShapes`; `setExactShapes` turns it off and on). */
+  exactShapes?: boolean
+  /** Builds each world so see-through blobs can be put in order where they cross (`setPeel`; `EngineOptions.peel`). */
+  peel?: boolean
+  /**
+   * Asks the GPU to time its own work, so `gpuTimes` can say how long a frame takes on the GPU alone. Where the
+   * browser offers no timer (WebGL without `EXT_disjoint_timer_query_webgl2`, WebGPU without `timestamp-query`) it
+   * does nothing. Off by default: each pass then writes two timestamps.
+   */
+  timer?: boolean
+}
+
+/** How long the GPU spent on one frame, in milliseconds (`Stage.gpuTimes`). */
+export interface GpuTimes {
+  /** Compute passes: posing, projecting, sorting, lighting. WebGL has none, so 0 there. */
+  compute: number
+  /** Render passes: drawing the blobs and every pass after them (pixel art, outlines, the lens). */
+  render: number
+  /** The CPU's share: posing and handing the frame to the GPU (on WebGL, sorting too). The two overlap, so a frame takes about the larger of this and the GPU's. */
+  cpu: number
 }
 
 /**
@@ -241,7 +275,7 @@ export class Stage {
   /** Starts a stage on a canvas: makes the renderer (WebGPU, or WebGL 2 where there is none) and begins drawing. */
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
-    const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl }, (r) => {
+    const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl, trackTimestamp: !!opts.timer }, (r) => {
       r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
       r.setClearColor(0x000000, 0)
     })
@@ -314,12 +348,14 @@ export class Stage {
   }
 
   private build(actor: Actor) {
-    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
+    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, exactShapes: this.opts.exactShapes, peel: this.opts.peel, shadowDensity: this.opts.shadowDensity })
     this.world.glowGain = this.emits
     this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
     this.dress()
     this.world.cleanCuts = this.clean
+    this.world.exactShapes = this.exact
+    this.world.farDetail = this.far
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
     if (this.painter) this.paintOver()
@@ -341,7 +377,7 @@ export class Stage {
     this.blockLook = look
     // a look that differs only in its ambient tint (a night's light following the sky as weather comes and lightning
     // flashes) keeps the cubes: making them again took a second each time, so a thunderstorm hitched at every flash
-    if (look && was && this.blocks && sameBut(look, was, 'ambient')) this.blocks.setLights(this.lit.lights, this.lit.ambient, look.ambient)
+    if (look && was && this.blocks && !this.blockDue && sameBut(look, was, 'ambient')) this.blocks.setLights(this.lit.lights, this.lit.ambient, look.ambient)
     else this.block()
     this.invalidate()
   }
@@ -350,10 +386,28 @@ export class Stage {
   private soft?: SplatWorld
 
   /** How many cubes and faces are on show while the scene is drawn as blocks. */
-  get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces } : undefined }
+  get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces, levels: this.blocks.levels() } : undefined }
+
+  /** Whether the cubes have to be made again before the next frame is drawn. */
+  private blockDue = false
+
+  /**
+   * The cubes are due: they are made at the next draw (`makeBlocks`), not here. A new actor and the look that goes
+   * with it reach the stage in the same task (a page sets the actor, then its look with the new scene's cell), and
+   * making them twice cost a scene switch a whole build of every cube.
+   */
+  private block() {
+    this.blockDue = true
+    // snow lying is raised onto the cubes' tops, and the pose comes before the draw, so this part is not put off
+    for (const a of this.actor ? [this.actor, ...this.extras] : []) if (a.lies) {
+      a.skeleton.place[1] = this.blockLook ? this.blockLook.cell * 0.5 : 0
+      a.skeleton.update()
+    }
+  }
 
   /** Makes the cubes for the actors on show (again), or puts them away. */
-  private block() {
+  private makeBlocks() {
+    this.blockDue = false
     if (this.blocks) { this.scene.remove(this.blocks); this.blocks.dispose(); this.blocks = undefined }
     if (this.soft) { this.scene.remove(this.soft); this.soft.dispose(); this.soft = undefined }
     const all = this.actor ? [this.actor, ...this.extras] : []
@@ -365,7 +419,7 @@ export class Stage {
       // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
       const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks') || (a.weather && this.blockLook!.weather !== 'blocks'))
       if (soft.length) {
-        this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
+        this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort, peel: this.opts.peel })
         this.soft.setFog(...this.fog)
         this.soft.setMarks(this.marks)
         if (this.opts.lights) this.soft.setLights(this.lit.lights, this.lit.ambient)
@@ -410,6 +464,18 @@ export class Stage {
 
   /** Which depth sort the world uses: the counting sort, or the exact radix sort (slower; ties always in one order). */
   get sortKind() { return this.sort }
+
+  private far: FarRule | false = false
+  /**
+   * Level of detail by distance (lod.ts `FarRule`), kept for every world from now on: past `from` fewer blobs are drawn
+   * the further off they are, each grown to cover for the rest, so a world as big as an island draws far ground with
+   * fewer, bigger blobs. Leave it out for every blob. The soft actors drawn among blocks keep every blob.
+   */
+  setFarDetail(rule?: FarRule) {
+    this.far = rule ?? false
+    if (this.world) this.world.farDetail = this.far
+    this.invalidate()
+  }
   /**
    * Changes how blobs are sorted by depth: 'bins' is quick, 'radix' settles every tie the same way each frame, which
    * pixel art with hard edges wants.
@@ -546,7 +612,9 @@ export class Stage {
   }
 
   /** Seconds into the clip, or the time a poser is showing. */
-  get time() { return this.step > 0 ? Math.floor(this.t / this.step + 1e-6) * this.step : this.t }
+  get time() { const step = this.heldStep; return step > 0 ? Math.floor(this.t / step + 1e-6) * step : this.t }
+  /** The held frames in force: the stage's own `step`, or claymation's stop motion. */
+  private get heldStep() { const fps = this.filterLook?.kind === 'clay' ? this.filterLook.fps ?? 12 : 0; return this.step > 0 ? this.step : fps > 0 ? 1 / fps : 0 }
 
   /** Moves the clock to `seconds` and draws that moment: for a page that kept its own time while this stage was paused. */
   seek(seconds: number) {
@@ -603,6 +671,14 @@ export class Stage {
   setEdits(edits: readonly ShapeEdit[]) {
     this.edits = edits.filter((e) => e.op === 'cut' || this.opts.lights).map((e) => ({ ...e }))
     this.world?.setEdits(this.edits)
+    this.invalidate()
+  }
+
+  private exact = true
+  /** On a stage made with `exactShapes`: whether blobs are drawn in their true shape (the default) or flattened from their middles. */
+  setExactShapes(on: boolean) {
+    this.exact = on
+    if (this.world) this.world.exactShapes = on
     this.invalidate()
   }
 
@@ -688,6 +764,45 @@ export class Stage {
     this.invalidate()
   }
 
+  private halftone?: HalftonePass
+  private halftoneLook?: HalftoneLook
+  /**
+   * Halftone screen print (splat-core/halftone.ts): the picture printed in the look's few see-through inks, each as
+   * dots on its own turned screen fixed on the paper, the dots growing and running together where the picture is
+   * dark in that ink, the plates a little off true and the ink taking unevenly; the subject's sky is printed behind
+   * it, or the paper left bare. The paper covers the canvas. Every blob is drawn flat in its own color while it is
+   * on, under the stage's own lights. Leave the look out to stop. Kept for the next actor too. Not in pixel mode;
+   * ASCII, cel shading, neon, stained glass and watercolor come first if set, and outlines and the lens wait.
+   */
+  setHalftone(look?: HalftoneLook) {
+    this.halftoneLook = look
+    if (!look) { this.halftone?.dispose(); this.halftone = undefined }
+    else this.halftone ??= new HalftonePass()
+    this.dress()
+    this.invalidate()
+  }
+
+  private filter?: FilterPass
+  private filterLook?: FilterLook
+  /**
+   * One of the looks laid over the whole picture (splat-core/filters.ts): a thermal camera, an old CRT or tape, a
+   * blueprint, a mosaic, paper cutouts or claymation. The look covers the canvas. The blueprint and paper cutouts draw
+   * every blob flat in its own color with no lights; the thermal camera draws what gives its own light over white so
+   * it runs hot; claymation moves in held frames (`ClayLook.fps`) unless the stage holds its own. Leave the look out to
+   * stop. Kept for the next actor too. Not in pixel mode; the other looks come first if set, and outlines and the
+   * lens wait.
+   */
+  setFilter(look?: FilterLook) {
+    this.filterLook = look
+    if (!look) { this.filter?.dispose(); this.filter = undefined }
+    else this.filter ??= new FilterPass()
+    this.dress()
+    this.invalidate()
+  }
+
+  /** Whether the filter on draws every blob flat with no lights (the blueprint and paper cutouts). */
+  private get filterFlat() { return this.filterLook?.kind === 'blueprint' || this.filterLook?.kind === 'cutout' }
+
   private knit?: KnitPass
   private knitLook?: KnitLook
   /**
@@ -703,6 +818,22 @@ export class Stage {
     if (!look) { this.knit?.dispose(); this.knit = undefined }
     else this.knit ??= new KnitPass()
     this.dress()
+    this.invalidate()
+  }
+
+  private anaglyph?: AnaglyphPass
+  private anaglyphLook?: AnaglyphLook
+  /**
+   * 3D glasses (splat-core/anaglyph.ts): the frame drawn from a left and a right eye either side of the camera and
+   * laid over each other in red and cyan, so that through red and cyan glasses the scene stands in depth. What the
+   * view looks at sits at the screen (unless the look's `pop` pushes the screen back), the backdrop behind it. The
+   * blobs are drawn as they are (marks, lights), sorted once for each eye. Leave the look out to stop. Kept for the
+   * next actor too. Not in pixel mode; the other looks come first if set, and outlines and the lens wait.
+   */
+  setAnaglyph(look?: AnaglyphLook) {
+    this.anaglyphLook = look
+    if (!look) { this.anaglyph?.dispose(); this.anaglyph = undefined }
+    else this.anaglyph ??= new AnaglyphPass()
     this.invalidate()
   }
 
@@ -730,7 +861,7 @@ export class Stage {
     if (!world) return
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
-    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook || this.knitLook ? { kind: 'flat' } : this.marks)
+    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook || this.halftoneLook || this.knitLook || this.filterFlat ? { kind: 'flat' } : this.marks)
     this.soft?.setMarks(this.marks)
     if (!this.opts.lights) return
     this.light()
@@ -746,7 +877,7 @@ export class Stage {
     if (!world || !this.opts.lights) return
     const cel = this.celLook
     world.glowGain = this.emits
-    if (!cel && (this.neonLook || this.glassLook || (this.knitLook && !this.washLook))) world.setLights([], 1)
+    if (!cel && (this.neonLook || this.glassLook || (this.knitLook && !this.washLook && !this.halftoneLook) || this.filterFlat)) world.setLights([], 1)
     else if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }, ...this.lit.lights.slice(0, MAX_LIGHTS - 1).map((l) => ({ ...l, shadow: false }))], 1)
     else world.setLights(this.lit.lights, this.lit.ambient)
   }
@@ -791,6 +922,19 @@ export class Stage {
     this.invalidate()
   }
 
+  private peel?: SplatPeel
+  /**
+   * On a stage made with `peel`: takes the nearest `layers` blobs (1 to `MAX_PEEL`) off the front of each pixel one at
+   * a time (peel.ts), so see-through blobs that cross are each in front on their own side; 0 stops. Everything that is
+   * not blobs is drawn under them all. Costs a draw of the blobs a layer and one more. Not in pixel mode, and any
+   * other look comes first.
+   */
+  setPeel(layers: number) {
+    if (!layers || !this.opts.peel) { this.peel?.dispose(); this.peel = undefined }
+    else (this.peel ??= new SplatPeel(layers)).setLayers(layers)
+    this.invalidate()
+  }
+
   private marks?: MarkLook
   /**
    * Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor
@@ -816,7 +960,7 @@ export class Stage {
 
   private glowGain = 1
   /** What the world's `glowGain` is: the stage's own, or neon's, which tells lamps from pale things by it. */
-  private get emits() { return this.neonLook && !(this.opts.lights && this.celLook) ? NEON_EMIT : this.glowGain }
+  private get emits() { return this.neonLook && !(this.opts.lights && this.celLook) ? NEON_EMIT : this.filterLook?.kind === 'thermal' && !(this.opts.lights && this.celLook) ? THERMAL_EMIT : this.glowGain }
   /**
    * How many times its own color a blob that gives its own light (`Actor.glow`) is drawn under live lights (the
    * world's `glowGain`), kept for the next actor too. Over 1 only with a lens (`setLens`), which lets what is brighter
@@ -897,6 +1041,8 @@ export class Stage {
   private get pixelScale() { return Math.max(1, Math.round(this.pixelSize * this.renderer.getPixelRatio())) }
 
   private draw() {
+    // the cubes for the actors and look as they now stand, where either changed since the last frame
+    if (this.blockDue) this.makeBlocks()
     if (!this.pixel && this.blocks) {
       const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
       this.blocks.render(this.renderer, this.scene, this.camera, x, y)
@@ -940,11 +1086,35 @@ export class Stage {
       this.wash.render(this.renderer, this.scene, this.camera)
       return
     }
+    if (!this.pixel && this.halftone && this.halftoneLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.halftone.setLook(this.halftoneLook, this.renderer.getPixelRatio())
+      this.halftone.setSize(x, y)
+      this.halftone.render(this.renderer, this.scene, this.camera)
+      return
+    }
     if (!this.pixel && this.knit && this.knitLook) {
       const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
       this.knit.setLook(this.knitLook)
       this.knit.setSize(x, y, stitchSize(this.knitLook.size ?? 9, this.renderer.getPixelRatio()))
       this.knit.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.anaglyph && this.anaglyphLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.anaglyph.setSize(x, y)
+      this.anaglyph.setLook(this.anaglyphLook)
+      this.anaglyph.render(this.renderer, this.scene, this.camera, this.orbit.distance)
+      return
+    }
+    if (!this.pixel && this.filter && this.filterLook && this.world) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      // the subject alone (not the sky's sun, moon and stars): what thumbprints are sized by and dimension lines go round
+      const box = this.world.posedBox(true)
+      this.filter.setSize(x, y)
+      const size = Math.hypot(box.hi[0] - box.lo[0], box.hi[1] - box.lo[1], box.hi[2] - box.lo[2])
+      this.filter.setLook(this.filterLook, this.renderer.getPixelRatio(), Number.isFinite(size) && size > 0 ? size : 1, this.time)
+      this.filter.render(this.renderer, this.scene, this.camera, box)
       return
     }
     if (!this.pixel && this.lines) {
@@ -959,6 +1129,12 @@ export class Stage {
       this.lens.setSize(x, y)
       this.lens.setLook(this.lensLook, this.camera.fov)
       this.lens.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.peel) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.peel.setSize(x, y)
+      this.peel.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel) { this.renderer.render(this.scene, this.camera); return }
@@ -1153,6 +1329,33 @@ export class Stage {
     return (performance.now() - t0) / frames
   }
 
+  /** Whether `gpuTimes` can answer: the stage was started with `timer` and the browser lets the GPU time its work. */
+  get timesGpu(): boolean {
+    const b = this.renderer.backend as unknown as { trackTimestamp?: boolean; disjoint?: unknown; isWebGPUBackend?: boolean }
+    return !!b.trackTimestamp && (!!b.isWebGPUBackend || !!b.disjoint)
+  }
+
+  /**
+   * Poses and draws the frame as it stands `frames` times over and asks the GPU how long it spent: per frame, in
+   * milliseconds. Unlike `timed`, the GPU's own clock, so the browser's late and wandering report of work done does
+   * not come into it, and the time is split between compute and drawing. Null where the stage can't time the GPU
+   * (`timesGpu`): start it with `timer` and use `timed` as the fallback.
+   */
+  async gpuTimes(frames = 8): Promise<GpuTimes | null> {
+    if (!this.timesGpu) return null
+    // what the live loop drew before now is not this measure
+    await Promise.all([this.renderer.resolveTimestampsAsync('compute'), this.renderer.resolveTimestampsAsync('render')])
+    const t0 = performance.now()
+    for (let k = 0; k < frames; k++) {
+      this.pose()
+      this.resize()
+      this.draw()
+    }
+    const cpu = (performance.now() - t0) / frames
+    const [compute, render] = await Promise.all([this.renderer.resolveTimestampsAsync('compute'), this.renderer.resolveTimestampsAsync('render')])
+    return { compute: (compute ?? 0) / frames, render: (render ?? 0) / frames, cpu }
+  }
+
   /** Offscreen only: draws the frame `t` seconds into the clip and copies it to the page. */
   async frame(t: number) {
     this.t = t
@@ -1238,8 +1441,12 @@ export class Stage {
     this.glass?.dispose()
     this.wash?.dispose()
     this.knit?.dispose()
+    this.anaglyph?.dispose()
+    this.halftone?.dispose()
+    this.filter?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
+    this.peel?.dispose()
     this.cel?.dispose()
     this.mirror?.dispose()
     this.target?.dispose()

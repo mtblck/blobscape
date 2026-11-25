@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_STYLE, STYLES, styleAsked, styleWords } from './styles.ts'
+import { DEFAULT_STYLE, PICKED_STYLES, STYLES, offered, styleAsked, styleWords } from './styles.ts'
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, BLOCK_SPAN, BLOCK_START, blockBack, blockLook, gridOf } from '../blockLooks.ts'
@@ -8,7 +8,11 @@ import { TIMES, paletteAt, timeAsked, timeOf, under } from '../timeOfDay.ts'
 import { WASH, WASH_PAPERS, WASH_SKY_COLORS as WASH_SKY, WASH_START, washLook } from '../washLooks.ts'
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
+import { HALFTONE } from '../halftoneLooks.ts'
+import { FILTERS } from '../../splat-engine/styles/filterLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
+import { ANAGLYPH, ANAGLYPH_START, anaglyphLook } from '../anaglyphLooks.ts'
+import { ANAGLYPH_BACK } from '../../splat-core/anaglyph.ts'
 
 test('blocks come first and are the default, then pixel art and every look Brush and Ink offers, each once', () => {
   assert.equal(STYLES[0].id, 'blocks')
@@ -16,8 +20,8 @@ test('blocks come first and are the default, then pixel art and every look Brush
   assert.equal(STYLES[1].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 8)
+  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH, ANAGLYPH, HALFTONE, ...FILTERS]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
+  assert.equal(ids.length, LOOKS.length + 10 + FILTERS.length)
   assert.equal(STYLES[2].id, 'glitch')
 })
 
@@ -30,6 +34,7 @@ test('an address picks a style, and anything else is the default, blocks', () =>
   assert.equal(styleAsked('pixel'), 'pixel')
   assert.equal(styleAsked('glass'), 'glass')
   assert.equal(styleAsked('watercolor'), 'watercolor')
+  assert.equal(styleAsked('anaglyph'), 'anaglyph')
   assert.equal(styleAsked('woodcut'), 'blocks')
   // Text is still `ascii` (and `text`); its old box sets are Box Art's now
   assert.equal(styleAsked('text'), 'ascii')
@@ -43,7 +48,7 @@ test('an address picks a style, and anything else is the default, blocks', () =>
 test('every style has a note and words for the line under the view', () => {
   for (const s of STYLES) {
     assert.ok(s.note.length > 10, s.id)
-    assert.match(styleWords(s.id), /^(as|in) \S/, s.id)
+    assert.match(styleWords(s.id), /^(as|in|through|on) \S/, s.id)
   }
   assert.equal(styleWords('ink'), 'in ink and wash')
 })
@@ -68,6 +73,8 @@ test('stained glass takes a scene\'s own sky for the window round it', () => {
 test('watercolor is laid on a light paper, with a scene\'s own sky behind or a pale one', () => {
   for (const p of WASH_PAPERS) assert.ok(Math.min(...p.paper) > 0.8, p.id)
   assert.deepEqual(washLook(WASH_START).sky, WASH_SKY)
+  assert.equal(washLook(WASH_START).border, true, 'the paper border is there unless turned off')
+  assert.equal(washLook({ ...WASH_START, border: false }).border, false)
   assert.deepEqual(washLook(WASH_START, [[255, 255, 255], [0, 0, 0]]).sky, [[1, 1, 1], [0, 0, 0]])
   assert.equal(styleWords('watercolor'), 'in watercolor')
 })
@@ -84,6 +91,9 @@ test('blocks are whole cells of the grid a scene was cut on, or a share of a sub
   assert.equal(styleWords('blocks'), 'as blocks')
   assert.equal(gridOf(0.03, [], 0), 0.03)
   assert.ok(Math.abs(gridOf(undefined, [0, 0, 0, 4.8, 1, 0], 2) - 4.8 / BLOCK_SPAN) < 1e-9)
+  // a cut that says its grid is snapped to that grid, not to a guess that falls between its rows of blobs
+  assert.equal(gridOf(undefined, [0, 0, 0, 4.8, 1, 0], 2, 0.03), 0.03)
+  assert.equal(gridOf(0.05, [], 0, 0.03), 0.05)
   const look = blockLook({ ...BLOCK_START, size: 3 }, 0.02, 90)
   assert.ok(Math.abs(look.cell - 0.06) < 1e-9)
   // the light is measured from the starting view: a quarter turn of the view turns it with it
@@ -120,4 +130,19 @@ test('a time of day brings a sky, a light and a palette that holds the scene\'s 
   const has = (c: readonly number[]) => at.some((p) => Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]) + Math.abs(p[2] - c[2]) < 12)
   assert.ok(has(dim) && has([255, 220, 90]) && has([13, 18, 40]) && at.length <= 32)
   assert.ok(paletteAt(own, timeOf('afternoon')).length >= own.length)
+})
+
+test('3D glasses stand the subject’s own sky behind it, or the dark backdrop', () => {
+  assert.deepEqual(anaglyphLook(ANAGLYPH_START).back, ANAGLYPH_BACK)
+  assert.deepEqual(anaglyphLook(ANAGLYPH_START, [[255, 255, 255], [0, 0, 0]]).back, [[1, 1, 1], [0, 0, 0]])
+  assert.equal(anaglyphLook({ ...ANAGLYPH_START, mix: 'gray' }).mix, 'gray')
+})
+
+test('claymation is hidden from the pickers but still opens by address', () => {
+  assert.ok(STYLES.some((s) => s.id === 'clay'))
+  assert.ok(!PICKED_STYLES.some((s) => s.id === 'clay'))
+  assert.equal(PICKED_STYLES.length, STYLES.length - 1)
+  assert.equal(offered('clay'), false)
+  assert.equal(offered('blocks'), true)
+  assert.equal(styleAsked('clay'), 'clay')
 })

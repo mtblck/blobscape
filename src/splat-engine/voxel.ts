@@ -1263,5 +1263,5 @@ export function buildVoxels(spec: VoxelSpec): Built {
     if (glow && spec.parts[pi]?.glow) glow[i] = 255
     if (laid && spec.parts[pi]?.laid) laid[i] = 1
   }
-  return { blobs, skin, skeleton, partOf, seen, glow, laid }
+  return { blobs, skin, skeleton, partOf, seen, glow, laid, grid: s }
 }
