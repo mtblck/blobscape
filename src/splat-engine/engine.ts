@@ -1,5 +1,5 @@
 import {
-  BufferAttribute, DataUtils, DynamicDrawUsage, InstancedBufferGeometry, Matrix4, Mesh, NodeMaterial, Sphere, StorageBufferAttribute, Vector2, Vector3, Vector4,
+  BufferAttribute, DataUtils, DepthTexture, DynamicDrawUsage, FloatType, InstancedBufferGeometry, Matrix4, Mesh, Node, NodeMaterial, Sphere, StorageBufferAttribute, Vector2, Vector3, Vector4,
   type Camera, type Renderer,
 } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
@@ -12,7 +12,7 @@ import { Blobs } from '../splat-core/blobs.ts'
 const TSL = TSLTyped as unknown as Record<string, any>
 const {
   Discard, EPSILON, Fn, If, atan, cameraProjectionMatrix, cameraViewport, cameraViewMatrix, cos, dot, exp, float, instanceIndex,
-  abs, cameraPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, floor, fract, length, max, min, mix, normalize, positionGeometry, pow, select, sin, smoothstep, sqrt, storage, uint, uniform, uniformArray, uintBitsToFloat, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
+  abs, cameraPosition, cameraProjectionMatrixInverse, screenUV, texture, cameraWorldMatrix, floor, fract, length, max, min, mix, normalize, positionGeometry, pow, select, sin, smoothstep, sqrt, storage, uint, uniform, uniformArray, uintBitsToFloat, unpackUnorm4x8, varyingProperty, vec2, vec3, vec4,
 } = TSL
 import { MAX_STRETCH, packWeights, skinBlob, skinCenters, type Skeleton, type Skin, type SkinMode } from './rig.ts'
 import { GRAD_STRIDE, weightGradients } from './stretch.ts'
@@ -145,6 +145,11 @@ export interface EngineOptions {
    * cuts bind.
    */
   exactShapes?: boolean
+  /**
+   * Lets `SplatPeel` (peel.ts) take the nearest blobs off the front of each pixel one at a time, so see-through blobs
+   * that cross are each in front on their own side. Costs nothing until a peel draws; the world binds one more texture.
+   */
+  peel?: boolean
 }
 
 /** A point light for `setLights`. */
@@ -365,7 +370,7 @@ export class SplatWorld extends Mesh {
   /** Whether eased light is still on its way: the scene needs drawing again though nothing else has changed. */
   get settling() { return this.easeLeft > 0 }
 
-  constructor(actors: Actor[], { bins: wantBins = 65536, sort: sortKind = 'bins', mode = 'quat', lights = false, paint = false, cleanCuts = false, exactShapes = false, shadowDensity = SHADOW_DENSITY }: EngineOptions = {}) {
+  constructor(actors: Actor[], { bins: wantBins = 65536, sort: sortKind = 'bins', mode = 'quat', lights = false, paint = false, cleanCuts = false, exactShapes = false, peel = false, shadowDensity = SHADOW_DENSITY }: EngineOptions = {}) {
     const count = actors.reduce((s, a) => s + a.blobs.count, 0)
     const geometry = new InstancedBufferGeometry()
     geometry.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
@@ -388,6 +393,7 @@ export class SplatWorld extends Mesh {
     // the counting sort says how many blobs it kept, and the draw takes that many (WebGPU; `enableWebGL` undoes it)
     if (sort instanceof DepthSort) geometry.setIndirect(sort.drawArgs)
     super(geometry, material)
+    this.drawMaterial = material
     this.count = count
     this.actors = actors
     this.boneCount = bones
@@ -430,7 +436,12 @@ export class SplatWorld extends Mesh {
     buf.edits.clean.value = cleanCuts ? 1 : 0
     this.exactBuilt = exactShapes
     this.exact.value = exactShapes ? 1 : 0
-    material.colorNode = makeFragment(this.flat, this.mark, cleanCuts ? buf.edits : undefined, exactShapes ? this.exact : undefined) as never
+    if (peel) {
+      const placeholder = new DepthTexture(1, 1)
+      placeholder.type = FloatType
+      this.peeling = { mode: uniform(0), first: uniform(1), prev: texture(placeholder, screenUV) }
+    }
+    material.colorNode = makeFragment(this.flat, this.mark, cleanCuts ? buf.edits : undefined, exactShapes ? this.exact : undefined, this.peeling) as never
 
     this.onBeforeRender = (renderer, _scene, camera) => this.prepare(renderer as unknown as Renderer, camera)
   }
@@ -449,7 +460,7 @@ export class SplatWorld extends Mesh {
     // is laid in paint order as before, for a scan's blobs, which build a surface between them
     const byDepth = !!look && !look.soft
     M.soft.value = byDepth ? 0 : 1
-    const material = this.material as NodeMaterial
+    const material = this.drawMaterial
     if (material.depthWrite !== byDepth) { material.depthWrite = byDepth; material.needsUpdate = true }
     M.size.value = look?.size ?? 1
     const lin = (c: readonly number[]) => [srgbToLinear(c[0]), srgbToLinear(c[1]), srgbToLinear(c[2])] as const
@@ -521,6 +532,18 @@ export class SplatWorld extends Mesh {
   private readonly clean: boolean
   private readonly exactBuilt: boolean
   private readonly exact = uniform(0)
+  private readonly peeling?: Peeling
+  private readonly drawMaterial: NodeMaterial
+  /** Builds the draw's shaders for the renderer's backend now, rather than as the world is first drawn: for a pass that draws it with a material of its own made from them (`SplatPeel`). */
+  buildFor(renderer: Renderer) { this.build(this.isWebGL(renderer)) }
+  /** Set by `SplatPeel` while it draws (0 when not): 1 keeps only each pixel's nearest blob behind the last layer, 2 lays all that lies behind it as usual. Needs a world made with `peel`. */
+  get peelMode() { return (this.peeling?.mode.value as number) ?? 0 }
+  set peelMode(m: number) { if (this.peeling) this.peeling.mode.value = m }
+  /** Set by `SplatPeel`: whether the layer being drawn is the first, with nothing in front of it. */
+  get peelFirst() { return (this.peeling?.first.value as number) > 0.5 }
+  set peelFirst(on: boolean) { if (this.peeling) this.peeling.first.value = on ? 1 : 0 }
+  /** Set by `SplatPeel`: the depth of the layer before, which this layer lies behind. */
+  peelBehind(depth: DepthTexture) { if (this.peeling) this.peeling.prev.value = depth }
   /** Whether blobs are drawn in their true shape now (`EngineOptions.exactShapes`). Only a world made with `exactShapes` can. */
   get exactShapes() { return this.exact.value > 0 }
   set exactShapes(on: boolean) {
@@ -709,7 +732,8 @@ export class SplatWorld extends Mesh {
   private build(webgl: boolean) {
     const key = webgl ? `webgl-${this.mode}` : 'webgpu'
     if (key === this.builtFor) return
-    const material = this.material as NodeMaterial
+    // its own material, even while a pass draws it with another (`SplatPeel`)
+    const material = this.drawMaterial
     if (webgl) {
       enableWebGL(this.buf, this.sort)
       // the CPU sort says how many it kept by the instance count instead (`sortCPU`)
@@ -1147,7 +1171,7 @@ export class SplatWorld extends Mesh {
 
   dispose() {
     this.geometry.dispose()
-    ;(this.material as NodeMaterial).dispose()
+    this.drawMaterial.dispose()
     // storage buffers belong to no geometry: their dispose event frees them on the GPU
     for (const a of this.buf.attrs) a.dispose()
     this.sort.dispose()
@@ -2317,13 +2341,31 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
   })()
 }
 
-function makeFragment(flat: N, M: Marks, E?: Edits, X?: N) {
+/** The depth peeling's switches (`EngineOptions.peel`): the mode, whether this is the first layer, the last layer's depth. */
+interface Peeling { mode: N; first: N; prev: N }
+
+/** How far behind the last layer's depth (in the depth buffer's 0 to 1) a pixel must be to be in the next: past the same blob, and past rounding. */
+export const PEEL_GAP = 1e-7
+
+/** This fragment's own depth in the depth buffer (0 to 1), as the GPU writes it. */
+class FragDepth extends Node {
+  constructor() { super('float') }
+  generate(builder: N, output?: string | null) {
+    return (builder as { getFragCoord(): string; format(snippet: string, from: string, to?: string | null): string }).format(builder.getFragCoord().replace(/\.xy$/, '.z'), 'float', output)
+  }
+}
+
+function makeFragment(flat: N, M: Marks, E?: Edits, X?: N, P?: Peeling) {
   return Fn(() => {
     const uv = splatUv()
     const r2 = dot(uv, uv).toVar()
     // the flattened blob's quad ends at 2σ; an exact shape's may reach further, and its pixels are tested below
     const exact = X ? X.greaterThan(0.5).and(M.kind.lessThan(0.5)) : null
     If(exact ? r2.greaterThan(4).and(exact.not()) : r2.greaterThan(4), () => { Discard() })
+    // depth peeling: only what lies behind the last layer taken off the front
+    if (P) If(P.mode.greaterThan(0.5).and(P.first.lessThan(0.5)), () => {
+      If((new FragDepth() as N).lessThanEqual(P.prev.x.add(PEEL_GAP)), () => { Discard() })
+    })
     // clean cuts: this pixel of the blob is in or out on its own
     if (E) If(E.clean.greaterThan(0.5).and(E.count.greaterThan(0)), () => {
       If(editsAt(E, densestPoint()).keep.lessThan(0.5), () => { Discard() })
@@ -2352,6 +2394,8 @@ function makeFragment(flat: N, M: Marks, E?: Edits, X?: N) {
       })
       out.assign(vec4(splatColor().rgb, alpha))
     })
+    // a layer is laid front to back later, so it keeps its color with its cover in
+    if (P) If(P.mode.greaterThan(0.5).and(P.mode.lessThan(1.5)), () => { out.assign(vec4(out.rgb.mul(out.a), out.a)) })
     return out
   })()
 }

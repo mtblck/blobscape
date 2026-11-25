@@ -32,6 +32,7 @@ import type { WashLook } from '../splat-core/wash.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
+import { SplatPeel } from './peel.ts'
 import { SplatMirror } from './mirror.ts'
 import type { MirrorImage, MirrorPlane } from './reflect.ts'
 import type { OpticsLook } from '../splat-core/optics.ts'
@@ -102,6 +103,8 @@ export interface StageOptions {
   cleanCuts?: boolean
   /** Builds each world to draw blobs in their true shape on screen (`EngineOptions.exactShapes`; `setExactShapes` turns it off and on). */
   exactShapes?: boolean
+  /** Builds each world so see-through blobs can be put in order where they cross (`setPeel`; `EngineOptions.peel`). */
+  peel?: boolean
   /**
    * Asks the GPU to time its own work, so `gpuTimes` can say how long a frame takes on the GPU alone. Where the
    * browser offers no timer (WebGL without `EXT_disjoint_timer_query_webgl2`, WebGPU without `timestamp-query`) it
@@ -332,7 +335,7 @@ export class Stage {
   }
 
   private build(actor: Actor) {
-    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, exactShapes: this.opts.exactShapes, shadowDensity: this.opts.shadowDensity })
+    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, exactShapes: this.opts.exactShapes, peel: this.opts.peel, shadowDensity: this.opts.shadowDensity })
     this.world.glowGain = this.emits
     this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
@@ -402,7 +405,7 @@ export class Stage {
       // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
       const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks') || (a.weather && this.blockLook!.weather !== 'blocks'))
       if (soft.length) {
-        this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
+        this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort, peel: this.opts.peel })
         this.soft.setFog(...this.fog)
         this.soft.setMarks(this.marks)
         if (this.opts.lights) this.soft.setLights(this.lit.lights, this.lit.ambient)
@@ -836,6 +839,19 @@ export class Stage {
     this.invalidate()
   }
 
+  private peel?: SplatPeel
+  /**
+   * On a stage made with `peel`: takes the nearest `layers` blobs (1 to `MAX_PEEL`) off the front of each pixel one at
+   * a time (peel.ts), so see-through blobs that cross are each in front on their own side; 0 stops. Everything that is
+   * not blobs is drawn under them all. Costs a draw of the blobs a layer and one more. Not in pixel mode, and any
+   * other look comes first.
+   */
+  setPeel(layers: number) {
+    if (!layers || !this.opts.peel) { this.peel?.dispose(); this.peel = undefined }
+    else (this.peel ??= new SplatPeel(layers)).setLayers(layers)
+    this.invalidate()
+  }
+
   private marks?: MarkLook
   /**
    * Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor
@@ -1006,6 +1022,12 @@ export class Stage {
       this.lens.setSize(x, y)
       this.lens.setLook(this.lensLook, this.camera.fov)
       this.lens.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.peel) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.peel.setSize(x, y)
+      this.peel.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel) { this.renderer.render(this.scene, this.camera); return }
@@ -1314,6 +1336,7 @@ export class Stage {
     this.knit?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
+    this.peel?.dispose()
     this.cel?.dispose()
     this.mirror?.dispose()
     this.target?.dispose()

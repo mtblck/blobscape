@@ -291,6 +291,7 @@ export default [
     entries: ['src/engine-lab/main.tsx'],
     files: ['engine-lab/'],
     async run({ root, shots, join, fails, ok, open, axe }) {
+      const exactSeen = []
       for (const webgl of [false, true]) {
         const label = webgl ? 'webgl' : 'webgpu'
         const { page, ctx } = await open(`/engine-lab/?which=engine&n=12000&walk=0&herd=2&offscreen=1${webgl ? '&webgl=1' : ''}`, { viewport: { width: 1000, height: 1000 } })
@@ -435,6 +436,63 @@ export default [
           const clean = await edge('clean'), rough = await edge('rough')
           if (!(clean.rows > 300 && clean.near > clean.rows * 0.9 && clean.over <= 2 && rough.over > 20 && (!clean.chk || (clean.chk.center < 1e-3 && clean.chk.cov < clean.chk.covScale * 0.01)))) fails.push(`engine lab ${label}: clean cuts ${JSON.stringify({ clean, rough })}`)
           else ok(`engine lab ${label}: a clean cut's edge is the cut's own line (${clean.near} of ${clean.rows} rows within 2 pixels, none past it; whole blobs reach ${Math.round(rough.over)} pixels past)`)
+        }
+        // see-through blobs that cross: two big discs set through each other in an X. Sorted by their middles one is
+        // wholly in front; peeled, each is in front on its own side of the line where they cross, with the same cover
+        {
+          const look = async (peel) => {
+            const e = await open(`/engine-lab/?which=engine&offscreen=1&peel=${peel}${webgl ? '&webgl=1' : ''}`, { viewport: { width: 500, height: 500 } })
+            await e.page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+            const r = await e.page.evaluate(async () => {
+              const l = window.__lab
+              await l.frame(0)
+              const cv = document.querySelector('canvas'), w = cv.width, h = cv.height, d = cv.getContext('2d').getImageData(0, 0, w, h).data
+              // red less blue, over a patch either side of the middle, above the lying disc
+              const side = (x0, x1) => { let s = 0, n = 0; for (let y = Math.floor(h * 0.2); y < h * 0.3; y++) for (let x = Math.floor(w * x0); x < w * x1; x++, n++) s += d[(y * w + x) * 4] - d[(y * w + x) * 4 + 2]; return s / n }
+              let cover = 0
+              for (let i = 3; i < d.length; i += 4) cover += d[i]
+              return { left: side(0.3, 0.4), right: side(0.6, 0.7), cover: cover / (w * h * 255) }
+            })
+            if (peel) await e.page.screenshot({ path: join(shots, `engine-lab-peel-${label}.png`) })
+            await e.ctx.close()
+            return r
+          }
+          const sorted = await look(0), peeled = await look(4)
+          const flips = peeled.left > 10 && peeled.right < -10 && Math.sign(sorted.left) === Math.sign(sorted.right)
+          if (!flips || Math.abs(peeled.cover - sorted.cover) > 0.005) fails.push(`engine lab ${label}: depth peeling ${JSON.stringify({ sorted, peeled })}`)
+          else ok(`engine lab ${label}: peeled, two see-through discs that cross are each in front on their own side (red less blue ${peeled.left.toFixed(0)} and ${peeled.right.toFixed(0)}; sorted by middles, one is in front on both), the cover unchanged`)
+        }
+        // exact shapes: close to the herd, each pixel shaded by the most of its blob along its line of sight. The
+        // picture changes a little from the flattened blobs (close blobs reach a bit further), and both backends agree
+        {
+          const e = await open(`/engine-lab/?which=engine&n=4000&walk=0&herd=1&offscreen=1&shape=exact${webgl ? '&webgl=1' : ''}`, { viewport: { width: 500, height: 500 } })
+          await e.page.waitForFunction(() => window.__lab || window.__labError, null, { timeout: 60000 })
+          const r = await e.page.evaluate(async () => {
+            const l = window.__lab, cv = document.querySelector('canvas')
+            l.orbit = { ...l.orbit, distance: 0.9, elevation: 5 }
+            const grab = async (on) => {
+              l.world.exactShapes = on
+              await l.frame(0.3)
+              const w = cv.width, h = cv.height, d = cv.getContext('2d').getImageData(0, 0, w, h).data
+              // a 50 by 50 average, for comparing backends whose pixels round a little differently
+              const small = new Array(2500).fill(0), n = new Array(2500).fill(0)
+              let cover = 0
+              for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4, k = Math.floor(y * 50 / h) * 50 + Math.floor(x * 50 / w)
+                small[k] += d[i] + d[i + 1] + d[i + 2]; n[k] += 3; cover += d[i + 3]
+              }
+              return { small: small.map((v, k) => v / n[k]), cover: cover / (w * h * 255) }
+            }
+            const flat = await grab(false), exact = await grab(true)
+            return { flat: flat.cover, exact: exact.cover, small: exact.small }
+          })
+          await e.ctx.close()
+          exactSeen.push(r.small)
+          let apart = 0
+          if (exactSeen.length === 2) for (let k = 0; k < 2500; k++) apart += Math.abs(exactSeen[0][k] - exactSeen[1][k]) / 255 / 2500
+          const grew = r.exact / Math.max(r.flat, 1e-6) - 1
+          if (!(r.exact > 0.05 && grew > -0.01 && grew < 0.1 && apart < 0.01)) fails.push(`engine lab ${label}: exact shapes ${JSON.stringify({ flat: r.flat, exact: r.exact, apart })}`)
+          else ok(`engine lab ${label}: exact shapes close up cover ${(grew * 100).toFixed(1)}% more than flattened blobs${exactSeen.length === 2 ? `, the backends ${(apart * 100).toFixed(2)}% apart` : ''}`)
         }
         // color by angle (spherical harmonics): the lab's sheen makes the fox warm from one side and blue from the other,
         // and on WebGPU the colors the GPU gave each blob match `viewColor`

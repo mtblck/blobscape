@@ -89,6 +89,7 @@ export * from './depth.ts'
 export * from './reflect.ts'
 export * from './mirror.ts'
 export * from './lens.ts'
+export * from './peel.ts'
 export * from '../splat-core/optics.ts'
 
 // the styles as one catalog: every look's settings, where each starts and the look they make for the stage

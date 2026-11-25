@@ -243,7 +243,8 @@ Ink Studio kit. Since November 2026 the two projects build on each other's work 
 idea or code comes from [Ink Studio](https://github.com/siliconjungle/shapeshift-labs-ink-studio)
 (MIT, © siliconjungle), the code says so where it is used. Ink Studio also gave us ideas for smaller
 improvements to Diorama's pixel art, such as dither that moves with things and the picture held on
-the art's grid.
+the art's grid, and to the engine's drawing: leaving off-screen blobs out of the sort, GPU timings, each
+blob's true shape close up, and see-through blobs in the right order where they cross.
 
 The sandbox's One photo to a scene guesses depth with
 [Depth Anything V2](https://github.com/DepthAnything/Depth-Anything-V2) Small (Yang et al., 2024, Apache 2.0),

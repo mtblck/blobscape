@@ -47,6 +47,7 @@ const initial: LabOptions = {
   sh: params.get('sh') === '1',
   radix: params.get('sort') === 'radix',
   exact: params.get('shape') === 'exact',
+  peel: params.has('peel') ? Math.max(0, Math.min(6, Number(params.get('peel')) || 0)) : undefined,
   offscreen: params.get('offscreen') === '1',
 }
 const COUNTS = [20000, 100000, 200000, 500000]
@@ -88,7 +89,7 @@ function App() {
     let live: Lab | undefined, gone = false
     setLab(undefined)
     setError(undefined)
-    const q = new URLSearchParams({ which: opts.which, n: String(opts.count), walk: opts.walk ? '1' : '0', mode: opts.mode, webgl: opts.webgl ? '1' : '0', herd: String(opts.herd), lod: opts.lod ? '1' : '0', edits: opts.edits ? '1' : '0', sh: opts.sh ? '1' : '0', sort: opts.radix ? 'radix' : 'bins', ...(opts.exact ? { shape: 'exact' } : {}), ...(opts.offscreen ? { offscreen: '1' } : {}) })
+    const q = new URLSearchParams({ which: opts.which, n: String(opts.count), walk: opts.walk ? '1' : '0', mode: opts.mode, webgl: opts.webgl ? '1' : '0', herd: String(opts.herd), lod: opts.lod ? '1' : '0', edits: opts.edits ? '1' : '0', sh: opts.sh ? '1' : '0', sort: opts.radix ? 'radix' : 'bins', ...(opts.exact ? { shape: 'exact' } : {}), ...(opts.peel !== undefined ? { peel: String(opts.peel) } : {}), ...(opts.offscreen ? { offscreen: '1' } : {}) })
     history.replaceState(null, '', `?${q}`)
     startLab(canvas.current!, opts).then((l) => {
       if (gone) { l.dispose(); return }
