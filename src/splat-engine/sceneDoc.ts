@@ -686,7 +686,7 @@ export interface FireDoc {
 /** The colors of a fire when a scene names none: deep orange, orange, yellow, white-hot. */
 export const FIRE_COLORS: [string, string, string, string] = ['#d9541e', '#f59a2a', '#ffd166', '#fff3b0']
 /** The most fires a scene can have. */
-export const MAX_FIRES = 4
+export const MAX_FIRES = 10
 
 /** A point light in a scene. */
 export interface LightDoc {

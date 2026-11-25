@@ -4508,7 +4508,7 @@
      "name": "MAX_FIRES",
      "kind": "const",
      "doc": "The most fires a scene can have.",
-     "type": "4"
+     "type": "10"
     },
     {
      "name": "LightDoc",
