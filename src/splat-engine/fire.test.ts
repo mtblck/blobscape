@@ -178,8 +178,10 @@ test('a fire in heavy rain dies down to embers and smoke, its light with it, and
   assert.equal(sparks, 0, 'a fire that is out still throws sparks')
   fire.show(1.3)
   assert.ok(light() < bright * 0.15 && light() > 0, `its light ${light().toFixed(3)} of ${bright.toFixed(3)}`)
-  // the storm over, it catches again
-  for (let k = 0; k < 200; k++) fire.under(skyState(), 0.05)
+  // the storm over, it catches again: told until it has (as it was told until it went out), since the loops it
+  // plays meanwhile are played a few milliseconds a call, and a slow machine needs more calls for them
+  let calm = 0
+  while (fire.fuel[0] < 1 && calm++ < 20000) fire.under(skyState(), 0.05)
   fire.show(1.3)
   assert.equal(fire.fuel[0], 1)
   assert.ok(alight() > full * 0.9 && smoking() === 0)
