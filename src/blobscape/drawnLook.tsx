@@ -109,6 +109,12 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const paints = useMemo(() => paintChoices(on.palette), [ownKey])
   const paintsFor = (id: string) => paints.find((p) => p.id === id) ?? paints[0]
   const blockPaints = paintsFor(block.palette), celPaints = paintsFor(cel.palette)
+  const markPaints = paintsFor(mk.palette), asciiPaints = paintsFor(asc.palette), neonPaints = paintsFor(neon.palette), glassPaints = paintsFor(glass.palette), washPaints = paintsFor(wash.palette)
+  // the palette the look on show paints from (blocks paint their cubes themselves; knitting has its yarns; hatching and
+  // stipple draw ink on paper, and ASCII and neon their own inks unless they take things' own colors)
+  const lookPaints = look === 'cel' ? celPaints : look === 'glass' ? glassPaints : look === 'watercolor' ? washPaints
+    : look === 'neon' ? (neon.set === 'own' ? neonPaints : undefined) : look === 'ascii' ? (asc.own ? asciiPaints : undefined)
+      : look === 'gouache' || look === 'oil' || look === 'ink' || look === 'blobs' ? markPaints : undefined
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
   // the night's, and both tones are dimmed and cooled (`nightLight`), so the scene's lamps and lit windows stand out
   const skyDark = sky ? nightOf(sky) : 0
@@ -166,13 +172,13 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const { pixelCel } = on
   useEffect(() => { stage?.setCel(!look && pixelCel ? { ...pixelCel, ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: timeId ? undefined : nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, timeId, outline, pen, azimuth, light, offscreen, pixelCel])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were);
-  // cel shading then paints them from its palette, if it has one
-  const celSnap = look === 'cel' ? celPaints.colors : undefined
+  // then the look paints them from its palette, if it has one
+  const paintSnap = lookPaints?.colors.length ? lookPaints.colors : undefined
   useEffect(() => {
     // stained glass wants them too: lead runs wherever the color changes, so a mottled surface would be all lead
     const fills = look === 'cel' ? cel.fills : look === 'glass' ? GLASS_FILLS : !look && pixelCel ? PIXEL_FILLS : 0
-    const snap = paletteSnap(celSnap as Rgb[] | undefined)
-    if (!stage || !actor || !plain || (!fills && !snap)) return
+    const snap = paletteSnap(paintSnap as Rgb[] | undefined)
+    if (!stage || !actor || (fills ? !plain : !snap)) return
     const b = actor.blobs
     let flat: ArrayLike<number> = b.color
     if (fills) {
@@ -182,7 +188,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     }
     stage.tint(snap ? (_own, i) => snap(flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]) : (_own, i) => [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]])
     return () => stage.tint()
-  }, [stage, actor, plain, look, cel.fills, !!pixelCel, celSnap])
+  }, [stage, actor, plain, look, cel.fills, !!pixelCel, paintSnap])
   useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' || look === 'stipple' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
 
   const drawnOn = look === 'ink' || look === 'hatch' || look === 'stipple'
@@ -211,17 +217,17 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
         )}
         {lit && (
           <div className="space-y-4" data-testid="brush-neon">
-            <SettingsControls def={NEON_DEF} value={neon} onChange={change('neon')} on={shows} />
+            <SettingsControls def={NEON_DEF} value={neon} onChange={change('neon')} on={shows} choices={{ palette: paintControl(neonPaints, 'Each thing is painted the closest one, so its tube and its body take that color.') }} />
           </div>
         )}
         {glazed && (
           <div className="space-y-4" data-testid="brush-glass">
-            <SettingsControls def={GLASS_DEF} value={glass} onChange={change('glass')} on={shows} />
+            <SettingsControls def={GLASS_DEF} value={glass} onChange={change('glass')} on={shows} choices={{ palette: paintControl(glassPaints, 'Each color is painted the closest one before it is cut into panes, so the glass is that color made richer and lit from behind.') }} />
           </div>
         )}
         {painted && (
           <div className="space-y-4" data-testid="brush-wash">
-            <SettingsControls def={WASH_DEF} value={wash} onChange={change('watercolor')} on={shows} />
+            <SettingsControls def={WASH_DEF} value={wash} onChange={change('watercolor')} on={shows} choices={{ palette: paintControl(washPaints, 'Each color is painted the closest one, then laid on the paper as a see-through wash, so washes over one another mix.') }} />
           </div>
         )}
         {knitted && (
@@ -229,8 +235,8 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <SettingsControls def={KNIT_DEF} value={knit} onChange={change('knit')} on={shows} />
           </div>
         )}
-        {look !== 'cel' && !blocky && !lit && !glazed && !painted && !knitted && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} />}
-        {ascii && <SettingsControls def={ASCII} value={asc} onChange={change('ascii')} on={shows} />}
+        {look !== 'cel' && !blocky && !lit && !glazed && !painted && !knitted && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} choices={{ palette: paintControl(markPaints, 'Each blob is painted the closest one, light and shade as the scene was lit, so shade falls in steps of the palette.') }} />}
+        {ascii && <SettingsControls def={ASCII} value={asc} onChange={change('ascii')} on={shows} choices={{ palette: paintControl(asciiPaints, 'Each character takes the closest one to the color of what it stands for.') }} />}
         {ascii && (
           <div>
             <Button small onClick={() => {

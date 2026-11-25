@@ -20,9 +20,11 @@ export interface GlassChoice {
   shine: number
   /** How much one pane's glass differs from the next, 0 to 1. */
   vary: number
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 /** Where stained glass's settings start. */
-export const GLASS_START: GlassChoice = { pane: 0.06, lead: 3, shine: 0.5, vary: 0.5 }
+export const GLASS_START: GlassChoice = { pane: 0.06, lead: 3, shine: 0.5, vary: 0.5, palette: 'none' }
 
 /** The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), where it has one. */
 export function glassLook(c: GlassChoice, sky?: readonly [readonly number[], readonly number[]]): GlassLook {

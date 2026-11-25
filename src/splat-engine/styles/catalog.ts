@@ -148,6 +148,8 @@ export interface MarkSettings {
   pen: number
   /** The paper and ink, an id of `PAPERS`. */
   paper: string
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 /** The settings of the picture drawn as characters. */
 export interface AsciiSettings {
@@ -167,6 +169,8 @@ export interface AsciiSettings {
   own: boolean
   /** The ground and ink, an id of `PAPERS`. */
   paper: string
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 /** Cel shading's settings. */
 export interface CelSettings {
@@ -293,8 +297,9 @@ export const GLITCH_DEF: StyleDef<GlitchChoice> = {
 /** The settings the brush marks and the plain blobs share: mark size, outline, pen and paper. */
 export const MARKS: StyleDef<MarkSettings> = {
   id: 'marks', styles: ['gouache', 'oil', 'ink', 'hatch', 'stipple', 'blobs'],
-  start: { size: 1, outline: null, pen: 1.5, paper: PAPERS[0].id },
+  start: { size: 1, outline: null, pen: 1.5, paper: PAPERS[0].id, palette: 'none' },
   settings: [
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (_v, on) => on.style !== 'hatch' && on.style !== 'stipple' },
     { key: 'size', kind: 'range', label: 'Mark size', min: 0.5, max: 1.3, step: 0.05, unit: 'percent', when: (_v, on) => on.style !== 'blobs', hint: 'Smaller marks leave gaps between them; bigger ones overlap more.' },
     { key: 'outline', kind: 'toggle', label: 'Outlines', address: 'outline', testid: 'brush-outline', auto: (style) => PEN_LOOKS.includes(style), about: 'A pen line round the subject, where one thing stands in front of another, and between its parts. Heavier against dark things, and it lifts off here and there against light ones.' },
     { key: 'pen', kind: 'range', label: 'Pen width', min: 0.75, max: 3, step: 0.25, unit: 'px', when: (v, on) => v.outline ?? PEN_LOOKS.includes(on.style) },
@@ -308,7 +313,7 @@ export const WORDS_START = 'Every blob a letter. '
 /** The settings of the picture drawn as characters. */
 export const ASCII: StyleDef<AsciiSettings> = {
   id: 'ascii', styles: ['ascii'],
-  start: { chars: 'ascii', letter: 12, weight: 1, strokes: true, strands: true, own: true, paper: PAPERS[0].id, words: WORDS_START },
+  start: { chars: 'ascii', letter: 12, weight: 1, strokes: true, strands: true, own: true, paper: PAPERS[0].id, words: WORDS_START, palette: 'none' },
   settings: [
     { key: 'chars', kind: 'choice', label: 'Characters', address: 'chars', testid: 'brush-chars', options: [
       { id: 'ascii', label: 'ASCII', about: 'Letters and signs by how much there is to show, and strokes along edges.' },
@@ -325,6 +330,8 @@ export const ASCII: StyleDef<AsciiSettings> = {
     { key: 'strands', kind: 'toggle', label: 'Strokes along fur and grass', testid: 'brush-strands', when: (v) => v.chars === 'ascii', about: 'A cell that is mostly long thin blobs, such as strands of fur or blades of grass, gets the stroke nearest the way they run.' },
     { key: 'own', kind: 'toggle', label: 'Their own colors', testid: 'brush-own', about: 'Each character takes the color of what it stands for, on a dark screen. Off, they are one ink on paper.' },
     { key: 'paper', kind: 'choice', label: 'Paper', options: PAPERS, when: (v) => !v.own },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (v) => v.own },
+
   ],
 }
 
@@ -376,6 +383,7 @@ export const NEON_DEF: StyleDef<NeonChoice> = {
   id: 'neon', styles: ['neon'], start: NEON_START,
   settings: [
     { key: 'set', kind: 'choice', label: 'Colors', options: NEON_SETS.map((s) => ({ id: s.id, label: s.label, about: 'Their own gives each tube the color of the thing it goes round, at full strength. The others deal a set of colors out part by part.' })) },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (v) => v.set === 'own' },
     { key: 'pace', kind: 'choice', label: 'Light runs', options: NEON_PACES },
     { key: 'line', kind: 'range', label: 'Tube width', min: 1, max: 5, step: 0.5, unit: 'px' },
     { key: 'glow', kind: 'range', label: 'Glow', min: 0, max: 2, step: 0.1, unit: 'percent', hint: 'How far the tubes\' light spills round them and onto the bodies beside them.' },
@@ -387,6 +395,7 @@ export const NEON_DEF: StyleDef<NeonChoice> = {
 export const GLASS_DEF: StyleDef<GlassChoice> = {
   id: 'glass', styles: ['glass'], start: GLASS_START,
   settings: [
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
     { key: 'pane', kind: 'range', label: 'Pane size', min: 0.03, max: 0.15, step: 0.01, unit: 'percent', hint: 'How big a pane is beside the whole scene. Panes are fixed in the scene, so they stay on their surfaces as the view turns.' },
     { key: 'lead', kind: 'range', label: 'Lead width', min: 1, max: 5, step: 0.5, unit: 'px' },
     { key: 'shine', kind: 'range', label: 'Light behind', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'How much brighter the window is where the light stands behind it than at its corners.' },
@@ -398,6 +407,7 @@ export const GLASS_DEF: StyleDef<GlassChoice> = {
 export const WASH_DEF: StyleDef<WashChoice> = {
   id: 'watercolor', styles: ['watercolor'], start: WASH_START,
   settings: [
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
     { key: 'bleed', kind: 'range', label: 'Edges run', min: 0, max: 14, step: 1, unit: 'px', hint: 'How far a wash\'s edge wanders over the paper.' },
     { key: 'pool', kind: 'range', label: 'Dark edges', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'Paint pools where a wash ends or its color changes, and dries darker there.' },
     { key: 'grain', kind: 'range', label: 'Paper grain', min: 0, max: 1, step: 0.05, unit: 'percent' },

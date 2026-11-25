@@ -13076,9 +13076,15 @@
      ]
     },
     {
+     "name": "whiteness",
+     "kind": "const",
+     "doc": "How near white a color (linear) is, for `kept`: halfway between its brightest and darkest channels. Its brightest\nalone took a strong orange or yellow (a palette's, say) for white and left it bare paper.",
+     "type": "(rgb: readonly number[]) => number"
+    },
+    {
      "name": "kept",
      "kind": "function",
-     "doc": "How much of a color is painted at all: nothing for the lightest (bare paper stands for it), all of it for the rest. `top` is its brightest channel.",
+     "doc": "How much of a color is painted at all: nothing for the lightest (bare paper stands for it), all of it for the rest. `top` is its `whiteness`.",
      "signatures": [
       {
        "code": "kept(top: number): number"
@@ -14003,6 +14009,11 @@
        "name": "paper",
        "type": "string",
        "doc": "The paper and ink, an id of `PAPERS`."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
       }
      ]
     },
@@ -14050,6 +14061,11 @@
        "name": "paper",
        "type": "string",
        "doc": "The ground and ink, an id of `PAPERS`."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
       }
      ]
     },
@@ -14941,6 +14957,11 @@
        "name": "pace",
        "type": "string",
        "doc": "How fast the light runs, an id of `NEON_PACES`."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
       }
      ]
     },
@@ -15020,6 +15041,11 @@
        "name": "vary",
        "type": "number",
        "doc": "How much one pane's glass differs from the next, 0 to 1."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
       }
      ]
     },
@@ -15093,6 +15119,11 @@
        "name": "paper",
        "type": "string",
        "doc": "The paper, an id of `WASH_PAPERS`."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
       }
      ]
     },
