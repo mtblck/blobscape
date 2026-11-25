@@ -85,7 +85,7 @@ export function PixelDiorama() {
   // Whether a frame holding the scene that is in the view now has really been drawn. Handing a cut scene to the stage
   // is not the end of the wait: its buffers have to be filled, its cubes made and its shaders built, which on a phone
   // took seconds after the waiting mark had gone (Matt, 2026-11-25), so the mark stays up until `shown()` resolves.
-  const [arrived, setArrived] = useState(false)
+  const [seenBuilt, setSeenBuilt] = useState<Built>()
   /** The built scene the stage was last given, so only a new cut waits for a frame (a switch like Rock the view does not). */
   const given = useRef<Built | undefined>(undefined)
   const [failed, setFailed] = useState<string>()
@@ -221,6 +221,8 @@ export function PixelDiorama() {
     return w
   }, [weathered, calm, offscreen])
   const shown = useMemo(() => dress(cutShown), [dress, cutShown])
+  // told by which cut was seen, not by a switch: the render that first holds a new cut must already count it as not yet drawn
+  const arrived = !!scene && seenBuilt === scene.built
   // What the view is drawn in lags what is picked while the scene is cut again for it (a style that lights the scene
   // itself wants it cut with no light baked in; a time of day wants its lamps lit or out): the picture on show keeps
   // its own style until the new cut is on the stage, so the bare blobs never show in between (Matt saw them, 2026-11-21)
@@ -326,8 +328,7 @@ export function PixelDiorama() {
     // a new cut is not on screen until a frame holding it is through the GPU: the waiting mark stays up until then
     if (given.current !== scene.built) {
       const mine = given.current = scene.built
-      setArrived(false)
-      void stage.shown().then(() => { if (given.current === mine) setArrived(true) })
+      void stage.shown().then(() => { if (given.current === mine) setSeenBuilt(mine) })
     }
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
@@ -409,6 +410,11 @@ export function PixelDiorama() {
   // (`LIT_MAX`), so only what gives its own light reaches the pixel pass's glow
   const pixelCel = useMemo<CelLook | undefined>(() => (pixels && shadedNow && !touring ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixels, shadedNow, touring, shown.sun, shown.shade])
   const drawing = useDrawnLook(stage, touring ? undefined : drawnStyle, { pixelCel, palette: (shown.of ?? shown).palette.colors, actor: onStage?.built, water: !!onStage?.of.water, weather: weathered || !!onStage?.of.heavens?.clouds, spacing: DETAIL.find((d) => d.id === onStage?.detail)?.spacing, plain: !!onStage?.plain, time: timeNow, azimuth: shown.views[0].orbit.azimuth, offscreen, light: coarse, loop: shown.loop, sky: shown.finish.sky || weathered ? [styleSky[0], styleSky[1]] : undefined }, drawnKept)
+  // The color behind the canvas is the new scene's as soon as its cut is in hand, a moment before the canvas holds
+  // anything but the old scene: it showed behind the old picture, then the transition laid the old picture and its
+  // own backdrop back over it, then gave way to the new (Matt saw the backdrop change, change back and change again,
+  // 2026-11-25). So it waits with the waiting mark, until a frame of the new scene is drawn.
+  const ground = useHeld(drawing.ground, arrived)
   // the walk-through's fourth step is about the four samples, so it draws them whatever the switch says
   const sampling = touring?.id === 'samples'
   const drawnLook = useMemo(() => (asPixels ? (sampling ? { ...look, fine: true } : look) : undefined), [asPixels, sampling, look])
@@ -799,7 +805,7 @@ export function PixelDiorama() {
           </ViewPopup>
         }
         view={<>
-              {drawing.ground && <div aria-hidden className="absolute inset-0" style={{ background: drawing.ground }} data-testid="diorama-ground" />}
+              {ground && <div aria-hidden className="absolute inset-0" style={{ background: ground }} data-testid="diorama-ground" />}
               <canvas
                 ref={canvas}
                 role="application"
