@@ -90,6 +90,7 @@ export type { GlyphCell, GlyphLook, GlyphSet, Probe } from '../splat-core/glyphs
 export { GLYPHS, QUADS, RAMP, RAMP_INK, SHADES, STROKES, blockFor, brailleFor, charOf, glyphAtlas, glyphBit, glyphCell, glyphScale, glyphText, rampFor, setBit, shapeCell, strokeFor, toneOf } from '../splat-core/glyphs.ts'
 export { GlyphPass } from './glyphPass.ts'
 export * from './lod.ts'
+export * from './merge.ts'
 export * from './edit.ts'
 export * from './depth.ts'
 export * from './reflect.ts'
