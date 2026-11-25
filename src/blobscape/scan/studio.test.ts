@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { about, extent } from './clean.ts'
 import { sampleScan } from './sample.ts'
 import { editAt } from '../../splat-engine/edit.ts'
-import { DEFAULT_CLEAN, FINISHED, LIGHTS, UNTURNED, WORK, autoOrient, cleanMasks, finish, lightsFor, preview, tip, trimEdits, working } from './studio.ts'
+import { DEFAULT_CLEAN, FINISHED, LIGHTS, UNTURNED, WORK, autoOrient, cleanMasks, finish, lightingFor, lightsFor, preview, tip, trimEdits, working } from './studio.ts'
 
 const sample = sampleScan(3, 0.5)
 const mugShare = (m: Uint8Array | undefined) => {
@@ -62,7 +62,7 @@ test('preview shows cut blobs in red only when asked, and finish stands the obje
 test('every light preset gives lights in range near the object', () => {
   for (const l of LIGHTS) {
     const ls = lightsFor(l.id, 30, [-1, 0, -1], [1, 2, 1])
-    if (l.id === 'scanned') { assert.equal(ls.length, 0); continue }
+    if (l.id === 'scanned' || l.id === 'sky') { assert.equal(ls.length, 0); continue }
     assert.ok(ls.length > 0)
     for (const p of ls) {
       const d = Math.hypot(p.position[0], p.position[1] - 1, p.position[2])
@@ -70,6 +70,18 @@ test('every light preset gives lights in range near the object', () => {
       assert.ok(p.color.every((c) => c >= 0 && Number.isFinite(c)))
     }
   }
+})
+
+test('the sun and moon preset is the shared sky at the hour, turned by the angle', () => {
+  const noon = lightingFor('sky', 0, [-1, 0, -1], [1, 2, 1], 1, 13)
+  assert.ok(noon.lights.length >= 1 && 'direction' in noon.lights[0] && noon.lights[0].direction[1] > 0.5)
+  const turned = lightingFor('sky', 90, [-1, 0, -1], [1, 2, 1], 1, 13)
+  const a = noon.lights[0] as { direction: number[] }, b = turned.lights[0] as { direction: number[] }
+  assert.ok(Math.abs(a.direction[1] - b.direction[1]) < 1e-9 && Math.abs(Math.hypot(a.direction[0], a.direction[2]) - Math.hypot(b.direction[0], b.direction[2])) < 1e-9)
+  const midnight = lightingFor('sky', 0, [-1, 0, -1], [1, 2, 1], 1, 0)
+  const sum = (x: number | number[]) => (typeof x === 'number' ? x * 3 : x[0] + x[1] + x[2])
+  assert.ok(sum(midnight.ambient) < sum(noon.ambient), 'night is darker round about')
+  assert.deepEqual(lightingFor('lamp', 30, [-1, 0, -1], [1, 2, 1], 0.3, 13), { lights: lightsFor('lamp', 30, [-1, 0, -1], [1, 2, 1]), ambient: 0.3 })
 })
 
 test('the view\'s trim lines are the masks\' own: a point is kept by the edits just when the crops and the table cut keep it', () => {

@@ -1140,8 +1140,8 @@ export default [
   },
   {
     name: 'scan-studio',
-    about: 'Scan Studio: the sample is leveled and cleaned, cut blobs show red, a lamp relights, .ply round trip, hand-off to the sandbox',
-    entries: ['src/blobscape/ScanStudio.tsx', 'src/blobscape/handoff.ts'],
+    about: 'Scan Studio: the sample is leveled and cleaned, cut blobs show red, a lamp relights, the scanned light is taken out and the sun lights it, .ply round trip, hand-off to the sandbox',
+    entries: ['src/blobscape/ScanStudio.tsx', 'src/blobscape/handoff.ts', 'src/blobscape/scan/delight.worker.ts'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       const k = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
       await k.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 90000 }).catch(() => {})
@@ -1177,6 +1177,14 @@ export default [
       const c = await look()
       if (!(b.red > 50000 && Math.abs(c.sum - a.sum) > a.sum * 0.03)) fails.push(`blobscape scan: cut/lamp ${JSON.stringify({ red: b.red, before: a.sum, lamp: c.sum })}`)
       else ok(`blobscape scan: cut blobs show red (${b.red} pixels) and the lamp relights the mug (brightness ${Math.round((100 * c.sum) / a.sum)}%)`)
+      // picking a light takes the scanned light out (#463), in a worker; then the shared sun and moon light the paint
+      const said = await k.page.waitForFunction(() => { const t = document.querySelector('[data-testid=scan-delight]')?.textContent ?? ''; return /^It was lit/.test(t) && t }, null, { timeout: 60000 }).then((h) => h.jsonValue(), () => '')
+      const paint = await look()
+      await tabClick(k.page.getByRole('button', { name: 'Sun and moon' }))
+      const sky = await look()
+      if (!(said && Math.abs(paint.sum - c.sum) > c.sum * 0.01 && Math.abs(sky.sum - paint.sum) > paint.sum * 0.02)) fails.push(`blobscape scan: taking the light out ${JSON.stringify({ said, lamp: c.sum, paint: paint.sum, sky: sky.sum })}`)
+      else ok(`blobscape scan: the scanned light is taken out ("${said}") and the sun lights the paint (brightness ${Math.round((100 * sky.sum) / paint.sum)}% of the lamp's)`)
+      await tabClick(k.page.getByRole('button', { name: 'Lamp' }))
       await k.page.screenshot({ path: join(shots, 'blobscape-scan.png') })
       await axe(k.page, 'blobscape scan')
       const [dl] = await Promise.all([k.page.waitForEvent('download'), k.page.getByRole('button', { name: 'Download .ply' }).click()])
