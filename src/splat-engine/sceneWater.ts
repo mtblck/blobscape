@@ -6,6 +6,7 @@ import { Skeleton, axisAngle, emptySkin, mulQ, setWeights } from './rig.ts'
 import type { CompiledScene, WaterDrop, WaterPlan } from './sceneDoc.ts'
 import { WATER_TICK, Water, crossing, makeSurface, shadeSurface, shapeSurface, type WaterSurface } from './water.ts'
 import { LavaHeat, lavaColor } from './lava.ts'
+import { PotionMix, domeShape, potionColor, type PotionPlan } from './potion.ts'
 
 /** How many rolls of wind press on the water. */
 const WIND_ROLLS = 5
@@ -90,6 +91,14 @@ export class SceneWater {
       this.glowNow = new Float32Array(nx * nz)
       this.surface.glow = new Uint8Array(this.surface.blobs.count).fill(255)
     }
+    if (plan.potion) {
+      // a potion's dye and froth are kept as lava's glow is, two bytes a cell; it is never mirrored, and glows as bright as it says
+      this.potion = new PotionMix({ nx, nz, x0, z0, cell, wet: water.wet }, plan.potion, scene.loop)
+      this.glowFrames = new Uint8Array(this.count * nx * nz * 2)
+      this.glowNow = new Float32Array(nx * nz * 2)
+      this.swell = new Float32Array(nx * nz)
+      this.surface.glow = new Uint8Array(this.surface.blobs.count).fill(Math.round(plan.potion.glow * 255))
+    }
     this.frames = this.run(water, plan.drops, true)
     this.set(0)
   }
@@ -98,10 +107,14 @@ export class SceneWater {
   private readonly warm: number
   /** The heat over the pool where the scene's water is lava (`WaterPlan.lava`), as it stands after the loop was worked out. */
   readonly lava: LavaHeat | null = null
-  /** The kept moments' glow, a byte a cell, where it is lava: two loops run back to back and blended across the loop, so the end joins the start exactly. */
+  /** The dye and froth over the pool where the scene's water is a potion (`WaterPlan.potion`), as they stand after the loop was worked out. */
+  readonly potion: PotionMix | null = null
+  /** The kept moments' glow, a byte a cell, where it is lava (or a potion's dye then froth, two bytes a cell): two loops run back to back and blended across the loop, so the end joins the start exactly. */
   private readonly glowFrames: Uint8Array | null = null
-  /** Each cell's glow as last laid by `set`, 0 to 1, where it is lava. */
+  /** Each cell's glow as last laid by `set`, 0 to 1, where it is lava; a potion's dye, then its froth, a block of cells each. */
   readonly glowNow: Float32Array | null = null
+  /** How far each cell is under a bubble swelling to pop, 0 to 1, as last laid by `set`, where it is a potion. */
+  readonly swell: Float32Array | null = null
   private readonly every: number
   private readonly ticks: number
 
@@ -125,8 +138,9 @@ export class SceneWater {
     const swells = bodies && plan.swells.length ? new Swells(water, plan, scene.loop) : undefined
     const froth = bodies && this.foamFrames ? new Froth(water, plan, scene.loop, this.foam) : undefined
     // lava's heat runs one loop more than the heights, kept too, so the two kept loops can be blended into one that joins
-    const lava = bodies ? this.lava : null, gf = lava && this.glowFrames, other = gf && new Uint8Array(gf.length)
-    const dt = every * WATER_TICK, cells = nx * nz
+    const lava = bodies ? this.lava ?? this.potion : null, gf = lava && this.glowFrames, other = gf && new Uint8Array(gf.length)
+    const dt = every * WATER_TICK, cells = nx * nz, ch = this.potion ? 2 : 1
+    const keep = (into: Uint8Array, at: number) => this.potion ? this.potion.write(into, at) : this.lava!.glow(into, at)
     for (let run = 0; run <= warm + (lava ? 1 : 0); run++) {
       let next = 0
       lava?.rewind()
@@ -134,7 +148,7 @@ export class SceneWater {
         const t = (k / ticks) * scene.loop
         if (lava && k % every === 0) {
           lava.step(dt, t, (b) => water.splash(b.x, b.z, b.r, plan.splash.depth))
-          if (run >= warm) lava.glow(run === warm ? gf! : other!, (k / every) * cells)
+          if (run >= warm) keep(run === warm ? gf! : other!, (k / every) * cells * ch)
         }
         if (run > warm) { water.step(WATER_TICK); yield; continue }
         if (run === warm && k % every === 0) {
@@ -165,8 +179,8 @@ export class SceneWater {
     if (gf && other) {
       // the loop after the kept one starts where the kept one ends: fading from it to the kept one across the loop joins the end to the start
       for (let m = 0; m < this.count; m++) {
-        const s = m / this.count, o = m * cells
-        for (let c = 0; c < cells; c++) gf[o + c] = Math.round(other[o + c] * (1 - s) + gf[o + c] * s)
+        const s = m / this.count, o = m * cells * ch
+        for (let c = 0; c < cells * ch; c++) gf[o + c] = Math.round(other[o + c] * (1 - s) + gf[o + c] * s)
       }
     }
     return frames
@@ -331,7 +345,11 @@ export class SceneWater {
     const ff = this.foamFrames, foam = this.foam
     if (ff) for (let k = 0; k < n; k++) foam[k] = (ff[a * n + k] * (1 - w) + ff[b * n + k] * w) / 255
     const gf = this.glowFrames, glow = this.glowNow
-    if (gf && glow) for (let k = 0; k < n; k++) glow[k] = (gf[a * n + k] * (1 - w) + gf[b * n + k] * w) / 255
+    if (gf && glow) {
+      const m = glow.length
+      for (let k = 0; k < m; k++) glow[k] = (gf[a * m + k] * (1 - w) + gf[b * m + k] * w) / 255
+    }
+    if (this.potion && this.swell) this.domes(u / this.count * this.loop)
     for (const band of this.bands) {
       // a band falls as its share of the swarm comes out
       const on = Math.min(1, Math.max(0, (this.rain - band.from) / (band.to - band.from)))
@@ -346,6 +364,27 @@ export class SceneWater {
     this.water.version++
   }
 
+  /** Swells the surface over every bubble about to pop at `t` (`PotionPlan.rise` before it does), into `water.h` and `swell`. */
+  private domes(t: number) {
+    const p = this.plan.potion!, swell = this.swell!, { nx, nz, x0, z0, cell } = this.plan, h = this.water.h, wet = this.water.wet
+    swell.fill(0)
+    for (const b of this.potion!.bubbles) {
+      const ahead = ((((b.at - t) % this.loop) + this.loop) % this.loop)
+      if (ahead >= p.rise) continue
+      const u = 1 - ahead / p.rise
+      const i0 = Math.max(0, Math.floor((b.x - b.r - x0) / cell)), i1 = Math.min(nx - 1, Math.floor((b.x + b.r - x0) / cell))
+      const j0 = Math.max(0, Math.floor((b.z - b.r - z0) / cell)), j1 = Math.min(nz - 1, Math.floor((b.z + b.r - z0) / cell))
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const k = j * nx + i
+        if (!wet[k]) continue
+        const s = domeShape(Math.hypot(x0 + (i + 0.5) * cell - b.x, z0 + (j + 0.5) * cell - b.z), b.r, u)
+        if (s <= 0) continue
+        h[k] += s * p.dome * (b.r / p.pop)
+        swell[k] = Math.max(swell[k], s)
+      }
+    }
+  }
+
   /**
    * Makes the surface's blobs ready for the scene at `t` seconds, seen from `eye`: lifted and tilted to the water,
    * and colored for that eye. `mirror` is a picture of what the water mirrors (`SplatMirror`), `lights` the lamps
@@ -356,6 +395,7 @@ export class SceneWater {
     this.set(t)
     shapeSurface(this.surface, this.water, p.ripple)
     if (p.lava && this.glowNow) { shadeLava(this.surface, this.glowNow, p.lava.ramp); return }
+    if (p.potion && this.glowNow && this.swell) { shadePotion(this.surface, this.glowNow, this.swell, p.potion); return }
     shadeSurface(this.surface, { body: p.body, sky: p.sky, horizon: p.horizon, clear: p.clear, steep: p.ripple, deep: p.deep, mirror }, eye, lights)
     if (this.foamFrames) whiten(this.surface, this.foam)
     if (this.spray) throwSpray(this.spray, this.bursts, t, this.loop, p.level)
@@ -369,6 +409,23 @@ export function shadeLava(s: WaterSurface, glow: Float32Array, ramp: Parameters<
     // a little grain a blob, so the crust is not one flat color
     const g = glow[s.home[k]] + (hash(k) - 0.5) * 0.06
     lavaColor(g, ramp, out)
+    color[k * 3] = out[0]; color[k * 3 + 1] = out[1]; color[k * 3 + 2] = out[2]
+    opacity[k] = 1
+  }
+}
+
+/**
+ * Colors each blob of a potion's surface (`potionColor`): by the dye and froth of the cell it lies in, deep in the
+ * hollows and lit on the crests (by the surface's curvature), and paler and shinier over a bubble about to pop. Solid.
+ */
+export function shadePotion(s: WaterSurface, brew: Float32Array, swell: Float32Array, p: PotionPlan) {
+  const { color, opacity } = s.blobs, out = [0, 0, 0], n = swell.length
+  // a hollow about a bubble's width across and half a dome's height deep is as deep as it gets (a dome's top bends by about 8 dome / pop²)
+  const full = (p.dome * 3) / (p.pop * p.pop)
+  for (let k = 0; k < s.home.length; k++) {
+    const c = s.home[k]
+    const shade = Math.max(-1, Math.min(1, s.curve[k] / -full)) + (hash(k) - 0.5) * 0.05
+    potionColor(brew[c], shade + swell[c] * 0.6, brew[n + c] + swell[c] * 0.35, p.ramp, out)
     color[k * 3] = out[0]; color[k * 3 + 1] = out[1]; color[k * 3 + 2] = out[2]
     opacity[k] = 1
   }

@@ -26,8 +26,8 @@ test('every light in every scene says when it shines, and a scene is sound by da
     if (!d.doc) continue
     const doc = d.doc
     ;(doc.lights ?? []).forEach((l, i) => assert.ok(l.lit, `${d.id}: lights[${i}] must say when it shines: lit 'dark' (a lamp, a candle, a window, a fire), 'day' or 'always' (docs/scene-descriptions.md, rule 14)`))
-    // a lamp that goes out by day has something that stops glowing with it: its glass, its flame, its pane
-    if ((doc.lights ?? []).some((l) => l.lit === 'dark')) assert.ok(doc.parts.some((p) => p.lit === 'dark'), `${d.id}: a light waits for the dark but no glowing part does: give the lamp's glowing parts lit 'dark' too`)
+    // a lamp that goes out by day has something that stops glowing with it: its glass, its flame, its pane, or a simulated fire
+    if ((doc.lights ?? []).some((l) => l.lit === 'dark')) assert.ok(doc.parts.some((p) => p.lit === 'dark') || (doc.fires ?? []).some((f) => f.lit === 'dark'), `${d.id}: a light waits for the dark but no glowing part or fire does: give the lamp's glowing parts lit 'dark' too`)
     for (const dark of [false, true]) {
       const at = litFor(doc, dark)
       assert.deepEqual(checkScene(at), [], `${d.id} ${dark ? 'in the dark' : 'by day'}`)
