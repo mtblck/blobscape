@@ -23,6 +23,7 @@ import { RadixSort } from './radix.ts'
 /** Either depth sort: the counting sort over bins, or the full radix sort. */
 type Sorter = DepthSort | RadixSort
 import { DISSOLVE_ASIDE, DISSOLVE_SOFT, DISSOLVE_TURN, DISSOLVE_WAY, dissolved } from './dissolve.ts'
+import { MERGE_BAND, MERGE_PX, levelWeight } from './merge.ts'
 import { FAR_BAND, FAR_SPREAD, detailFor, lodRank, screenRadius, type DetailRule, type FarRule } from './lod.ts'
 import { CLEAN_MARGIN, MAX_EDITS, blobReach, editAt, type ShapeEdit } from './edit.ts'
 import { applyMorphs, shares, type Morph } from './morph.ts'
@@ -90,6 +91,14 @@ export interface Actor {
   lies?: boolean
   /** The side of its cubes while the stage draws blocks, where it was cut on a grid of its own; left out, the look's `cell`. */
   blockCell?: number
+  /**
+   * Each blob's level of detail, a byte a blob (merge.ts `levelCode`), with `levelCell`: an actor made by `mergeLevels`
+   * carries coarser copies of its blobs, and a blob is drawn only while its level suits its distance (`levelWeight`).
+   * Left out, every blob is drawn at every distance.
+   */
+  levels?: Uint8Array
+  /** The side of the grid the finest of `levels` was cut on, in the actor's own units. */
+  levelCell?: number
 }
 
 /** How many morph targets a world takes, over all its actors. */
@@ -776,6 +785,8 @@ export class SplatWorld extends Mesh {
         // and its next two, how far the bone's blobs have dissolved and how far they drift (dissolve.ts)
         data[g * 20 + 7] = sk.gone[b]
         data[g * 20 + 11] = sk.lift[b]
+        // and its last, the side of the actor's finest merged cells (merge.ts), 0 with none
+        data[g * 20 + 15] = this.actors[a].levelCell ?? 0
         data.set(sk.quat.subarray(b * 4, b * 4 + 4), g * 20 + 16)
       }
     }
@@ -1058,6 +1069,9 @@ export class SplatWorld extends Mesh {
     // plane or the clip plane, or further off screen than `CLIP_XY` (the same test as `projectSplat`'s, on the center)
     const cull = this.sort instanceof DepthSort && this.cull
     const p = this.cam.proj.value.elements, k = this.cam.clip.value
+    // merged levels (merge.ts): a blob whose level does not suit its distance is left out as the GPU would draw it clear
+    const lv = cull ? this.buf.levels : null
+    const focal = this.cam.viewport.value.x * 0.5 * p[0], bones = this.buf.boneData
     for (let i = 0; i < this.count; i++) {
       const x = c[i * 3], y = c[i * 3 + 1], z = c[i * 3 + 2]
       const vx = v[0] * x + v[4] * y + v[8] * z + v[12], vy = v[1] * x + v[5] * y + v[9] * z + v[13], vz = v[2] * x + v[6] * y + v[10] * z + v[14]
@@ -1065,6 +1079,10 @@ export class SplatWorld extends Mesh {
         const cw = p[3] * vx + p[7] * vy + p[11] * vz + p[15], lim = cw * CLIP_XY
         if (vz >= -0.01 || p[2] * vx + p[6] * vy + p[10] * vz + p[14] > cw || Math.abs(p[0] * vx + p[4] * vy + p[8] * vz + p[12]) > lim ||
             Math.abs(p[1] * vx + p[5] * vy + p[9] * vz + p[13]) > lim || k.x * x + k.y * y + k.z * z + k.w < 0) { keys[i] = CULLED; continue }
+        if (lv && lv.code[i] >= 16) {
+          const g = lv.bone[i] * 20, size = Math.hypot(bones[g], bones[g + 1], bones[g + 2])
+          if (levelWeight((lv.cell[i] * size * focal) / -vz, lv.code[i]) <= 0) { keys[i] = CULLED; continue }
+        }
       }
       keys[i] = top - Math.min(top, Math.max(0, Math.floor((-vz - near) * scale)))
     }
@@ -1274,6 +1292,8 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
   // how much of each of the first four lights a blob sees, a byte each: all of it unless the actor baked lamp shadows
   const seen = new Uint32Array(n).fill(0xffffffff)
   packBlobs(actors, boneOffset, center, scale, quat, color)
+  // merged levels (merge.ts), for the CPU's cull on WebGL: each blob's code, the bone it rides and its finest cells' side
+  const levels = actors.some((a) => a.levels) ? { code: new Uint8Array(n), bone: new Uint32Array(n), cell: new Float32Array(n) } : null
   let i = 0
   actors.forEach((a, ai) => {
     const { blobs, skin } = a
@@ -1289,8 +1309,10 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
         if (g) for (let j = 0; j < GRAD_STRIDE; j++) skinFloats[i * skinStride + 2 + j] = g[k * GRAD_STRIDE + j]
       }
       if (a.seen) seen[i] = (a.seen[k * 4] | (a.seen[k * 4 + 1] << 8) | (a.seen[k * 4 + 2] << 16) | (a.seen[k * 4 + 3] << 24)) >>> 0
-      // a blob's own light rides in the spare float beside its scale (`packShape` leaves it be)
-      if (a.glow) scale[i * 4 + 3] = a.glow[k] / 255
+      // a blob's own light rides in the spare float beside its scale (`packShape` leaves it be), and its level of detail
+      // (merge.ts) as twice its code on top: the light is what is left under 2
+      if (a.glow || a.levels) scale[i * 4 + 3] = (a.glow ? a.glow[k] / 255 : 0) + 2 * (a.levels?.[k] ?? 0)
+      if (levels && a.levels) { levels.code[i] = a.levels[k]; levels.bone[i] = boneOffset[ai] + skin.joints[k * 4]; levels.cell[i] = a.levelCell ?? 0 }
     }
   })
   const attr = (a: Float32Array | Uint32Array, size: number) => new StorageBufferAttribute(a, size)
@@ -1310,7 +1332,7 @@ function makeBuffers(actors: Actor[], boneOffset: number[], count: number, bones
     count: n,
     /** Every GPU buffer, so dispose can free them. */
     attrs: [centerAttr, scaleAttr, quatAttr, colorAttr, partAttr, seenAttr, skinAttr, boneAttr, worldCenterAttr, covAAttr, covBAttr, splatAAttr, splatBAttr, splatCAttr],
-    skinWords, srcCenterData: center,
+    skinWords, srcCenterData: center, levels,
     /** Each actor's weight gradients (stretch.ts), or null; how many words a blob has in `skin`; whether any actor stretches. */
     grads, skinStride, stretch,
     boneData, boneAttr, worldCenterAttr, covAAttr, covBAttr, colorAttr, centerAttr, scaleAttr, quatAttr,
@@ -1618,10 +1640,14 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
   }
 
   let A: N[]
-  // the blob's own light (`Actor.glow`), handed on to the color pass in a spare slot of the covariance
-  let glow: N
+  // the blob's own light (`Actor.glow`), handed on to the color pass in a spare slot of the covariance, and under it its
+  // level of detail (merge.ts), twice its code on top of the light
+  const packed = (M ? M.cholB.element(i).z : buf.srcScale.element(i).w).toVar()
+  const code = floor(packed.mul(0.5)).toVar()
+  const glow: N = packed.sub(code.mul(2))
+  // the side of its finest level's cells in the world: the actor's, carried in each bone's spare slot 15, at the bones' size
+  const cell = col(0, 3).w.mul(ws[0]).add(col(1, 3).w.mul(ws[1])).add(col(2, 3).w.mul(ws[2])).add(col(3, 3).w.mul(ws[3])).mul(S).toVar()
   if (M) {
-    glow = M.cholB.element(i).z
     // the rest shape is L Lᵀ, L lower triangular: its columns stand in for the blob's scaled axes
     const la = M.cholA.element(i).toVar(), lb = M.cholB.element(i).toVar()
     const L = [vec3(la.x, la.y, la.z), vec3(0, la.w, lb.x), vec3(0, 0, lb.y)]
@@ -1632,7 +1658,6 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
       A = L.map((l) => stretched(l, c0.mul(l.x).add(c1.mul(l.y)).add(c2.mul(l.z))))
     }
   } else if (mode === 'quat') {
-    glow = buf.srcScale.element(i).w
     const s = buf.srcScale.element(i).xyz.toVar()
     const lq = normalize(buf.srcQuat.element(i)).toVar()
     const q = quatMul(normalize(Q), lq).toVar()
@@ -1643,7 +1668,6 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
       A = [stretched(own[0].mul(s.x), A[0]), stretched(own[1].mul(s.y), A[1]), stretched(own[2].mul(s.z), A[2])]
     }
   } else {
-    glow = buf.srcScale.element(i).w
     const s = buf.srcScale.element(i).xyz.toVar()
     const lq = normalize(buf.srcQuat.element(i)).toVar()
     const R = quatColumns(lq as never)
@@ -1665,14 +1689,15 @@ function deformBlob(buf: ReturnType<typeof makeBuffers>, i: N, mode: SkinMode, M
   f.mulAssign(float(1).sub(going).mul(float(1).sub(going)))
   // shape edits: a cut blob has no size either (with clean cuts, only one well inside the cut: the draw trims the rest)
   f.mulAssign(editsAt(buf.edits, world, buf.edits.clean.mul(CLEAN_MARGIN).mul(sqrt(max(e('x', 'x').add(e('y', 'y')).add(e('z', 'z')), 0)))).keep)
-  return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).mul(f).toVar(), covB: vec4(vec2(e('y', 'z'), e('z', 'z')).mul(f), glow, 0).toVar() }
+  return { world, covA: vec4(e('x', 'x'), e('x', 'y'), e('x', 'z'), e('y', 'y')).mul(f).toVar(), covB: vec4(vec2(e('y', 'z'), e('z', 'z')).mul(f), glow, cell).toVar(), code }
 }
 
 function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode, M?: MorphGPU) {
   return Fn(() => {
     const i = instanceIndex
     const d = deformBlob(buf, i, mode, M)
-    buf.worldCenterW.element(i).assign(vec4(d.world, 1))
+    // the blob's level of detail rides where the center's w would be, and its cells' side in the covariance's spare slot
+    buf.worldCenterW.element(i).assign(vec4(d.world, d.code))
     buf.covAW.element(i).assign(d.covA)
     buf.covBW.element(i).assign(d.covB)
   })().compute(buf.count, [WORKGROUP]).setName(`SplatWorldDeform_${mode}`)
@@ -1687,7 +1712,7 @@ function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode, M?: Mor
  * offset): a blob whose center is behind it gets opacity 0. `far` is the level of detail for small blobs (`FarRule`:
  * pixels, least; pixels 0 is off), which thins blob `idx` out by its size on screen and grows it (`farSize` in lod.ts).
  */
-function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N, clip: N, far: N, idx: N) {
+function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N, clip: N, far: N, idx: N, code: N) {
   const viewCenter4 = view.mul(vec4(center, 1)).toVar()
   const viewCenter = viewCenter4.xyz.toVar()
   const centerClip = proj.mul(viewCenter4).toVar()
@@ -1753,6 +1778,11 @@ function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N
     .or(dot(center, clip.xyz).add(clip.w).lessThan(0)), () => {
     alphaScale.assign(0)
   })
+  // merged levels (merge.ts): a blob of a level drawn only while its level suits its distance, by its finest cells' size
+  // on screen (`levelWeight`, the CPU twin)
+  If(code.greaterThanEqual(16), () => {
+    alphaScale.mulAssign(levelWeightNode(covB.w.mul(focal.x).div(z.negate()), code))
+  })
   const ndc = centerClip.xyz.div(max(w, 0.0001)).toVar()
   // How the blob lies in depth: where it is densest along the line of sight through a point of its ellipse is nearer
   // or further than its center by the depth that goes with that point (the mean of depth given the place on screen:
@@ -1762,6 +1792,16 @@ function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N
   const toDepth = proj[3].z.mul(invZ2).toVar()
   const tilt = vec3(dot(h, axis1).div(sqrt(lambda1)), dot(h, axis2).div(sqrt(lambda2)), sqrt(max(c00.add(c11).add(c22), 0)).mul(MARK_LIFT)).mul(toDepth)
   return { ndc, axes: vec4(ax1, ax2), tilt, alphaScale, depth: viewCenter.z.negate() }
+}
+
+/** `levelWeight` (merge.ts) on the GPU: how much of a blob of level `code` is drawn where its finest cells are `px` pixels across. */
+function levelWeightNode(px: N, code: N) {
+  const c = uint(code).toVar()
+  const level = float(c.bitAnd(uint(3))).toVar(), top = float(c.shiftRight(uint(2)).bitAnd(uint(3))).toVar()
+  const ease = (x: N) => smoothstep(float(MERGE_PX * (1 - MERGE_BAND)), float(MERGE_PX * (1 + MERGE_BAND)), x)
+  const into = select(level.greaterThan(0), min(float(1), float(2).mul(float(1).sub(ease(px.mul(pow(float(2), level.sub(1))))))), float(1))
+  const out = select(level.lessThan(top), min(float(1), float(2).mul(ease(px.mul(pow(float(2), level))))), float(1))
+  return into.mul(out)
 }
 
 /** `farSize` (lod.ts) on the GPU: what a blob's covariance is multiplied by for its rank, `px2` its largest standard deviation on screen squared; `far` is (pixels, least). */
@@ -1777,7 +1817,8 @@ function makeProject(buf: ReturnType<typeof makeBuffers>, sort: Sorter, cam: Cam
   const bins1 = bins - 1
   return Fn(() => {
     const i = instanceIndex
-    const p = projectSplat(buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport, cam.clip, cam.far, i)
+    const c = buf.worldCenter.element(i).toVar()
+    const p = projectSplat(c.xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport, cam.clip, cam.far, i, c.w)
     buf.splatAW.element(i).assign(vec4(p.ndc, p.alphaScale))
     buf.splatBW.element(i).assign(p.axes)
     buf.splatCW.element(i).assign(vec4(p.tilt, 0))
@@ -2360,7 +2401,7 @@ function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
-    const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw, clip, far, idx)
+    const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw, clip, far, idx, d.code)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
     let rgb = own

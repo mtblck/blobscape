@@ -956,6 +956,18 @@
        "optional": true,
        "type": "number",
        "doc": "The side of its cubes while the stage draws blocks, where it was cut on a grid of its own; left out, the look's `cell`."
+      },
+      {
+       "name": "levels",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "Each blob's level of detail, a byte a blob (merge.ts `levelCode`), with `levelCell`: an actor made by `mergeLevels`\ncarries coarser copies of its blobs, and a blob is drawn only while its level suits its distance (`levelWeight`).\nLeft out, every blob is drawn at every distance."
+      },
+      {
+       "name": "levelCell",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of the grid the finest of `levels` was cut on, in the actor's own units."
       }
      ]
     },
@@ -20437,6 +20449,103 @@
      "signatures": [
       {
        "code": "farSize(rank: number, px2: number, rule: FarRule): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "merge",
+   "title": "Merged blobs for far ground",
+   "group": "extras",
+   "doc": "",
+   "entries": [
+    {
+     "name": "MERGE_LEVELS",
+     "kind": "const",
+     "doc": "How many coarser levels: cells two and four times the blobs' own.",
+     "type": "2"
+    },
+    {
+     "name": "MERGE_PX",
+     "kind": "const",
+     "doc": "A level gives way to the next coarser one where its cells come under this many pixels across on screen.",
+     "type": "1.5"
+    },
+    {
+     "name": "MERGE_BAND",
+     "kind": "const",
+     "doc": "Over how much of `MERGE_PX` (either side) one level hands over to the next.",
+     "type": "0.25"
+    },
+    {
+     "name": "MERGE_GROW",
+     "kind": "const",
+     "doc": "How much wider a merged blob is than the spread of what it stands for (standard deviations): the mean and spread\nof a cell of touching discs is a blob a third the cell wide, which left the far ground see-through between cells.",
+     "type": "1.35"
+    },
+    {
+     "name": "levelCode",
+     "kind": "function",
+     "doc": "The byte a blob carries for its level: 0 for a blob in no level (drawn at every distance), else its level and the coarsest.",
+     "signatures": [
+      {
+       "code": "levelCode(level: number, top: number): number"
+      }
+     ]
+    },
+    {
+     "name": "levelWeight",
+     "kind": "function",
+     "doc": "How much of a blob is drawn (0 to 1, opacity) where a cell of the finest level is `px` pixels across on screen\n(its side over its distance, at the blob), for its `levelCode`: a level shows from where its finer level's cells\ncome under `MERGE_PX` to where its own do, coming in fully over the band before the finer one starts to go.",
+     "signatures": [
+      {
+       "code": "levelWeight(px: number, code: number): number"
+      }
+     ]
+    },
+    {
+     "name": "Mergeable",
+     "kind": "interface",
+     "doc": "An actor's blobs and what rides with each, as `mergeLevels` takes and gives them.",
+     "props": [
+      {
+       "name": "blobs",
+       "type": "Blobs",
+       "doc": "The blobs in the rest pose."
+      },
+      {
+       "name": "skin",
+       "type": "Skin",
+       "doc": "Which bones move each blob: only a blob wholly on one bone is merged."
+      },
+      {
+       "name": "partOf",
+       "optional": true,
+       "type": "ArrayLike<number>",
+       "doc": "Which part each blob belongs to (the engine's `Actor.partOf`)."
+      },
+      {
+       "name": "seen",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of each of the first four lights each blob sees, four bytes a blob (`Actor.seen`)."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
+      }
+     ]
+    },
+    {
+     "name": "mergeLevels",
+     "kind": "function",
+     "doc": "The blobs with coarser levels added after them: on grids of `cell` (the side the blobs were cut on) times 2, 4 …\n(`levels` of them), cells counted from the origin of the blobs' own frame so a coarse cell holds whole finer ones,\none blob a cell and bone from the blobs on that bone alone. A blob on more than one bone, or clear, stays in no\nlevel and is drawn at every distance. Each blob counts by its opacity times the area of its two widest axes; a\nmerged blob takes their weighted color, opacity, glow and sight of lamps, the part of the heaviest, and their mean\nand spread (each blob's own shape plus where it stands), grown by `MERGE_GROW`. `levels` is each blob's `levelCode`.",
+     "signatures": [
+      {
+       "code": "mergeLevels(a: Mergeable, cell: number, levels?: number): Mergeable & { levels: Uint8Array }"
       }
      ]
     }

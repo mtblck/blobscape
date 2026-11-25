@@ -56,7 +56,8 @@ function whenShown() {
 export function startRenderer(params: THREE.WebGPURendererParameters & { canvas: HTMLCanvasElement }, setup?: (r: THREE.WebGPURenderer) => void) {
   return withRetries(async ({ webgl }) => {
     await whenShown()
-    const renderer = new THREE.WebGPURenderer({ ...params, forceWebGL: webgl || params.forceWebGL })
+    const limits = webgl || params.forceWebGL ? undefined : await bufferLimits()
+    const renderer = new THREE.WebGPURenderer({ ...params, forceWebGL: webgl || params.forceWebGL, requiredLimits: { ...limits, ...params.requiredLimits } })
     setup?.(renderer)
     try {
       await renderer.init()
@@ -69,4 +70,20 @@ export function startRenderer(params: THREE.WebGPURendererParameters & { canvas:
       throw { error, reachedWebGL } satisfies Failed
     }
   }, { webgl: params.forceWebGL })
+}
+
+/**
+ * The biggest buffers the GPU offers, to ask for: WebGPU starts every device at 128 MB a storage buffer whatever the
+ * GPU can do, and a world as big as three islands with their merged levels (merge.ts) and a creature's skin that
+ * stretches passes that in its skin buffer. Nothing where WebGPU is missing or answers nothing.
+ */
+async function bufferLimits(): Promise<Record<string, number> | undefined> {
+  try {
+    const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<{ limits: Record<string, number> } | null> } }).gpu
+    const adapter = await gpu?.requestAdapter()
+    if (!adapter) return undefined
+    return { maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize, maxBufferSize: adapter.limits.maxBufferSize }
+  } catch {
+    return undefined
+  }
 }
