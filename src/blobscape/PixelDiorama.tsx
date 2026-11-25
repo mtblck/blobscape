@@ -54,7 +54,7 @@ import { recordClip, writeRiggedMeshGlb } from '../splat-engine/glb.ts'
 import { Skeleton as Bones } from '../splat-engine/rig.ts'
 
 declare global {
-  interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; style: Style; water: () => SceneWater | undefined; mirrored: boolean; finish: (set: { bands?: number; heat?: number; selout?: boolean; exact?: boolean }) => void } }
+  interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; style: Style; water: () => SceneWater | undefined; mirrored: boolean; finish: (set: { bands?: number; heat?: number; selout?: boolean; exact?: boolean }) => void; picture: (w: number, h: number) => ImageData | undefined } }
 }
 
 /** The view `orbit`, rocked `swing` degrees to either side once every `loop` seconds, as it is at `t`. */
@@ -602,7 +602,18 @@ export function PixelDiorama() {
     if (!stage || !scene) return
     window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.built.skeleton.count, look: () => look, style, water: () => scene.of.water?.(), mirrored,
       // what the Finish tab no longer shows, for verify: the art-pixel effects and the exact sort
-      finish: ({ bands: b, heat: hz, selout: so, exact: ex }) => setFin((f) => ({ ...f, ...(b !== undefined && { bands: b }), ...(hz !== undefined && { heat: hz }), ...(so !== undefined && { selout: so }), ...(ex !== undefined && { exact: ex }) })) }
+      finish: ({ bands: b, heat: hz, selout: so, exact: ex }) => setFin((f) => ({ ...f, ...(b !== undefined && { bands: b }), ...(hz !== undefined && { heat: hz }), ...(so !== undefined && { selout: so }), ...(ex !== undefined && { exact: ex }) })),
+      // for the loop recorder in a style other than pixel art: the view as Export draws it (an offscreen stage keeps its last frame on the page's canvas)
+      picture: (w, h) => {
+        const cv = canvas.current
+        if (!cv?.parentElement) return undefined
+        const sheet = document.createElement('canvas')
+        sheet.width = w
+        sheet.height = h
+        const ctx = sheet.getContext('2d', { alpha: false, willReadFrequently: true })!
+        paintView(ctx, cv.parentElement, w, h, (el) => el)
+        return ctx.getImageData(0, 0, w, h)
+      } }
     return () => { delete window.__diorama }
   }, [stage, scene, look, style, mirrored])
 
