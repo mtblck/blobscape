@@ -56,6 +56,7 @@ export * from './solids.ts'
 export * from './water.ts'
 export * from './sceneWater.ts'
 export * from './lava.ts'
+export * from './potion.ts'
 export * from './fire.ts'
 export * from './sceneFire.ts'
 

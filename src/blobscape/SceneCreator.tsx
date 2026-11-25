@@ -466,7 +466,7 @@ export function SceneCreator() {
   }, [fallKey])
   // the land's water (a pond, a sea), played through the loop once for where everything stands, as Diorama plays it:
   // made again a moment after a prop is moved, since what stands in it changes what lands on it
-  const waterKey = project && cp?.land.prop.doc.water ? JSON.stringify([project.land, project.props.map((p) => [p.prop, p.at, p.turn, p.size]), project.loop]) : ''
+  const waterKey = project && (cp?.land.prop.doc.water || cp?.props.some((p) => p.prop.doc.potion)) ? JSON.stringify([project.land, project.props.map((p) => [p.prop, p.at, p.turn, p.size]), project.loop]) : ''
   const ponds = useRef(new Map<string, SceneWater>())
   const [pond, setPond] = useState<SceneWater>()
   useEffect(() => {
@@ -524,7 +524,7 @@ export function SceneCreator() {
       stage.reshape(pond.surface)
       if (pond.spray) stage.reshape(pond.spray)
     })
-    stage.setMirror(pond && mirrored && !pond.plan.lava ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
+    stage.setMirror(pond && mirrored && !pond.plan.lava && !pond.plan.potion ? { plane: levelPlane(pond.plan.level), lift: pond.plan.cell * 0.75, seen: (image) => { seen = image; wet?.() } } : undefined)
     // the land's moon, sun and stars, which cloud cover puts out
     const heavens = heavenBones(land.skeleton.bones.map((b) => b.name))
     const own = fall ? ownClouds(live.current.shown.weatherScene()) : 0
