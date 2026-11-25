@@ -29,9 +29,11 @@ export interface StyleSettings {
 /**
  * The detail a page starts a style at, as a place in the detail levels (Chunky, Medium, Fine, Finest), until the
  * visitor picks one: Finest (Matt, 2026-11-20); a phone starts pixel art at Fine (he found the dragon slow at Finest
- * on his) and at Chunky the styles that draw the whole screen several times a frame.
+ * on his) and at Chunky the styles that draw the whole screen several times a frame. Plain blobs start at Finest on a
+ * phone too (Matt, 2026-11-25).
  */
-export const detailStart = (style: Style, coarse: boolean): number => (coarse ? (isPixelStyle(style) ? 2 : 0) : 3)
+export const detailStart = (style: Style, coarse: boolean): number =>
+  (coarse ? (style === 'blobs' ? 3 : isPixelStyle(style) ? 2 : 0) : 3)
 
 /** Whether zooming in on pixel art grows its pixels (`?pixelzoom=0` turns it off). */
 export const pixelZoomAsked = (q: URLSearchParams = new URLSearchParams()): boolean => q.get('pixelzoom') !== '0'
