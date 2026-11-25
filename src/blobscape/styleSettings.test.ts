@@ -89,12 +89,14 @@ test('shading each pixel lights by the scene’s sun in two tones', () => {
 })
 
 test('every page starts a style at the same detail and grows pixels the same way on zooming in', () => {
-  // Finest, but a phone starts pixel art at Fine and the whole-screen styles at Chunky
+  // Finest, but a phone starts pixel art at Fine and the whole-screen styles at Chunky; blobs stay at Finest
   assert.equal(detailStart('pixel', false), 3)
   assert.equal(detailStart('cel', false), 3)
   assert.equal(detailStart('pixel', true), 2)
   assert.equal(detailStart('glitch', true), 2)
   assert.equal(detailStart('cel', true), 0)
+  assert.equal(detailStart('blobs', true), 3)
+  assert.equal(detailStart('blobs', false), 3)
   const s = pixelStart(FINISH)
   assert.equal(pixelSizeAt(s, 6, 6), 2)
   assert.equal(pixelSizeAt(s, 6, 3), 4)
