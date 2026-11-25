@@ -99,6 +99,19 @@ export interface BlockSource {
    * work again. A source whose colors are changed in place (weather shaded under the sky) must leave it out.
    */
   keepCubes?: boolean
+  /**
+   * A source as big as a world (an island a hundred and fifty meters across): its cubes are also made twice and four
+   * times as big (`FAR_LEVELS`), every level cut into the same squares (`farChunk`), and a square far enough away
+   * that its own cubes would come under `FAR_BLOCK` pixels on screen is drawn with the bigger ones (`farLevel`), so
+   * the far side of it costs a fraction of its faces. Each square keeps the faces along its edges (`walls`), so
+   * squares of different sizes beside each other leave no slit between them.
+   */
+  far?: boolean
+  /**
+   * Faces between two cubes in different squares of this size (x and z, the source's rest units, from the origin)
+   * are kept, so each square is closed on its sides: what a far source's levels are made with (`farChunk`).
+   */
+  walls?: number
 }
 
 /** A square of ground, x and z, in a source's rest units. */
@@ -394,12 +407,16 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   // which faces show, cell by cell, and how many each piece gets
   const open = new Uint8Array(count)
   const pieceOf = new Map<number, { actor: number; bone: number; cells: number[]; faces: number }>()
+  // a source cut into squares keeps the faces along their edges: its square's side in cells
+  const walled = sources.map((s) => (s.walls ? Math.max(1, Math.round(s.walls / (s.blockCell ?? look.cell))) : 0))
   let faces = 0
   for (let k = 0; k < count; k++) {
     const group = groups[owner[k] * 2 + loose[k]], x = cells[k * 3], y = cells[k * 3 + 1], z = cells[k * 3 + 2]
+    const per = loose[k] ? 0 : walled[owner[k]]
     for (let f = 0; f < 6; f++) {
       const n = FACES[f].n
       if (group.get(loose[k] ? speckKey(x + n[0], y + n[1], z + n[2], bones[k]) : keyOf(x + n[0], y + n[1], z + n[2])) !== bones[k]) open[k] |= 1 << f
+      else if (per && (Math.floor((x + n[0]) / per) !== Math.floor(x / per) || Math.floor((z + n[2]) / per) !== Math.floor(z / per))) open[k] |= 1 << f
     }
     if (!open[k]) continue
     const id = owner[k] * 256 + bones[k]
@@ -481,15 +498,91 @@ const kept = new WeakMap<Blobs, { source: BlockSource; key: string; built: Built
  */
 export function keptBlocks(source: BlockSource, look: BlockLook): Built {
   if (!source.keepCubes) return buildBlocks([source], look)
-  const key = JSON.stringify({ ...look, ambient: undefined, cell: source.blockCell ?? look.cell })
+  const key = JSON.stringify({ ...look, ambient: undefined, cell: source.blockCell ?? look.cell, walls: source.walls })
   const list = kept.get(source.blobs) ?? []
   const same = (s: BlockSource) => s.skin === source.skin && s.glow === source.glow && s.laid === source.laid && s.seen === source.seen && s.skeleton.bones === source.skeleton.bones
   const hit = list.find((e) => e.key === key && same(e.source))
   if (hit) return hit.built
   const built = buildBlocks([source], look)
-  // a few looks a set of blobs (block sizes, lights), the newest first
-  kept.set(source.blobs, [{ source, key, built }, ...list].slice(0, 3))
+  // a few looks a set of blobs (block sizes, lights, a far source's levels), the newest first
+  kept.set(source.blobs, [{ source, key, built }, ...list].slice(0, 6))
   return built
+}
+
+/** How many levels of bigger cubes a far source (`BlockSource.far`) has beside its own: twice and four times as big. */
+export const FAR_LEVELS = 2
+/** A square of a far source whose cubes would be drawn smaller than this many device pixels across takes the next bigger cubes, where there are any. */
+export const FAR_BLOCK = 1.5
+/** How many of a far source's biggest cubes a square is across. */
+export const FAR_CHUNK = 16
+/** How far past `FAR_BLOCK`, as a share of it, a square's cubes must come before it changes level again, so a square at the line does not flicker between two. */
+export const FAR_HOLD = 0.15
+
+/** The side of a far source's squares for its own cube side `cell` (x and z, rest units): `FAR_CHUNK` of its biggest cubes. */
+export function farChunk(cell: number): number {
+  return cell * FAR_CHUNK * 2 ** FAR_LEVELS
+}
+
+/**
+ * Which level a square of a far source is drawn at (0 its own cubes, 1 twice as big, up to `most`), for `px`, how many
+ * pixels across its own cubes would be on screen, and `now`, the level it is drawn at: the first whose cubes come to
+ * `FAR_BLOCK` pixels, held within `FAR_HOLD` of the line either way.
+ */
+export function farLevel(px: number, now: number, most = FAR_LEVELS): number {
+  const want = (least: number) => {
+    let k = 0
+    while (k < most && px * 2 ** k < least) k++
+    return k
+  }
+  const coarser = want(FAR_BLOCK * (1 - FAR_HOLD)), finer = want(FAR_BLOCK * (1 + FAR_HOLD))
+  return now < coarser ? coarser : now > finer ? finer : now
+}
+
+/** The faces of one square of a piece: their triangles, and the middle and reach (half the box's diagonal) of their corners, in the rest pose. */
+export interface BlockChunk {
+  /** The square, as its place along x and z in squares (`"x,z"`), the same for every level of one source. */
+  key: string
+  /** Three corners a triangle. */
+  indices: Uint32Array
+  /** The middle of its corners' box. */
+  middle: [number, number, number]
+  /** Half that box's diagonal. */
+  reach: number
+}
+
+/**
+ * Cuts a piece's triangles (`indices`, as `holed` leaves them) into squares of side `chunk` from the origin (x and z),
+ * by each face's cube (a loose speck's by its own corners), so every face is in exactly one.
+ */
+export function chunkFaces(piece: BlockPiece, indices: Uint32Array, chunk: number): BlockChunk[] {
+  const per = Math.max(1, Math.round(chunk / piece.side)), p = piece.positions
+  const by = new Map<string, { faces: number[]; lo: number[]; hi: number[] }>()
+  for (let t = 0; t < indices.length; t += 6) {
+    const f = Math.floor(indices[t] / 4)
+    let cx: number, cz: number
+    if (piece.faceCells[f * 4 + 3] >= 0) {
+      cx = Math.floor(piece.faceCells[f * 4] / per)
+      cz = Math.floor(piece.faceCells[f * 4 + 2] / per)
+    } else {
+      cx = Math.floor((p[f * 12] + p[f * 12 + 6]) / 2 / chunk)
+      cz = Math.floor((p[f * 12 + 2] + p[f * 12 + 8]) / 2 / chunk)
+    }
+    const key = `${cx},${cz}`
+    let c = by.get(key)
+    if (!c) by.set(key, (c = { faces: [], lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity] }))
+    c.faces.push(t)
+    for (let v = 0; v < 4; v++) for (let j = 0; j < 3; j++) {
+      const q = p[(f * 4 + v) * 3 + j]
+      if (q < c.lo[j]) c.lo[j] = q
+      if (q > c.hi[j]) c.hi[j] = q
+    }
+  }
+  return [...by].map(([key, c]) => {
+    const out = new Uint32Array(c.faces.length * 6)
+    c.faces.forEach((t, i) => out.set(indices.subarray(t, t + 6), i * 6))
+    const middle = [0, 1, 2].map((j) => (c.lo[j] + c.hi[j]) / 2) as [number, number, number]
+    return { key, indices: out, middle, reach: Math.hypot(c.hi[0] - c.lo[0], c.hi[1] - c.lo[1], c.hi[2] - c.lo[2]) / 2 }
+  })
 }
 
 /** Which of the first four lights are lamps that stay put, by a source's `seen`: those some blob of it sees less than all of. */

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Blobs } from '../splat-core/blobs.ts'
-import { BLOCK_FROM, BLOCK_SHADE, FACE_VOTE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, holed, keptBlocks, faceTone, faceSeesLamp, flowMesh, flowStep, lampSight, lampsOf, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
+import { FAR_BLOCK, FAR_HOLD, FAR_LEVELS, chunkFaces, farChunk, farLevel, BLOCK_FROM, BLOCK_SHADE, FACE_VOTE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, holed, keptBlocks, faceTone, faceSeesLamp, flowMesh, flowStep, lampSight, lampsOf, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
 import { emptySkin } from './rig.ts'
 
 type Rgb = [number, number, number]
@@ -228,6 +228,44 @@ test('a hole leaves out every face of the cubes standing in it, and only those',
     if (inside === kept) assert.fail(`face ${f} of the cube at ${piece.faceCells[f * 4]}`)
   }
   assert.equal(holed(piece, { min: [-1, -1], max: [1, 1] }).length, 0)
+})
+
+test('walls keep the faces between cubes in different squares, and only those', () => {
+  // a row of eight cubes across x = 0.4, where squares of 0.4 meet (cells 0..7 at 0.1, cell 4 starts the next square)
+  const row = source([0, 1, 2, 3, 4, 5, 6, 7].map((x) => blob(x * 0.1, 0, 0)))
+  const open = buildBlocks([row], plain), walled = buildBlocks([{ ...row, walls: 0.4 }], plain)
+  assert.equal(walled.faces, open.faces + 2, 'the two faces where the squares meet')
+  // and each square's faces close it on every side
+  for (const c of chunkFaces(walled.pieces[0], walled.pieces[0].indices, 0.4)) assert.equal(c.indices.length / 6, 4 * 4 + 2)
+})
+
+test('a piece cut into squares has every face in exactly one, with each square\'s middle and reach', () => {
+  const grid = source(Array.from({ length: 36 }, (_, i) => blob((i % 6) * 0.1, 0, Math.floor(i / 6) * 0.1)))
+  const piece = buildBlocks([{ ...grid, walls: 0.3 }], plain).pieces[0]
+  const squares = chunkFaces(piece, piece.indices, 0.3)
+  assert.deepEqual(squares.map((c) => c.key).sort(), ['0,0', '0,1', '1,0', '1,1'])
+  assert.equal(squares.reduce((n, c) => n + c.indices.length, 0), piece.indices.length)
+  const seen = new Set<number>()
+  for (const c of squares) for (const v of c.indices) seen.add(v)
+  assert.equal(seen.size, piece.positions.length / 3, 'every corner is used by one square or another')
+  const first = squares.find((c) => c.key === '0,0')!
+  // cells 0..2 each way: from -0.05 to 0.25
+  assert.ok(Math.abs(first.middle[0] - 0.1) < 1e-6 && Math.abs(first.middle[2] - 0.1) < 1e-6)
+  assert.ok(Math.abs(first.reach - Math.hypot(0.3, 0.1, 0.3) / 2) < 1e-6)
+})
+
+test('a far square takes bigger cubes as its own come under the line, and holds near it', () => {
+  assert.equal(farLevel(FAR_BLOCK * 2, 0), 0)
+  assert.equal(farLevel(FAR_BLOCK * 0.7, 0), 1)
+  assert.equal(farLevel(FAR_BLOCK * 0.3, 0), 2)
+  assert.equal(farLevel(FAR_BLOCK * 0.01, 0), FAR_LEVELS, 'never past the last level')
+  assert.equal(farLevel(FAR_BLOCK * 0.01, 0, 1), 1)
+  // within the hold of the line it stays as it was, either way
+  const near = FAR_BLOCK * (1 - FAR_HOLD / 2)
+  assert.equal(farLevel(near, 0), 0)
+  assert.equal(farLevel(near, 1), 1)
+  assert.equal(farLevel(FAR_BLOCK * (1 + FAR_HOLD * 2), 1), 0)
+  assert.equal(farChunk(0.1), 0.1 * 2 ** FAR_LEVELS * 16)
 })
 
 test('cubes kept with their blobs are made once, and again only for another look or grid', () => {

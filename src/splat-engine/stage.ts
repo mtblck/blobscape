@@ -78,6 +78,8 @@ export interface Actor {
   hole?: BlockHole
   /** Its blobs never change in place, so while the stage draws blocks its cubes are made once and kept (blocks.ts `BlockSource.keepCubes`). */
   keepCubes?: boolean
+  /** As big as a world: while the stage draws blocks, its squares far away are drawn with cubes two or four times as big (blocks.ts `BlockSource.far`). */
+  far?: boolean
 }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
@@ -384,7 +386,7 @@ export class Stage {
   private soft?: SplatWorld
 
   /** How many cubes and faces are on show while the scene is drawn as blocks. */
-  get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces } : undefined }
+  get blockCount() { return this.blocks ? { blocks: this.blocks.blocks, faces: this.blocks.faces, levels: this.blocks.levels() } : undefined }
 
   /** Whether the cubes have to be made again before the next frame is drawn. */
   private blockDue = false
