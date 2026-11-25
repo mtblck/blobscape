@@ -33,7 +33,7 @@
   {
    "id": "simulation",
    "title": "Simulation",
-   "doc": "The solvers under cloth, under sand, snow and goo, under the ripples of a pond, under lava and under a fire, for when you want to step them yourself."
+   "doc": "The solvers under cloth, under sand, snow and goo, under the ripples of a pond, under lava, under a bubbling potion and under a fire, for when you want to step them yourself."
   },
   {
    "id": "extras",
@@ -3785,6 +3785,12 @@
        "doc": "A pool of molten rock that turns over, cools to a crust that cracks into plates, and bubbles (lava.ts): a shared recipe, as water is. A scene has water or lava, not both."
       },
       {
+       "name": "potion",
+       "optional": true,
+       "type": "PotionDoc",
+       "doc": "A round pool of potion that is stirred, marbles its colors and bubbles up and pops (potion.ts): a shared recipe, as water and lava are. A scene has one pool: water, lava or a potion. A prop may carry one (a cauldron's); it comes with it when set down where the land has none."
+      },
+      {
        "name": "fires",
        "optional": true,
        "type": "FireDoc[]",
@@ -3984,6 +3990,112 @@
        "doc": "How many times steeper than it is the surface is drawn: 1 to 12, 3 when left out."
       }
      ]
+    },
+    {
+     "name": "PotionDoc",
+     "kind": "interface",
+     "doc": "A potion that brews (potion.ts): a round pool of liquid round `at` ([x, z]) out to `r`, at `level`, wherever the\nstill ground there lies under the level (dig the pot with a `cut`). Its surface is the water's height field, a\nlittle thicker; it is stirred round, which draws its second color out through its own in spirals, small eddies\nwander in it, and bubbles swell up into domes and pop, sending rings out and leaving froth that the stir carries\noff. One whole loop is worked out when the scene is made, as the water's is. It glows unless told not to: give the\nscene a light over it for what it lights.",
+     "props": [
+      {
+       "name": "at",
+       "type": "[number, number]",
+       "doc": "The pool's middle, [x, z]."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "The pool's radius: 0.05 to 3."
+      },
+      {
+       "name": "level",
+       "type": "number",
+       "doc": "The height its surface stands at."
+      },
+      {
+       "name": "colors",
+       "optional": true,
+       "type": "[string, string, string, string]",
+       "doc": "Its colors: deep (in its hollows), its own, its second (marbled through it), froth. A glowing pink when left out."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "number",
+       "doc": "How brightly it glows, 0 (lit like anything else) to 1: 0.85 when left out."
+      },
+      {
+       "name": "cell",
+       "optional": true,
+       "type": "number",
+       "doc": "A cell of its grid: 0.012 to 0.1, 0.022 when left out."
+      },
+      {
+       "name": "stir",
+       "optional": true,
+       "type": "number",
+       "doc": "How many times a loop it is stirred round, a whole number from −6 to 6 (under 0 the other way): 1 when left out."
+      },
+      {
+       "name": "eddies",
+       "optional": true,
+       "type": "number",
+       "doc": "How many small eddies wander in it: 0 to 6, 3 when left out."
+      },
+      {
+       "name": "bubbles",
+       "optional": true,
+       "type": "number",
+       "doc": "How many bubbles pop a loop: 0 to 80, 18 when left out."
+      },
+      {
+       "name": "pop",
+       "optional": true,
+       "type": "number",
+       "doc": "How wide a bubble is (half): 0.01 to 0.3, three cells when left out."
+      },
+      {
+       "name": "rise",
+       "optional": true,
+       "type": "number",
+       "doc": "Seconds a bubble swells before it pops: 0.1 to 3, 0.7 when left out."
+      },
+      {
+       "name": "dome",
+       "optional": true,
+       "type": "number",
+       "doc": "How high a bubble's dome stands, as a share of its half width: 0 to 1.5, 0.5 when left out."
+      },
+      {
+       "name": "froth",
+       "optional": true,
+       "type": "number",
+       "doc": "Seconds froth takes to fade to a third: 0.1 to 10, 1.2 when left out."
+      },
+      {
+       "name": "speed",
+       "optional": true,
+       "type": "number",
+       "doc": "How fast a ring travels, units a second: 0.05 to 2, 0.22 when left out."
+      },
+      {
+       "name": "damping",
+       "optional": true,
+       "type": "number",
+       "doc": "The share of its motion the surface loses a second, 0.05 to 0.95: 0.7 when left out."
+      },
+      {
+       "name": "ripple",
+       "optional": true,
+       "type": "number",
+       "doc": "How many times steeper than it is the surface is drawn: 1 to 12, 3 when left out."
+      }
+     ]
+    },
+    {
+     "name": "POTION_COLORS",
+     "kind": "const",
+     "doc": "The colors of a potion when a scene names none: deep, its own, its second, froth.",
+     "type": "[string, string, string, string]"
     },
     {
      "name": "LAVA_COLORS",
@@ -4753,6 +4865,12 @@
        "optional": true,
        "type": "LavaPlan",
        "doc": "Where the pool is molten rock (`SceneDoc.lava`): how it turns over, cools and bubbles."
+      },
+      {
+       "name": "potion",
+       "optional": true,
+       "type": "PotionPlan",
+       "doc": "Where the pool is a potion (`SceneDoc.potion`): how it is stirred, marbles and bubbles."
       }
      ],
      "methods": [
@@ -5906,10 +6024,22 @@
        "doc": "The heat over the pool where the scene's water is lava (`WaterPlan.lava`), as it stands after the loop was worked out."
       },
       {
+       "name": "potion",
+       "readonly": true,
+       "type": "PotionMix | null",
+       "doc": "The dye and froth over the pool where the scene's water is a potion (`WaterPlan.potion`), as they stand after the loop was worked out."
+      },
+      {
        "name": "glowNow",
        "readonly": true,
        "type": "Float32Array<ArrayBufferLike> | null",
-       "doc": "Each cell's glow as last laid by `set`, 0 to 1, where it is lava."
+       "doc": "Each cell's glow as last laid by `set`, 0 to 1, where it is lava; a potion's dye, then its froth, a block of cells each."
+      },
+      {
+       "name": "swell",
+       "readonly": true,
+       "type": "Float32Array<ArrayBufferLike> | null",
+       "doc": "How far each cell is under a bubble swelling to pop, 0 to 1, as last laid by `set`, where it is a potion."
       },
       {
        "name": "waves",
@@ -5986,6 +6116,16 @@
      "signatures": [
       {
        "code": "shadeLava(s: WaterSurface, glow: Float32Array, ramp: [Vec3, Vec3, Vec3, Vec3]): void"
+      }
+     ]
+    },
+    {
+     "name": "shadePotion",
+     "kind": "function",
+     "doc": "Colors each blob of a potion's surface (`potionColor`): by the dye and froth of the cell it lies in, deep in the\nhollows and lit on the crests (by the surface's curvature), and paler and shinier over a bubble about to pop. Solid.",
+     "signatures": [
+      {
+       "code": "shadePotion(s: WaterSurface, brew: Float32Array, swell: Float32Array, p: PotionPlan): void"
       }
      ]
     },
@@ -16816,6 +16956,246 @@
        "signatures": [
         {
          "code": "meanGlow(): number"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "potion",
+   "title": "A potion that brews",
+   "group": "simulation",
+   "doc": "A potion that brews (a scene's `potion`, sceneDoc.ts): a shared recipe, as water and lava are. Its surface is the\nwater's own height field (water.ts), a little thicker than water, in a round pool (a cauldron, a bowl, a well).\nOver it lie two fields carried by the way the brew turns:\n\n- `dye`, 0 to 1, how much of the potion's second color a cell holds: the brew is stirred round the middle (`stir`\n  turns a loop, faster partway out than at the middle or the wall, as a stirred pot goes) with a few small eddies\n  wandering round it, so the two colors are drawn out into spirals and marbled;\n- `fizz`, 0 to 1, froth: where a bubble breaks, a ring of froth is left that the turning carries off and that fades\n  over `fizzLife` seconds.\n\nBubbles come up at hashed places and times: each swells the surface into a dome over `rise` seconds (laid on the\nheights as they are shown, `domeAt`), then pops, leaving a crater in the height field whose rings run out over the\npool, a patch of the color from below (one or the other by a hash, so the marbling is fed fresh streaks) and froth.\n\nEverything is a function of the plan and the time, stepped at a fixed rate, so the same plan gives the same brew.\n`SceneWater` runs it through the loop with the heights and keeps the two fields a byte a cell per moment.",
+   "entries": [
+    {
+     "name": "PotionEddy",
+     "kind": "interface",
+     "doc": "A small eddy that wanders round the pool: `at` a share of its radius out, going round `times` a loop from `phase`, turning the brew round itself one way or the other.",
+     "props": [
+      {
+       "name": "out",
+       "type": "number",
+       "doc": "How far out from the middle it goes round, a share of the pool's radius."
+      },
+      {
+       "name": "times",
+       "type": "number",
+       "doc": "How many times a loop it goes round the pool."
+      },
+      {
+       "name": "phase",
+       "type": "number",
+       "doc": "Where in its round it starts, 0 to 1."
+      },
+      {
+       "name": "spin",
+       "type": "-1 | 1",
+       "doc": "Which way it turns the brew: 1 with the stir, −1 against it."
+      }
+     ]
+    },
+    {
+     "name": "PotionPlan",
+     "kind": "interface",
+     "doc": "A scene's potion as compiled (`WaterPlan.potion`).",
+     "props": [
+      {
+       "name": "x",
+       "type": "number",
+       "doc": "The pool's middle, along x."
+      },
+      {
+       "name": "z",
+       "type": "number",
+       "doc": "The pool's middle, along z."
+      },
+      {
+       "name": "r",
+       "type": "number",
+       "doc": "The pool's radius."
+      },
+      {
+       "name": "stir",
+       "type": "number",
+       "doc": "How many times a loop the brew is stirred round (a whole number; under 0 the other way)."
+      },
+      {
+       "name": "eddies",
+       "type": "PotionEddy[]",
+       "doc": "Small eddies wandering round in it."
+      },
+      {
+       "name": "bubbles",
+       "type": "number",
+       "doc": "How many bubbles break a loop."
+      },
+      {
+       "name": "pop",
+       "type": "number",
+       "doc": "Half the width of a bubble."
+      },
+      {
+       "name": "rise",
+       "type": "number",
+       "doc": "Seconds a bubble swells before it pops."
+      },
+      {
+       "name": "dome",
+       "type": "number",
+       "doc": "How high a bubble's dome stands just before it pops."
+      },
+      {
+       "name": "fizzLife",
+       "type": "number",
+       "doc": "Seconds froth takes to fade to a third."
+      },
+      {
+       "name": "ramp",
+       "type": "[Vec3, Vec3, Vec3, Vec3]",
+       "doc": "Its colors (sRGB, 0 to 1 as blobs hold them): deep (in the hollows), its own, its second (marbled through it), froth."
+      },
+      {
+       "name": "glow",
+       "type": "number",
+       "doc": "How brightly it glows, 0 (not at all, lit like anything else) to 1."
+      }
+     ]
+    },
+    {
+     "name": "eddyAt",
+     "kind": "function",
+     "doc": "Where an eddy stands `t` seconds into a loop of `loop`, in a pool round (x, z) of radius `r`.",
+     "signatures": [
+      {
+       "code": "eddyAt(e: PotionEddy, p: Pick<PotionPlan, \"x\" | \"z\" | \"r\">, t: number, loop: number): [number, number]"
+      }
+     ]
+    },
+    {
+     "name": "stirSpeed",
+     "kind": "function",
+     "doc": "How fast the stirred brew goes round at `d` from the middle of a pool of radius `r`, units a second (along the way\nround, with the stir): still at the middle and at the wall, fastest a little over halfway out, and on average\ngoing round `stir` times a loop.",
+     "signatures": [
+      {
+       "code": "stirSpeed(d: number, r: number, stir: number, loop: number): number"
+      }
+     ]
+    },
+    {
+     "name": "domeShape",
+     "kind": "function",
+     "doc": "Where a dome stands over a bubble about to pop, as a share of its full height at `d` from the bubble's middle, `u`\nof the way through its swelling (0 to 1): it grows wider and taller together, round on top.",
+     "signatures": [
+      {
+       "code": "domeShape(d: number, r: number, u: number): number"
+      }
+     ]
+    },
+    {
+     "name": "potionColor",
+     "kind": "function",
+     "doc": "The color of a point of potion (sRGB, 0 to 1): `dye` of the second color in its own, `shade` from −1 (deep, in a hollow) to 1 (lit, on a crest), `fizz` of froth.",
+     "signatures": [
+      {
+       "code": "potionColor(dye: number, shade: number, fizz: number, ramp: [Vec3, Vec3, Vec3, Vec3], out?: number[]): number[]"
+      }
+     ]
+    },
+    {
+     "name": "PotionMix",
+     "kind": "class",
+     "doc": "The dye and froth over a potion's pool: stepped by `step`, read by `write`. The pure half of the potion, worked on\ntyped arrays, so Node tests run it as the page does.",
+     "ctor": [
+      {
+       "code": "new PotionMix(grid: LavaGrid, plan: PotionPlan, loop: number)"
+      }
+     ],
+     "props": [
+      {
+       "name": "dye",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "How much of the second color each cell holds, 0 to 1."
+      },
+      {
+       "name": "fizz",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "How much froth lies on each cell, 0 to 1."
+      },
+      {
+       "name": "u",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "The brew's way of moving at each cell as last worked out, along x, units a second."
+      },
+      {
+       "name": "w",
+       "readonly": true,
+       "type": "Float32Array",
+       "doc": "Along z."
+      },
+      {
+       "name": "bubbles",
+       "readonly": true,
+       "type": "LavaBubble[]",
+       "doc": "Every bubble that breaks in the loop, in order."
+      },
+      {
+       "name": "grid",
+       "readonly": true,
+       "type": "LavaGrid",
+       "doc": "The grid it lies on."
+      },
+      {
+       "name": "plan",
+       "readonly": true,
+       "type": "PotionPlan",
+       "doc": "The plan it runs."
+      },
+      {
+       "name": "loop",
+       "readonly": true,
+       "type": "number",
+       "doc": "Seconds before it all repeats: the scene's loop."
+      }
+     ],
+     "methods": [
+      {
+       "name": "flowAt",
+       "doc": "The way the brew moves at `t`: round with the stir, round each eddy, and never into the wall.",
+       "signatures": [
+        {
+         "code": "flowAt(t: number): void"
+        }
+       ]
+      },
+      {
+       "name": "step",
+       "doc": "Moves the brew on `dt` seconds to `t + dt`: the turning carries the dye and froth along (each cell takes what was\nupstream of it), froth fades, and every bubble due pops (`burst` is told, to mark the height field). Bubbles are\ntaken in loop order; call `rewind` when the loop starts again.",
+       "signatures": [
+        {
+         "code": "step(dt: number, t: number, burst?: (b: LavaBubble) => void): void"
+        }
+       ]
+      },
+      {
+       "name": "rewind",
+       "doc": "Starts the loop's bubbles again from the first: call as each run through the loop starts.",
+       "signatures": [
+        {
+         "code": "rewind(): void"
+        }
+       ]
+      },
+      {
+       "name": "write",
+       "doc": "Writes the dye then the froth of every cell, 0 to 255, into `out` from `at` (two blocks of a cell each).",
+       "signatures": [
+        {
+         "code": "write(out: Uint8Array, at?: number): void"
         }
        ]
       }

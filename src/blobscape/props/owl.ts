@@ -65,7 +65,7 @@ export const WIZARD_FLOOR: PropDoc = {
   },
 }
 
-/** A cauldron of glowing pink potion over a log fire, stirring itself with a ladle, bubbling and throwing sparks. */
+/** A cauldron of glowing pink potion over a log fire, stirring itself with a ladle, its brew swirling, bubbling and popping, and throwing sparks. */
 export const CAULDRON: PropDoc = {
   name: 'Cauldron',
   foot: [0.607, -0.06, 0.294],
@@ -81,7 +81,6 @@ export const CAULDRON: PropDoc = {
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
     bones: [
-      { name: 'potion', at: [0.62, 0.84, 0.3] },
       { name: 'flame0', at: [0.92, 0.06, 0.3] },
       { name: 'flame1', at: [0.713, 0.06, 0.585] },
       { name: 'flame2', at: [0.377, 0.06, 0.476] },
@@ -108,14 +107,14 @@ export const CAULDRON: PropDoc = {
       { name: 'spark7', at: [0.62, 1.785, 0.3] },
     ],
     parts: [
-      { shape: { kind: 'cut', shape: { kind: 'sphere', at: [0.62, 0.62, 0.3], r: 0.52 }, hole: { kind: 'box', at: [0.62, 1.2, 0.3], half: [0.7, 0.34, 0.7] } }, paint: { kind: 'bands', axis: 'y', size: 0.09, colors: ['#1a1a2a', '#2c2c40', '#1a1a2a', '#0a0a14'] } },
+      // the pot is hollowed under its rim, so the potion has a bowl to lie in
+      { shape: { kind: 'cut', shape: { kind: 'cut', shape: { kind: 'sphere', at: [0.62, 0.62, 0.3], r: 0.52 }, hole: { kind: 'box', at: [0.62, 1.2, 0.3], half: [0.7, 0.34, 0.7] } }, hole: { kind: 'ball', at: [0.62, 0.86, 0.3], r: [0.42, 0.13, 0.42] } }, paint: { kind: 'bands', axis: 'y', size: 0.09, colors: ['#1a1a2a', '#2c2c40', '#1a1a2a', '#0a0a14'] } },
       { shape: { kind: 'ring', at: [0.62, 0.86, 0.3], r: 0.44, tube: 0.06 }, paint: '#4a4a60' },
       { shape: { kind: 'cone', from: [0.936, 0.28, 0.473], to: [1.059, 0, 0.54], r: 0.06, rTo: 0.045 }, paint: '#1a1a2a', noShadow: true },
       { shape: { kind: 'cone', from: [0.313, 0.28, 0.487], to: [0.193, 0, 0.56], r: 0.06, rTo: 0.045 }, paint: '#1a1a2a', noShadow: true },
       { shape: { kind: 'cone', from: [0.612, 0.28, -0.06], to: [0.608, 0, -0.2], r: 0.06, rTo: 0.045 }, paint: '#1a1a2a', noShadow: true },
       { shape: { kind: 'ring', at: [0.12, 0.72, 0.3], r: 0.09, tube: 0.025 }, paint: '#4a4a60', noShadow: true },
       { shape: { kind: 'ring', at: [1.12, 0.72, 0.3], r: 0.09, tube: 0.025 }, paint: '#4a4a60', noShadow: true },
-      { shape: { kind: 'cylinder', at: [0.62, 0.8, 0.3], height: 0.06, r: 0.41 }, paint: { kind: 'patches', size: 0.12, colors: ['#ff5ac0', '#c0208a', '#ff5ac0', '#ffb0e0'] }, bone: 'potion', glow: true, noShadow: true },
       { shape: { kind: 'cone', from: [1.159, 0.05, 0.409], to: [0.424, 0.07, 0.26], r: 0.06, rTo: 0.05 }, paint: { kind: 'bands', axis: 'x', size: 0.06, colors: ['#4a2e1c', '#2a1a12', '#7a4a28'] }, noShadow: true },
       { shape: { kind: 'cone', from: [0.511, 0.05, 0.839], to: [0.66, 0.07, 0.104], r: 0.06, rTo: 0.05 }, paint: { kind: 'bands', axis: 'x', size: 0.06, colors: ['#4a2e1c', '#2a1a12', '#7a4a28'] }, noShadow: true },
       { shape: { kind: 'cone', from: [0.081, 0.05, 0.191], to: [0.816, 0.07, 0.34], r: 0.06, rTo: 0.05 }, paint: { kind: 'bands', axis: 'x', size: 0.06, colors: ['#4a2e1c', '#2a1a12', '#7a4a28'] }, noShadow: true },
@@ -147,7 +146,6 @@ export const CAULDRON: PropDoc = {
       { shape: { kind: 'sphere', at: [1.279, 1.785, -0.237], r: 0.022 }, paint: '#ffd24a', bone: 'spark7', glow: true, noShadow: true },
     ],
     moves: [
-      { kind: 'pulse', bone: 'potion', size: [0.97, 1.02], times: 6 },
       { kind: 'pulse', bone: 'flame0', size: [0.6, 1.2], times: 7, phase: 0 },
       { kind: 'sway', bone: 'flame0', axis: 'x', degrees: 10, times: 5, phase: 0 },
       { kind: 'pulse', bone: 'flame1', size: [0.6, 1.2], times: 8, phase: 0.21 },
@@ -186,6 +184,8 @@ export const CAULDRON: PropDoc = {
       { kind: 'spin', bone: 'spark7', axis: 'y', times: 2, phase: 0.91 },
       { kind: 'bob', bone: 'spark7', by: [0, 0.15, 0], times: 3, phase: 0.4 },
     ],
+    // the brew itself: stirred round as the ladle goes, marbled in two pinks, bubbling and popping (potion.ts)
+    potion: { at: [0.62, 0.3], r: 0.38, level: 0.82, colors: ['#3a0830', '#8a1468', '#e05ab8', '#ffd8f0'], stir: 2, bubbles: 26, pop: 0.075, dome: 0.7, froth: 1.6 },
     lights: [
       { at: [0.62, 1.1, 0.3], color: '#ff5ac0', strength: 2.4, range: 2.2, lit: 'always', flicker: { by: 0.2, times: 6 } },
       { at: [0.62, 0.15, 0.4], color: '#ff8a2a', strength: 1.8, range: 1.6, lit: 'dark', flicker: { by: 0.35, times: 9 } },
@@ -377,7 +377,7 @@ export const BOOKS_AND_CANDLE: PropDoc = {
 /** The pieces above as the library lists them. */
 export const OWL_MADE: MadeProp[] = [
   { id: 'wizard-floor', tags: ['rocky', 'night'], kind: 'land', about: 'A round of mossy stone floor with potion bottles, toadstools and stones', prop: WIZARD_FLOOR },
-  { id: 'cauldron', tags: ['magic', 'lamp'], kind: 'prop', group: 'buildings', about: 'A cauldron of glowing pink potion over a log fire, stirring itself with a ladle, bubbling and throwing sparks', prop: CAULDRON },
+  { id: 'cauldron', tags: ['magic', 'lamp'], kind: 'prop', group: 'buildings', about: 'A cauldron of glowing pink potion over a log fire, stirring itself with a ladle, its brew swirling, bubbling and popping, and throwing sparks', prop: CAULDRON },
   { id: 'wizard-owl', tags: ['animal', 'magic'], kind: 'prop', group: 'living', about: 'A great owl in a starry wizard hat on a stump, blinking and stretching its wings', prop: WIZARD_OWL },
   { id: 'lit-candle', tags: ['lamp', 'thing'], kind: 'prop', about: 'A candle whose flame flickers and lights what is round it when it is dark', prop: LIT_CANDLE },
   { id: 'short-candle', tags: ['thing'], kind: 'prop', about: 'A short candle with a flickering flame when it is dark', prop: SHORT_CANDLE },

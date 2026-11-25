@@ -27,6 +27,8 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
   const moves: MoveDoc[] = [...(ground.moves ?? [])]
   const lights: LightDoc[] = [...(ground.lights ?? [])]
   const fires: FireDoc[] = [...(ground.fires ?? [])]
+  // a scene has one pool: the land's water or lava, or else the first potion a prop brings (a cauldron's), where it was set down
+  let potion = ground.water || ground.lava ? undefined : ground.potion
   const palettes = [ground.palette]
   // what rides the land's water or pushes through it, from the props set down in it
   const floats = [...(ground.water?.floats ?? [])], bodies = [...(ground.water?.bodies ?? [])]
@@ -57,6 +59,10 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
       for (const f of prop.water.rides ?? []) floats.push({ bone: name(f.bone), at: t.point(f.at), size: f.size * t.size })
       for (const b of prop.water.wakes ?? []) bodies.push({ bone: name(b.bone), at: t.point(b.at), r: b.r * t.size, ...(b.draft !== undefined ? { draft: b.draft * t.size } : {}) })
     }
+    if (doc.potion && !potion && !ground.water && !ground.lava) {
+      const p = doc.potion, c = t.point([p.at[0], p.level, p.at[1]])
+      potion = { ...p, at: [c[0], c[2]], level: c[1], r: p.r * t.size, ...(p.pop !== undefined ? { pop: p.pop * t.size } : {}), ...(p.cell !== undefined ? { cell: Math.min(0.1, Math.max(0.012, p.cell * t.size)) } : {}) }
+    }
     if (!placed.still) for (const m of doc.moves ?? []) moves.push(placedMove({ ...m, bone: name(m.bone) }, t, placed.phase ?? 0))
     // its fires come with it, as far as the scene has room, and its lights that name them follow them to their places in the scene's list
     const firesFrom = fires.length
@@ -84,6 +90,7 @@ export function composeScene(project: SceneProject, find: (id: string) => PropDo
     moves,
     lights,
     ...(fires.length ? { fires: fires.slice(0, MAX_FIRES) } : {}),
+    ...(potion ? { potion } : {}),
     ...(ground.water ? { water: { ...ground.water, floats: floats.slice(0, 12), bodies: bodies.slice(0, 12) } } : {}),
     ...(leaves.length ? { air: { ...ground.air, specks: [...(ground.air?.specks ?? []), ...leaves.slice(0, Math.max(0, Math.floor((300 - (ground.air?.specks ?? []).reduce((n, x) => n + x.count, 0)) / LEAVES_EACH)))] } } : {}),
   }
