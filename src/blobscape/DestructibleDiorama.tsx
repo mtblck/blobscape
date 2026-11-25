@@ -172,14 +172,17 @@ export function DestructibleDiorama() {
   }, [stage, key, room, scene, detail])
 
   const ready = built?.key === key
-  useEffect(() => { if (stage) stage.playing = !calm || offscreen }, [stage, calm, offscreen])
+  // under reduced motion the scene holds still, and plays only while something the visitor broke builds itself back
+  const mending = brokenNow.length > 0
+  useEffect(() => { if (stage) stage.playing = !calm || offscreen || mending }, [stage, calm, offscreen, mending])
   useEffect(() => { if (stage && orbit) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 
   /** Breaks a thing, struck at `at`; false when it is broken already or there is no room for its pieces. */
   const crumble = (k: number, at?: ArrayLike<number>): boolean => {
     if (!stage || !built || !ready) return false
     const thing = built.things[k]
-    if (!thing || broken.current.some((b) => b.thing === thing)) return false
+    if (!thing) return false
+    if (broken.current.some((b) => b.thing === thing)) { setSaid(`The ${thing.label} is in pieces already.`); return false }
     // a free run of slots in the pool: after the last broken thing, or before the first
     const used = broken.current.map((b) => [b.from, b.from + b.kept.length] as const).sort((a, b) => a[0] - b[0])
     let from = 0, free = 0
@@ -223,7 +226,7 @@ export function DestructibleDiorama() {
     crumble(k, hit!.point)
   }
 
-  const breakAll = () => { built?.things.forEach((_, k) => crumble(k)) }
+  const breakAll = () => { built?.things.forEach((t, k) => { if (!broken.current.some((b) => b.thing === t)) crumble(k) }) }
 
   // the address keeps what is on show
   useEffect(() => {
