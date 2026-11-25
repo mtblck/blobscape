@@ -12662,12 +12662,12 @@
       {
        "name": "min",
        "type": "readonly [number, number]",
-       "doc": ""
+       "doc": "Its least x and z."
       },
       {
        "name": "max",
        "type": "readonly [number, number]",
-       "doc": ""
+       "doc": "Its most x and z."
       }
      ]
     },

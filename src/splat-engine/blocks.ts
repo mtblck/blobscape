@@ -102,7 +102,12 @@ export interface BlockSource {
 }
 
 /** A square of ground, x and z, in a source's rest units. */
-export interface BlockHole { min: readonly [number, number]; max: readonly [number, number] }
+export interface BlockHole {
+  /** Its least x and z. */
+  min: readonly [number, number]
+  /** Its most x and z. */
+  max: readonly [number, number]
+}
 
 /** The cubes on one bone of one actor, as a mesh: four corners a face, two triangles. */
 export interface BlockPiece {

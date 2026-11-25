@@ -91,7 +91,7 @@ export function Islands() {
   // how the island is drawn: built from blocks (Matt, 2026-11-20: the style to drive these islands), as pixel art, or as the blobs themselves
   const [style, setStyle] = useState<'blocks' | 'pixel' | 'blobs'>(() => { const s = params().get('style'); return s === 'pixel' || s === 'blobs' ? s : 'blocks' })
   const pixels = style === 'pixel', blocky = style === 'blocks'
-  // 2× at first on a phone; 1× there is streamed, the patch round the elf at 1× and the rest at 2× (`islandBlockBase`)
+  // 2× at first on a phone; 1× there is streamed, the patch round the elf at 1× and the rest at 2× (`blockBase`)
   const blockStart = islandBlockStart(coarse)
   const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? v : blockStart })
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
@@ -603,7 +603,7 @@ export function Islands() {
                     </div>
                   </Field>
                 )}
-                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint={blockBase(blockSize, coarse) > blockSize ? `How big a block is. On a phone the ground round you is cut at ${blockSize}× and the rest of the island stays ${blockBase(blockSize, coarse)}×.` : 'How big a block is. The island is cut again at that size.'} />}
+                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint={blockBase(blockSize, coarse) > blockSize ? `How big a block is. On a phone only the ground near the elf, or in the middle of the view, is cut at ${blockSize}×; the rest of the island stays ${blockBase(blockSize, coarse)}×.` : 'How big a block is. The island is cut again at that size.'} />}
                 {!blocky && (
                   <Field label="Detail">
                     <div className="flex flex-wrap gap-1.5">
