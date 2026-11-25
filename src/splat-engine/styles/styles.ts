@@ -19,8 +19,16 @@ export const STYLES: { id: Style; label: string; note: string }[] = [BLOCKS, PIX
 /** The style a page starts in, and the one a plain address means: blocks. Every other style is named in the address (`?style=pixel`). */
 export const DEFAULT_STYLE: Style = BLOCKS.id
 
-/** The style an address asks for (`?style=oil`), or the default. */
-export const styleAsked = (asked: string | null): Style => STYLES.find((s) => s.id === asked)?.id ?? DEFAULT_STYLE
+/**
+ * The style an address or a kept scene asks for (`?style=oil`), or the default. Text keeps the id `ascii` (`?style=text`
+ * means it too), and a Text picture in box drawing or quarter blocks (`?style=ascii&chars=lines`, kept before
+ * 2026-11-25) is Box Art now, so `chars` is the address's or the kept Text settings' set of characters.
+ */
+export function styleAsked(asked: string | null, chars?: string | null): Style {
+  const id = asked === 'text' ? 'ascii' : asked
+  if (id === 'ascii' && (chars === 'lines' || chars === 'blocks')) return 'boxart'
+  return STYLES.find((s) => s.id === id)?.id ?? DEFAULT_STYLE
+}
 
 /** A style as the end of "drawn …", for the line under the view and the view's own label. */
 export function styleWords(style: Style): string {
@@ -28,7 +36,8 @@ export function styleWords(style: Style): string {
   if (style === 'glitch') return 'as glitching pixel art'
   if (style === 'blobs') return 'as blobs'
   if (style === 'blocks') return 'as blocks'
-  if (style === 'ascii') return 'as a grid of characters'
+  if (style === 'ascii') return 'as text'
+  if (style === 'boxart') return 'as box art'
   if (style === 'knit') return 'as knitting'
   return `in ${STYLES.find((s) => s.id === style)!.label.toLowerCase()}`
 }

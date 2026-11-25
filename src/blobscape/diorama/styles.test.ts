@@ -31,6 +31,13 @@ test('an address picks a style, and anything else is the default, blocks', () =>
   assert.equal(styleAsked('glass'), 'glass')
   assert.equal(styleAsked('watercolor'), 'watercolor')
   assert.equal(styleAsked('woodcut'), 'blocks')
+  // Text is still `ascii` (and `text`); its old box sets are Box Art's now
+  assert.equal(styleAsked('text'), 'ascii')
+  assert.equal(styleAsked('boxart'), 'boxart')
+  assert.equal(styleAsked('ascii', 'lines'), 'boxart')
+  assert.equal(styleAsked('ascii', 'blocks'), 'boxart')
+  assert.equal(styleAsked('ascii', 'braille'), 'ascii')
+  assert.equal(styleAsked('oil', 'lines'), 'oil')
 })
 
 test('every style has a note and words for the line under the view', () => {

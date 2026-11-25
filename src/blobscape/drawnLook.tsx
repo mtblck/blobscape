@@ -13,7 +13,7 @@ import { WASH, washGround, washLook } from './washLooks.ts'
 import { KNIT, knitGround, knitLook } from './knitLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, blockBack, blockLook, gridOf } from './blockLooks.ts'
 import type { TimeOfDay } from './timeOfDay.ts'
-import { ASCII, BLOCKS_DEF, CEL_DEF, GLASS_DEF, KNIT_DEF, MARKS, NEON_DEF, WASH_DEF, drawnStart, type DrawnSettings, type Shows } from './styles/catalog.ts'
+import { ASCII, BLOCKS_DEF, BOX_ART, CEL_DEF, GLASS_DEF, KNIT_DEF, MARKS, NEON_DEF, WASH_DEF, drawnStart, type DrawnSettings, type Shows } from './styles/catalog.ts'
 import { SettingsControls } from './styles/SettingsControls.tsx'
 import { PaletteStrip } from './styles/PaletteStrip.tsx'
 import { PALETTES } from './diorama/scene.ts'
@@ -21,7 +21,7 @@ import { paletteSnap } from '../splat-core/paints.ts'
 import type { Rgb } from '../splat-core/pixel.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf } from './celLooks.ts'
 
-/** Every drawn look a page can offer: the marks, ASCII, cel shading, neon, stained glass, watercolor, and the plain blobs. */
+/** Every drawn look a page can offer: the marks, Text, Box Art, cel shading, neon, stained glass, watercolor, and the plain blobs. */
 export type Look = LookId | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof KNIT.id
 export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, KNIT, LOOKS[LOOKS.length - 1]]
 /** The looks that light the blobs themselves, and so want them built with no light baked in (`unlit`). */
@@ -88,7 +88,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // the settings are the page's to hold (so its saved scenes and links keep them) or, where it holds none, this hook's
   const mine = useState<DrawnSettings>(() => drawnStart(params(), { coarse: on.light }))
   const [drawn, setDrawn] = kept ?? mine
-  const { cel, neon, glass, watercolor: wash, blocks: block, marks: mk, ascii: asc, knit } = drawn
+  const { cel, neon, glass, watercolor: wash, blocks: block, marks: mk, ascii: asc, boxart: box, knit } = drawn
   const change = <K extends keyof DrawnSettings>(key: K) => (c: Partial<DrawnSettings[K]>) => setDrawn((d) => ({ ...d, [key]: { ...d[key], ...c } }))
   // a time of day stands the blocks' sun at its own height; the slider moves it from there
   const timeId = on.time?.id, timeHeight = on.time?.height
@@ -98,9 +98,13 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   // outlines: on for the two pen looks and cel shading unless the visitor says otherwise
   const outlined = look === 'cel' ? cel.outline : mk.outline
   const pen = look === 'cel' ? cel.pen : mk.pen
-  const paper = look === 'ascii' ? asc.paper : mk.paper
-  // ASCII: how tall a character is, whether each takes the color of what it stands for, and strokes along edges
-  const { letter, own, strokes, strands, weight, chars, words } = asc
+  // Text and Box Art draw the same grid of characters: Box Art's sets have no strokes, strands or words
+  const boxed = look === 'boxart'
+  const ascii = look === 'ascii' || boxed
+  const chosen = boxed ? { ...box, strokes: false, strands: false, words: '' } : asc
+  const paper = ascii ? chosen.paper : mk.paper
+  // the characters: how tall one is, whether each takes the color of what it stands for, and strokes along edges
+  const { letter, own, strokes, strands, weight, chars, words } = chosen
   const [copied, setCopied] = useState('')
   const { actor, plain, azimuth, soft, offscreen, sky, light, loop, spacing } = on
   // blocks and cel shading paint the subject from a palette before they light it (Full color keeps its own paint)
@@ -109,11 +113,11 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const paints = useMemo(() => paintChoices(on.palette), [ownKey])
   const paintsFor = (id: string) => paints.find((p) => p.id === id) ?? paints[0]
   const blockPaints = paintsFor(block.palette), celPaints = paintsFor(cel.palette)
-  const markPaints = paintsFor(mk.palette), asciiPaints = paintsFor(asc.palette), neonPaints = paintsFor(neon.palette), glassPaints = paintsFor(glass.palette), washPaints = paintsFor(wash.palette)
+  const markPaints = paintsFor(mk.palette), asciiPaints = paintsFor(chosen.palette), neonPaints = paintsFor(neon.palette), glassPaints = paintsFor(glass.palette), washPaints = paintsFor(wash.palette)
   // the palette the look on show paints from (blocks paint their cubes themselves; knitting has its yarns; hatching and
   // stipple draw ink on paper, and ASCII and neon their own inks unless they take things' own colors)
   const lookPaints = look === 'cel' ? celPaints : look === 'glass' ? glassPaints : look === 'watercolor' ? washPaints
-    : look === 'neon' ? (neon.set === 'own' ? neonPaints : undefined) : look === 'ascii' ? (asc.own ? asciiPaints : undefined)
+    : look === 'neon' ? (neon.set === 'own' ? neonPaints : undefined) : ascii ? (own ? asciiPaints : undefined)
       : look === 'gouache' || look === 'oil' || look === 'ink' || look === 'blobs' ? markPaints : undefined
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
   // the night's, and both tones are dimmed and cooled (`nightLight`), so the scene's lamps and lit windows stand out
@@ -127,7 +131,6 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const sheet = PAPERS.find((p) => p.id === paper)!
   const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'blocks' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && look !== 'knit' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, actor])
-  const ascii = look === 'ascii'
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
   const held = useMemo(() => { const v = params().get('steady'); return v !== null && v !== '' && Number.isFinite(+v) ? +v : offscreen ? 0 : undefined }, [offscreen])
   const glyphs = useMemo<GlyphLook | undefined>(() => (ascii ? { size: letter, ink: own ? undefined : sheet.ink, light: !own && lum(sheet.paper) > lum(sheet.ink), edges: strokes, strands, gain: weight * (own ? SCREEN_GAIN : 1), steady: held, set: chars, words } : undefined), [ascii, letter, own, sheet, strokes, strands, weight, held, chars, words])
@@ -236,7 +239,8 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
           </div>
         )}
         {look !== 'cel' && !blocky && !lit && !glazed && !painted && !knitted && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} choices={{ palette: paintControl(markPaints, 'Each blob is painted the closest one, light and shade as the scene was lit, so shade falls in steps of the palette.') }} />}
-        {ascii && <SettingsControls def={ASCII} value={asc} onChange={change('ascii')} on={shows} choices={{ palette: paintControl(asciiPaints, 'Each character takes the closest one to the color of what it stands for.') }} />}
+        {ascii && !boxed && <SettingsControls def={ASCII} value={asc} onChange={change('ascii')} on={shows} choices={{ palette: paintControl(asciiPaints, 'Each character takes the closest one to the color of what it stands for.') }} />}
+        {boxed && <SettingsControls def={BOX_ART} value={box} onChange={change('boxart')} on={shows} choices={{ palette: paintControl(asciiPaints, 'Each character takes the closest one to the color of what it stands for.') }} />}
         {ascii && (
           <div>
             <Button small onClick={() => {

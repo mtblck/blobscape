@@ -153,7 +153,7 @@ export interface MarkSettings {
 }
 /** The settings of the picture drawn as characters. */
 export interface AsciiSettings {
-  /** Which characters: ASCII, braille, blocks, box drawing, words or a typewriter's. */
+  /** Which characters: ASCII, braille, words or a typewriter's (Box Art's sets are its own style). */
   chars: GlyphSet
   /** The text the picture is written in, drawn as words. */
   words: string
@@ -165,6 +165,21 @@ export interface AsciiSettings {
   strokes: boolean
   /** Whether fur and grass are drawn as strokes along the way they lie. */
   strands: boolean
+  /** Whether each character takes the color of what it shows. */
+  own: boolean
+  /** The ground and ink, an id of `PAPERS`. */
+  paper: string
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
+}
+/** The settings of the picture drawn as Box Art: the box-drawing and block characters, apart from Text (Matt, 2026-11-25). */
+export interface BoxArtSettings {
+  /** Which characters: box drawing ('lines') or quarter blocks and shades ('blocks'). */
+  chars: 'lines' | 'blocks'
+  /** A character's height, in CSS pixels. */
+  letter: number
+  /** How heavy the characters are drawn. */
+  weight: number
   /** Whether each character takes the color of what it shows. */
   own: boolean
   /** The ground and ink, an id of `PAPERS`. */
@@ -318,8 +333,6 @@ export const ASCII: StyleDef<AsciiSettings> = {
     { key: 'chars', kind: 'choice', label: 'Characters', address: 'chars', testid: 'brush-chars', options: [
       { id: 'ascii', label: 'ASCII', about: 'Letters and signs by how much there is to show, and strokes along edges.' },
       { id: 'braille', label: 'Braille', about: 'Eight dots a cell, each on where its eighth of the cell is heavy enough, so shapes come out finer than a character. Idea from Silicon Jungle\'s Ink Studio.' },
-      { id: 'blocks', label: 'Quarter blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
-      { id: 'lines', label: 'Box drawing', about: 'Only the edges, in the box-drawing characters ─ │ ┌ ┼ that join from cell to cell, with a dot where there is something to show.' },
       { id: 'words', label: 'Words', about: 'Your words, written over and over through the picture, each letter as bright as what it stands on.' },
       { id: 'typed', label: 'Typewriter', about: 'Keys struck once, or twice over one another for the darkest places, each strike a little out of line and the ribbon worn unevenly.' },
     ] },
@@ -332,6 +345,26 @@ export const ASCII: StyleDef<AsciiSettings> = {
     { key: 'paper', kind: 'choice', label: 'Paper', options: PAPERS, when: (v) => !v.own },
     { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (v) => v.own },
 
+  ],
+}
+
+/** Box Art's sets of characters, which Text drew until 2026-11-25: `?style=ascii&chars=lines` is Box Art now. */
+export const BOX_SETS: readonly string[] = ['lines', 'blocks']
+
+/** The settings of the picture drawn as Box Art (Matt, 2026-11-25: box drawing and quarter blocks, out of Text). */
+export const BOX_ART: StyleDef<BoxArtSettings> = {
+  id: 'boxart', styles: ['boxart'],
+  start: { chars: 'lines', letter: 12, weight: 1, own: true, paper: PAPERS[0].id, palette: 'none' },
+  settings: [
+    { key: 'chars', kind: 'choice', label: 'Characters', address: 'chars', testid: 'brush-chars', options: [
+      { id: 'lines', label: 'Box drawing', about: 'Only the edges, in the box-drawing characters ─ │ ┌ ┼ that join from cell to cell, with a dot where there is something to show.' },
+      { id: 'blocks', label: 'Quarter blocks', about: 'Quarter blocks where a cell is half one thing and half another, and the shades ░ ▒ ▓ where it is even. Idea from Silicon Jungle\'s Ink Studio.' },
+    ] },
+    { key: 'letter', kind: 'range', label: 'Character size', min: 8, max: 24, step: 2, unit: 'px', hint: 'How tall a character is. Smaller ones show more of the picture; bigger ones are easier to read.' },
+    { key: 'weight', kind: 'range', label: 'Weight', min: 0.5, max: 2, step: 0.1, unit: 'percent', hint: 'Over 100% every cell takes a heavier character than its tone asks for, which suits a dim scene.' },
+    { key: 'own', kind: 'toggle', label: 'Their own colors', testid: 'brush-own', about: 'Each character takes the color of what it stands for, on a dark screen. Off, they are one ink on paper.' },
+    { key: 'paper', kind: 'choice', label: 'Paper', options: PAPERS, when: (v) => !v.own },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true, when: (v) => v.own },
   ],
 }
 
@@ -470,7 +503,7 @@ export const SCENE: StyleDef<SceneSettings> = {
 export const sceneStart = (q: URLSearchParams = new URLSearchParams()): SceneSettings => fromAddress(SCENE, SCENE.start, q)
 
 /** Every style's settings, by the name they are kept under. */
-export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF } as const
+export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, boxart: BOX_ART, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF } as const
 /** A name settings are kept under: a key of `CATALOG`. */
 export type StyleKey = keyof typeof CATALOG
 
@@ -484,6 +517,8 @@ export interface StylesValue {
   marks: MarkSettings
   /** The characters'. */
   ascii: AsciiSettings
+  /** Box Art's. */
+  boxart: BoxArtSettings
   /** Cel shading's. */
   cel: CelSettings
   /** The Blocks style's. */
@@ -557,6 +592,7 @@ export function drawnStart(q: URLSearchParams = new URLSearchParams(), on: Start
   return {
     marks: fromAddress(MARKS, MARKS.start, q),
     ascii: fromAddress(ASCII, ASCII.start, q),
+    boxart: fromAddress(BOX_ART, BOX_ART.start, q),
     cel: fromAddress(CEL_DEF, CEL_DEF.start, q),
     blocks: fromAddress(BLOCKS_DEF, { ...BLOCKS_DEF.start, size: BLOCKS_DEF.start.size + (on.coarse ? 1 : 0) }, q),
     neon: fromAddress(NEON_DEF, NEON_DEF.start, q),
@@ -566,12 +602,20 @@ export function drawnStart(q: URLSearchParams = new URLSearchParams(), on: Start
   }
 }
 
+/** Box Art's kept settings, or, from a scene kept before it was its own style, Text's when they were drawn in its characters. */
+function boxArtKept(got: Record<string, unknown>): unknown {
+  if (got.boxart) return got.boxart
+  const old = got.ascii as { chars?: unknown } | undefined
+  return old && BOX_SETS.includes(old.chars as string) ? old : undefined
+}
+
 /** Kept drawn settings read back over a start: `kept` is an object by style (`{ cel: {…}, blocks: {…} }`), any of it missing or unsound left as it starts. */
 export function drawnFrom(start: DrawnSettings, kept: unknown): DrawnSettings {
   const got = (kept && typeof kept === 'object' ? kept : {}) as Record<string, unknown>
   return {
     marks: settingsFrom(MARKS, start.marks, got.marks),
     ascii: settingsFrom(ASCII, start.ascii, got.ascii),
+    boxart: settingsFrom(BOX_ART, start.boxart, boxArtKept(got)),
     cel: settingsFrom(CEL_DEF, start.cel, got.cel),
     blocks: settingsFrom(BLOCKS_DEF, start.blocks, got.blocks),
     neon: settingsFrom(NEON_DEF, start.neon, got.neon),

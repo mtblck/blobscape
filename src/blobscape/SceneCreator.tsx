@@ -242,7 +242,7 @@ export function SceneCreator() {
   const [lampPicked, setLampPicked] = useState<number>()
   // how the scene is drawn (`?style=`), and pixel art's own settings
   const calm = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
-  const [style, setStyleState] = useState<Style>(() => styleAsked(typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('style')))
+  const [style, setStyleState] = useState<Style>(() => { const q = new URLSearchParams(typeof location === 'undefined' ? '' : location.search); return styleAsked(q.get('style'), q.get('chars')) })
   const pixels = isPixelStyle(style)
   const glitching = style === 'glitch'
   // pixel art's settings and the finish, shared with Diorama (styleSettings.ts)
@@ -727,9 +727,10 @@ export function SceneCreator() {
     open(o)
     pictureFor.current = undefined
     const st = p.style
-    const id = STYLES.find((x) => x.id === st?.id)?.id
+    const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown; ascii?: { chars?: string } }
+    // a scene kept in Text's box drawing or quarter blocks opens in Box Art, their own style since 2026-11-25
+    const id = st?.id && STYLES.some((x) => x.id === st.id) ? styleAsked(st.id, settings.ascii?.chars) : undefined
     if (id && id !== style) drawStyle(id)
-    const settings = (st?.settings ?? {}) as { pixel?: unknown; glitch?: unknown }
     setPx(pixelFrom(pixelStart(shownOf(o).finish), settings.pixel))
     setGlitch(mergedLike(GLITCH_START, settings.glitch))
     setDrawn(drawnFrom(drawnStart(undefined, { coarse }), settings))

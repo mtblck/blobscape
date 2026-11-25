@@ -136,7 +136,7 @@ export function PixelDiorama() {
   const chosen = sceneSet.detail || undefined
   const setChosen = (id: string) => setSceneSet((c) => ({ ...c, detail: id }))
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
-  const [style, setStyle] = useState<Style>(() => styleAsked(new URLSearchParams(location.search).get('style')))
+  const [style, setStyle] = useState<Style>(() => { const q = new URLSearchParams(location.search); return styleAsked(q.get('style'), q.get('chars')) })
   const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
   // every other style's settings (styles/catalog.ts): the page holds them, as it holds pixel art's
   const drawnKept = useState<DrawnSettings>(() => drawnStart(new URLSearchParams(location.search), { coarse }))
