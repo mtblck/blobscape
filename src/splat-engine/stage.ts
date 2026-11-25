@@ -27,6 +27,8 @@ import { GlassPass } from './glassPass.ts'
 import type { GlassLook } from '../splat-core/glass.ts'
 import { WashPass } from './washPass.ts'
 import { HalftonePass } from './halftonePass.ts'
+import { FilterPass } from './filterPass.ts'
+import { THERMAL_EMIT, type FilterLook } from '../splat-core/filters.ts'
 import type { HalftoneLook } from '../splat-core/halftone.ts'
 import { KnitPass } from './knitPass.ts'
 import { AnaglyphPass } from './anaglyphPass.ts'
@@ -41,7 +43,8 @@ import { SplatMirror } from './mirror.ts'
 import type { MirrorImage, MirrorPlane } from './reflect.ts'
 import type { OpticsLook } from '../splat-core/optics.ts'
 import { BlockView } from './blockView.ts'
-import type { BlockLook } from './blocks.ts'
+import type { BlockHole, BlockLook } from './blocks.ts'
+import type { FarRule } from './lod.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
 /** How many times a second a stage draws its mirror's picture again, at most (`Stage.setMirror`). */
@@ -71,6 +74,10 @@ export interface Actor {
   lies?: boolean
   /** The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`. */
   blockCell?: number
+  /** While the stage draws blocks, the square (x and z, rest units) whose cubes are not drawn, where a finer cut is laid in (blocks.ts `BlockSource.hole`). */
+  hole?: BlockHole
+  /** Its blobs never change in place, so while the stage draws blocks its cubes are made once and kept (blocks.ts `BlockSource.keepCubes`). */
+  keepCubes?: boolean
 }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
@@ -346,6 +353,7 @@ export class Stage {
     this.dress()
     this.world.cleanCuts = this.clean
     this.world.exactShapes = this.exact
+    this.world.farDetail = this.far
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
     if (this.painter) this.paintOver()
@@ -454,6 +462,18 @@ export class Stage {
 
   /** Which depth sort the world uses: the counting sort, or the exact radix sort (slower; ties always in one order). */
   get sortKind() { return this.sort }
+
+  private far: FarRule | false = false
+  /**
+   * Level of detail by distance (lod.ts `FarRule`), kept for every world from now on: past `from` fewer blobs are drawn
+   * the further off they are, each grown to cover for the rest, so a world as big as an island draws far ground with
+   * fewer, bigger blobs. Leave it out for every blob. The soft actors drawn among blocks keep every blob.
+   */
+  setFarDetail(rule?: FarRule) {
+    this.far = rule ?? false
+    if (this.world) this.world.farDetail = this.far
+    this.invalidate()
+  }
   /**
    * Changes how blobs are sorted by depth: 'bins' is quick, 'radix' settles every tie the same way each frame, which
    * pixel art with hard edges wants.
@@ -590,7 +610,9 @@ export class Stage {
   }
 
   /** Seconds into the clip, or the time a poser is showing. */
-  get time() { return this.step > 0 ? Math.floor(this.t / this.step + 1e-6) * this.step : this.t }
+  get time() { const step = this.heldStep; return step > 0 ? Math.floor(this.t / step + 1e-6) * step : this.t }
+  /** The held frames in force: the stage's own `step`, or claymation's stop motion. */
+  private get heldStep() { const fps = this.filterLook?.kind === 'clay' ? this.filterLook.fps ?? 12 : 0; return this.step > 0 ? this.step : fps > 0 ? 1 / fps : 0 }
 
   /** Moves the clock to `seconds` and draws that moment: for a page that kept its own time while this stage was paused. */
   seek(seconds: number) {
@@ -758,6 +780,27 @@ export class Stage {
     this.invalidate()
   }
 
+  private filter?: FilterPass
+  private filterLook?: FilterLook
+  /**
+   * One of the looks laid over the whole picture (splat-core/filters.ts): a thermal camera, an old CRT or tape, a
+   * blueprint, a mosaic, paper cutouts or claymation. The look covers the canvas. The blueprint and paper cutouts draw
+   * every blob flat in its own color with no lights; the thermal camera draws what gives its own light over white so
+   * it runs hot; claymation moves in held frames (`ClayLook.fps`) unless the stage holds its own. Leave the look out to
+   * stop. Kept for the next actor too. Not in pixel mode; the other looks come first if set, and outlines and the
+   * lens wait.
+   */
+  setFilter(look?: FilterLook) {
+    this.filterLook = look
+    if (!look) { this.filter?.dispose(); this.filter = undefined }
+    else this.filter ??= new FilterPass()
+    this.dress()
+    this.invalidate()
+  }
+
+  /** Whether the filter on draws every blob flat with no lights (the blueprint and paper cutouts). */
+  private get filterFlat() { return this.filterLook?.kind === 'blueprint' || this.filterLook?.kind === 'cutout' }
+
   private knit?: KnitPass
   private knitLook?: KnitLook
   /**
@@ -816,7 +859,7 @@ export class Stage {
     if (!world) return
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
-    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook || this.halftoneLook || this.knitLook ? { kind: 'flat' } : this.marks)
+    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook || this.halftoneLook || this.knitLook || this.filterFlat ? { kind: 'flat' } : this.marks)
     this.soft?.setMarks(this.marks)
     if (!this.opts.lights) return
     this.light()
@@ -832,7 +875,7 @@ export class Stage {
     if (!world || !this.opts.lights) return
     const cel = this.celLook
     world.glowGain = this.emits
-    if (!cel && (this.neonLook || this.glassLook || (this.knitLook && !this.washLook && !this.halftoneLook))) world.setLights([], 1)
+    if (!cel && (this.neonLook || this.glassLook || (this.knitLook && !this.washLook && !this.halftoneLook) || this.filterFlat)) world.setLights([], 1)
     else if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }, ...this.lit.lights.slice(0, MAX_LIGHTS - 1).map((l) => ({ ...l, shadow: false }))], 1)
     else world.setLights(this.lit.lights, this.lit.ambient)
   }
@@ -915,7 +958,7 @@ export class Stage {
 
   private glowGain = 1
   /** What the world's `glowGain` is: the stage's own, or neon's, which tells lamps from pale things by it. */
-  private get emits() { return this.neonLook && !(this.opts.lights && this.celLook) ? NEON_EMIT : this.glowGain }
+  private get emits() { return this.neonLook && !(this.opts.lights && this.celLook) ? NEON_EMIT : this.filterLook?.kind === 'thermal' && !(this.opts.lights && this.celLook) ? THERMAL_EMIT : this.glowGain }
   /**
    * How many times its own color a blob that gives its own light (`Actor.glow`) is drawn under live lights (the
    * world's `glowGain`), kept for the next actor too. Over 1 only with a lens (`setLens`), which lets what is brighter
@@ -1060,6 +1103,16 @@ export class Stage {
       this.anaglyph.setSize(x, y)
       this.anaglyph.setLook(this.anaglyphLook)
       this.anaglyph.render(this.renderer, this.scene, this.camera, this.orbit.distance)
+      return
+    }
+    if (!this.pixel && this.filter && this.filterLook && this.world) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      // the subject alone (not the sky's sun, moon and stars): what thumbprints are sized by and dimension lines go round
+      const box = this.world.posedBox(true)
+      this.filter.setSize(x, y)
+      const size = Math.hypot(box.hi[0] - box.lo[0], box.hi[1] - box.lo[1], box.hi[2] - box.lo[2])
+      this.filter.setLook(this.filterLook, this.renderer.getPixelRatio(), Number.isFinite(size) && size > 0 ? size : 1, this.time)
+      this.filter.render(this.renderer, this.scene, this.camera, box)
       return
     }
     if (!this.pixel && this.lines) {
@@ -1388,6 +1441,7 @@ export class Stage {
     this.knit?.dispose()
     this.anaglyph?.dispose()
     this.halftone?.dispose()
+    this.filter?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
     this.peel?.dispose()

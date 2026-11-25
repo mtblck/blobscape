@@ -52,3 +52,50 @@ export function screenRadius(radius: number, depth: number, p11: number, height:
   if (depth <= radius) return Infinity
   return (radius / depth) * p11 * (height / 2)
 }
+
+/**
+ * Level of detail for blobs too small to see, blob by blob: for one actor as big as a world (an island a hundred and
+ * fifty meters across, the camera standing on it), where the actor's own size on screen says nothing. A blob that
+ * would come under `pixels` on screen (its largest standard deviation, far off or just small) is kept by the share of
+ * that it would fill, so fewer are drawn the smaller they get, each grown to cover for those left out: far ground is
+ * drawn by about as many blobs as the pixels it covers, which also stops far fine detail shimmering, while a big soft
+ * cloud at the same distance keeps every blob. Which go is `lodRank` again, so the same blobs go each time.
+ */
+export interface FarRule {
+  /** The least a blob's size may come to on screen (its largest standard deviation, in pixels of the picture) before blobs thin out. */
+  pixels: number
+  /** Never fewer than this share of the blobs, however small. */
+  least: number
+}
+
+/** Blobs thin out where they would come under about a pixel, and never under 5% of them. */
+export const FAR: FarRule = { pixels: 1, least: 0.05 }
+
+/** How far before it goes a blob starts to shrink, as a share of the ranks: a blob shrinks away rather than blinks out. */
+export const FAR_BAND = 0.1
+
+/**
+ * How much more than the area left out the blobs kept grow to cover, when few are kept: blobs thinned at random
+ * leave chance gaps between them, which a surface of opaque discs showed as specks of what lies behind (clouds of
+ * small blobs came out grainy). Eased in from nothing as blobs start to thin out, so nothing jumps.
+ */
+export const FAR_SPREAD = 2
+
+/** The share of blobs kept where a blob's largest standard deviation on screen squared is `px2` (pixels²). */
+export function farKeep(px2: number, { pixels, least }: FarRule): number {
+  return Math.min(1, Math.max(least, px2 / (pixels * pixels)))
+}
+
+/**
+ * What a blob's covariance is multiplied by, by its `rank` (`lodRank`), where its largest standard deviation on screen
+ * squared is `px2`: 0 left out, else grown by one over the area kept (and `FAR_SPREAD`), and shrinking toward 0 over `FAR_BAND` as it
+ * nears its turn to go. `farSizeNode` in engine.ts is its twin (in `projectSplat`); change both.
+ */
+export function farSize(rank: number, px2: number, rule: FarRule): number {
+  const keep = farKeep(px2, rule)
+  if (keep >= 1) return 1
+  const s = Math.min(1, Math.max(0, (rank - (1 - keep)) / FAR_BAND + 1))
+  // those shrinking count for half: grown by one over the area kept, so the blobs cover what they did, and a little
+  // more (`FAR_SPREAD`) so chance gaps between them close
+  return (s * (1 + (FAR_SPREAD - 1) * (1 - keep))) / (keep + Math.min(FAR_BAND, 1 - keep) / 2)
+}

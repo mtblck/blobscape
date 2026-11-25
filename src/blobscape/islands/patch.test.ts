@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PATCH_HALF, PATCH_MOVE, inHole, patchAt, patchFor, patchOf } from './patch.ts'
+import { PATCH_HALF, PATCH_MOVE, PHONE_BLOCK_BASE, blockBase, inHole, patchAt, patchFor, patchHole, patchOf } from './patch.ts'
 import { box, buildVoxels, within } from '../../splat-engine/voxel.ts'
 import type { Bone } from '../../splat-engine/rig.ts'
 
@@ -47,4 +47,22 @@ test('a finer patch fills the coarse cut’s hole with no gap, overlapping it by
       if (over > 1) assert.ok(Math.abs(x - p.region.min[0]) < fine || Math.abs(x - p.region.max[0]) < fine || Math.abs(z - p.region.min[2]) < fine || Math.abs(z - p.region.max[2]) < fine, `doubled away from the seam at ${x.toFixed(2)}, ${z.toFixed(2)}`)
     }
   }
+})
+
+test('drawn as blocks, the hole leaves out the cubes whose blobs it would make clear, but for its edge ring', () => {
+  const coarse = 0.168, p = patchOf([3, -2], coarse, coarse / 2), hole = patchHole(p, coarse)
+  for (let i = -80; i <= 80; i++) for (let k = -80; k <= 80; k++) {
+    // a cube stands at the middle of its cell, and holds the blobs that round to that cell
+    const x = i * coarse, z = k * coarse
+    const inSquare = x >= hole.min[0] && x <= hole.max[0] && z >= hole.min[1] && z <= hole.max[1]
+    const inner = i > p.cells.x[0] && i < p.cells.x[1] && k > p.cells.z[0] && k < p.cells.z[1]
+    if (inner && !inHole(p, coarse, x + coarse * 0.3, z - coarse * 0.3)) assert.fail(`cell ${i}, ${k} is not in the hole`)
+    if (inSquare !== inner) assert.fail(`cell ${i}, ${k}`)
+  }
+})
+
+test('a phone cuts a whole island no finer than 2× and leaves smaller blocks to the patch; elsewhere the island is cut as asked', () => {
+  assert.equal(PHONE_BLOCK_BASE, 2)
+  assert.deepEqual([1, 2, 3].map((s) => blockBase(s, true)), [2, 2, 3])
+  assert.deepEqual([1, 2, 3].map((s) => blockBase(s, false)), [1, 2, 3])
 })

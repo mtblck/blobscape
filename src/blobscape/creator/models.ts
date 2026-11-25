@@ -43,7 +43,7 @@ export interface SplatModel extends ModelBase {
   morphs?: Morph[]
   /** Scattered over a mesh in its own flat colors (#369), so the cut lights it by the land's sun. */
   scattered?: boolean
-  /** A splat scan opened as a land (#381): drawn as it was captured, with its own light. */
+  /** A splat scan opened as a land (#381), its scanned light taken out and the scene's lit in (#463). */
   scan?: boolean
 }
 
