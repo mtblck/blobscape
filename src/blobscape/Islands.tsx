@@ -102,6 +102,8 @@ export function Islands() {
   const [creatures, setCreatures] = useState(() => params().get('creatures') !== '0')
   // and how its blades are drawn: soft blobs, or gouache dabs (Brush and Ink's marks)
   const [grassAs, setGrassAs] = useState<'blobs' | 'gouache'>(() => (params().get('grassas') === 'gouache' ? 'gouache' : 'blobs'))
+  // far squares in bigger cubes (blocks) and far blobs thinned (blobs); `?far=0` draws every one as cut
+  const [farBlocks] = useState(() => params().get('far') !== '0')
 
   // the world: its islands and bridges planned from the first island, each a description, then the scenes Pixel
   // Diorama's own code makes of them
@@ -216,10 +218,12 @@ export function Islands() {
   }, [ready, fine])
   // drawn as blocks, an island's cubes are made once and kept (`keepCubes`) and the hole only leaves some of them out,
   // so moving the patch makes the patch's cubes alone, not the whole island's again (over a second on a phone)
-  const pieces = useMemo((): (Built & { hole?: BlockHole; keepCubes?: boolean })[] => {
+  // and each island is cut into squares, those far off drawn with cubes two or four times as big (`Actor.far`), so
+  // the far side of an island, or another island, costs a fraction of its faces
+  const pieces = useMemo((): (Built & { hole?: BlockHole; keepCubes?: boolean; far?: boolean })[] => {
     if (!blocky || !ready) return holed
-    return ready.pieces.map((p, j) => ({ ...p, keepCubes: true, hole: fine && j === fine.index ? patchHole(fine.patch, ready.spacing) : undefined }))
-  }, [blocky, ready, fine, holed])
+    return ready.pieces.map((p, j) => ({ ...p, keepCubes: true, far: farBlocks && j < ready.world.islands.length, hole: fine && j === fine.index ? patchHole(fine.patch, ready.spacing) : undefined }))
+  }, [blocky, ready, fine, holed, farBlocks])
   const patchPiece = useMemo(() => (fine ? { ...fine.piece, blockCell: blocky ? fine.spacing : undefined, keepCubes: blocky } : undefined), [fine, blocky])
   const finerWaits = fineWanted && !(fine && fine.index === Math.min(near, ready!.world.islands.length - 1) && fine.patch.at.join() === focus.join())
 

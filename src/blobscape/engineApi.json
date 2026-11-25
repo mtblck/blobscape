@@ -138,6 +138,12 @@
        "optional": true,
        "type": "boolean",
        "doc": "Its blobs never change in place, so while the stage draws blocks its cubes are made once and kept (blocks.ts `BlockSource.keepCubes`)."
+      },
+      {
+       "name": "far",
+       "optional": true,
+       "type": "boolean",
+       "doc": "As big as a world: while the stage draws blocks, its squares far away are drawn with cubes two or four times as big (blocks.ts `BlockSource.far`)."
       }
      ]
     },
@@ -303,7 +309,7 @@
       {
        "name": "blockCount",
        "readonly": true,
-       "type": "{ blocks: number; faces: number } | undefined",
+       "type": "{ blocks: number; faces: number; levels: number[] } | undefined",
        "doc": "How many cubes and faces are on show while the scene is drawn as blocks."
       },
       {
@@ -12381,7 +12387,7 @@
     {
      "name": "BlockView",
      "kind": "class",
-     "doc": "A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes\nnever bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it\nis and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line\nround each face. A surface that moves by itself (an actor with `flows`: a pond) is columns whose tops follow its\nblobs (`reshape` after they change), drawn after the cubes and as see-through as its blobs are. It draws into a target with four samples a pixel and copies that out, since a cube's edges want\nsmoothing that soft blobs never did.",
+     "doc": "A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes\nnever bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it\nis and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line\nround each face. A surface that moves by itself (an actor with `flows`: a pond) is columns whose tops follow its\nblobs (`reshape` after they change), drawn after the cubes and as see-through as its blobs are. It draws into a target with four samples a pixel and copies that out, since a cube's edges want\nsmoothing that soft blobs never did. An actor as big as a world (`far`) is cut into squares at each of its levels,\nand each frame every square is drawn at the level its distance asks for (`farLevel`).",
      "extends": [
       "Group"
      ],
@@ -12436,6 +12442,15 @@
        "signatures": [
         {
          "code": "pose(): void"
+        }
+       ]
+      },
+      {
+       "name": "levels",
+       "doc": "How many of a far actor's squares are drawn at each level now: its own cubes first.",
+       "signatures": [
+        {
+         "code": "levels(): number[]"
         }
        ]
       },
@@ -12660,6 +12675,18 @@
        "optional": true,
        "type": "boolean",
        "doc": "Its blobs never change in place, so its cubes are kept with them and made once (`keptBlocks`): a stage that makes\nits cubes again for a new actor beside it (a patch moved underfoot) takes these as they were, not over a second's\nwork again. A source whose colors are changed in place (weather shaded under the sky) must leave it out."
+      },
+      {
+       "name": "far",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A source as big as a world (an island a hundred and fifty meters across): its cubes are also made twice and four\ntimes as big (`FAR_LEVELS`), every level cut into the same squares (`farChunk`), and a square far enough away\nthat its own cubes would come under `FAR_BLOCK` pixels on screen is drawn with the bigger ones (`farLevel`), so\nthe far side of it costs a fraction of its faces. Each square keeps the faces along its edges (`walls`), so\nsquares of different sizes beside each other leave no slit between them."
+      },
+      {
+       "name": "walls",
+       "optional": true,
+       "type": "number",
+       "doc": "Faces between two cubes in different squares of this size (x and z, the source's rest units, from the origin)\nare kept, so each square is closed on its sides: what a far source's levels are made with (`farChunk`)."
       }
      ]
     },
@@ -12815,6 +12842,87 @@
      "signatures": [
       {
        "code": "keptBlocks(source: BlockSource, look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] }"
+      }
+     ]
+    },
+    {
+     "name": "FAR_LEVELS",
+     "kind": "const",
+     "doc": "How many levels of bigger cubes a far source (`BlockSource.far`) has beside its own: twice and four times as big.",
+     "type": "2"
+    },
+    {
+     "name": "FAR_BLOCK",
+     "kind": "const",
+     "doc": "A square of a far source whose cubes would be drawn smaller than this many device pixels across takes the next bigger cubes, where there are any.",
+     "type": "1.5"
+    },
+    {
+     "name": "FAR_CHUNK",
+     "kind": "const",
+     "doc": "How many of a far source's biggest cubes a square is across.",
+     "type": "16"
+    },
+    {
+     "name": "FAR_HOLD",
+     "kind": "const",
+     "doc": "How far past `FAR_BLOCK`, as a share of it, a square's cubes must come before it changes level again, so a square at the line does not flicker between two.",
+     "type": "0.15"
+    },
+    {
+     "name": "farChunk",
+     "kind": "function",
+     "doc": "The side of a far source's squares for its own cube side `cell` (x and z, rest units): `FAR_CHUNK` of its biggest cubes.",
+     "signatures": [
+      {
+       "code": "farChunk(cell: number): number"
+      }
+     ]
+    },
+    {
+     "name": "farLevel",
+     "kind": "function",
+     "doc": "Which level a square of a far source is drawn at (0 its own cubes, 1 twice as big, up to `most`), for `px`, how many\npixels across its own cubes would be on screen, and `now`, the level it is drawn at: the first whose cubes come to\n`FAR_BLOCK` pixels, held within `FAR_HOLD` of the line either way.",
+     "signatures": [
+      {
+       "code": "farLevel(px: number, now: number, most?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "BlockChunk",
+     "kind": "interface",
+     "doc": "The faces of one square of a piece: their triangles, and the middle and reach (half the box's diagonal) of their corners, in the rest pose.",
+     "props": [
+      {
+       "name": "key",
+       "type": "string",
+       "doc": "The square, as its place along x and z in squares (`\"x,z\"`), the same for every level of one source."
+      },
+      {
+       "name": "indices",
+       "type": "Uint32Array",
+       "doc": "Three corners a triangle."
+      },
+      {
+       "name": "middle",
+       "type": "[number, number, number]",
+       "doc": "The middle of its corners' box."
+      },
+      {
+       "name": "reach",
+       "type": "number",
+       "doc": "Half that box's diagonal."
+      }
+     ]
+    },
+    {
+     "name": "chunkFaces",
+     "kind": "function",
+     "doc": "Cuts a piece's triangles (`indices`, as `holed` leaves them) into squares of side `chunk` from the origin (x and z),\nby each face's cube (a loose speck's by its own corners), so every face is in exactly one.",
+     "signatures": [
+      {
+       "code": "chunkFaces(piece: BlockPiece, indices: Uint32Array, chunk: number): BlockChunk[]"
       }
      ]
     },
