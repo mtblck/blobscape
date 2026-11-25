@@ -14697,7 +14697,7 @@
        "name": "coarse",
        "optional": true,
        "type": "boolean",
-       "doc": "A phone or tablet: blocks start a size up, for fewer cubes, and knitting two pixels a stitch finer, so its bands fit a small view."
+       "doc": "A phone or tablet: knitting starts two pixels a stitch finer, so its bands fit a small view."
       }
      ]
     },
