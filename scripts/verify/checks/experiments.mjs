@@ -1871,6 +1871,9 @@ export default [
       else if (!(got.worst <= 1 && got.shaken < got.rested * 0.5 && got.settled > 0.9)) fails.push(`snow globe: ${JSON.stringify(got)}`)
       else ok(`snow globe: a shake lifts the snow (${Math.round(got.rested * 100)}% lying before, ${Math.round(got.shaken * 100)}% after) and it settles again (${Math.round(got.settled * 100)}%), never past the glass`)
       await g.ctx.close()
+    },
+  },
+  {
     name: 'style-morph',
     about: 'Style Morph: the next style is drawn under the kept picture, which a wipe then takes away',
     entries: ['src/blobscape/StyleMorph.tsx'],
