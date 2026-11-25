@@ -11,6 +11,7 @@ import { GLASS_START, type GlassChoice } from './glassLooks.ts'
 import { GLITCH_AMOUNTS, GLITCH_PACE_CHOICES, GLITCH_START, type GlitchChoice } from './glitchLooks.ts'
 import { NEON_PACES, NEON_SETS, NEON_START, type NeonChoice } from './neonLooks.ts'
 import { WASH_PAPERS, WASH_START, type WashChoice } from './washLooks.ts'
+import { HALFTONE_PAPERS, HALFTONE_SETS, HALFTONE_START, type HalftoneChoice } from './halftoneLooks.ts'
 import { KNIT_PATTERNS, KNIT_START, KNIT_SWEATERS, type KnitChoice } from './knitLooks.ts'
 
 /**
@@ -451,6 +452,20 @@ export const WASH_DEF: StyleDef<WashChoice> = {
   ],
 }
 
+/** Halftone screen print's settings. */
+export const HALFTONE_DEF: StyleDef<HalftoneChoice> = {
+  id: 'halftone', styles: ['halftone'], start: HALFTONE_START,
+  settings: [
+    { key: 'inks', kind: 'choice', label: 'Inks', address: 'inks', testid: 'halftone-inks', options: HALFTONE_SETS.map((s) => ({ id: s.id, label: s.label, about: s.about })) },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
+    { key: 'cell', kind: 'range', label: 'Dot size', address: 'dots', min: 4, max: 16, step: 1, unit: 'px', whole: true, hint: 'How far apart the dots of one ink are. Smaller dots show more detail; bigger ones show the print.' },
+    { key: 'shift', kind: 'range', label: 'Off register', min: 0, max: 4, step: 0.5, unit: 'px', zero: 'None', hint: 'How far each ink\'s plate sits off the others, so colors fringe at the edges.' },
+    { key: 'texture', kind: 'range', label: 'Ink texture', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'How unevenly the ink takes on the paper.' },
+    { key: 'paper', kind: 'choice', label: 'Paper', options: HALFTONE_PAPERS },
+    { key: 'sky', kind: 'toggle', label: 'Print the sky', address: 'printsky', about: 'Prints the scene\'s sky behind it in the same inks. Off, the paper is left bare round the subject.' },
+  ],
+}
+
 /** Knitting's settings. */
 export const KNIT_DEF: StyleDef<KnitChoice> = {
   id: 'knit', styles: ['knit'], start: KNIT_START,
@@ -504,7 +519,7 @@ export const SCENE: StyleDef<SceneSettings> = {
 export const sceneStart = (q: URLSearchParams = new URLSearchParams()): SceneSettings => fromAddress(SCENE, SCENE.start, q)
 
 /** Every style's settings, by the name they are kept under. */
-export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, boxart: BOX_ART, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF } as const
+export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, boxart: BOX_ART, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, halftone: HALFTONE_DEF, knit: KNIT_DEF } as const
 /** A name settings are kept under: a key of `CATALOG`. */
 export type StyleKey = keyof typeof CATALOG
 
@@ -530,6 +545,8 @@ export interface StylesValue {
   glass: GlassChoice
   /** Watercolor's. */
   watercolor: WashChoice
+  /** Halftone screen print's. */
+  halftone: HalftoneChoice
   /** Knitting's. */
   knit: KnitChoice
 }
@@ -599,6 +616,7 @@ export function drawnStart(q: URLSearchParams = new URLSearchParams(), on: Start
     neon: fromAddress(NEON_DEF, NEON_DEF.start, q),
     glass: fromAddress(GLASS_DEF, GLASS_DEF.start, q),
     watercolor: fromAddress(WASH_DEF, WASH_DEF.start, q),
+    halftone: fromAddress(HALFTONE_DEF, HALFTONE_DEF.start, q),
     knit: fromAddress(KNIT_DEF, on.coarse ? { ...KNIT_DEF.start, stitch: KNIT_DEF.start.stitch - 2 } : KNIT_DEF.start, q),
   }
 }
@@ -622,6 +640,7 @@ export function drawnFrom(start: DrawnSettings, kept: unknown): DrawnSettings {
     neon: settingsFrom(NEON_DEF, start.neon, got.neon),
     glass: settingsFrom(GLASS_DEF, start.glass, got.glass),
     watercolor: settingsFrom(WASH_DEF, start.watercolor, got.watercolor),
+    halftone: settingsFrom(HALFTONE_DEF, start.halftone, got.halftone),
     knit: settingsFrom(KNIT_DEF, start.knit, got.knit),
   }
 }

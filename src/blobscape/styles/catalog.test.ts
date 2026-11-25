@@ -161,9 +161,9 @@ test('every page with brush looks, a time of day or weather draws them through t
 })
 
 test('every drawn style but knitting paints from a palette named in the address, and starts in full color', async () => {
-  const { ASCII, BOX_ART, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, KNIT_DEF, fromAddress } = await import('./catalog.ts')
+  const { ASCII, BOX_ART, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, HALFTONE_DEF, KNIT_DEF, fromAddress } = await import('./catalog.ts')
   const q = new URLSearchParams('palette=pico8')
-  for (const def of [MARKS, ASCII, BOX_ART, CEL_DEF, BLOCKS_DEF, NEON_DEF, GLASS_DEF, WASH_DEF] as StyleDef<{ palette: string }>[]) {
+  for (const def of [MARKS, ASCII, BOX_ART, CEL_DEF, BLOCKS_DEF, NEON_DEF, GLASS_DEF, WASH_DEF, HALFTONE_DEF] as StyleDef<{ palette: string }>[]) {
     assert.equal(def.start.palette, 'none', def.id)
     assert.equal(fromAddress(def, def.start, q).palette, 'pico8', def.id)
     assert.equal(fromAddress(def, def.start, new URLSearchParams('palette=<b>')).palette, 'none', `${def.id} keeps only an id`)
