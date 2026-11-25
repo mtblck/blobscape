@@ -27,6 +27,8 @@ import { GlassPass } from './glassPass.ts'
 import type { GlassLook } from '../splat-core/glass.ts'
 import { WashPass } from './washPass.ts'
 import { KnitPass } from './knitPass.ts'
+import { AnaglyphPass } from './anaglyphPass.ts'
+import type { AnaglyphLook } from '../splat-core/anaglyph.ts'
 import { stitchSize, type KnitLook } from '../splat-core/knit.ts'
 import type { WashLook } from '../splat-core/wash.ts'
 import { GlyphPass } from './glyphPass.ts'
@@ -724,6 +726,22 @@ export class Stage {
     this.invalidate()
   }
 
+  private anaglyph?: AnaglyphPass
+  private anaglyphLook?: AnaglyphLook
+  /**
+   * 3D glasses (splat-core/anaglyph.ts): the frame drawn from a left and a right eye either side of the camera and
+   * laid over each other in red and cyan, so that through red and cyan glasses the scene stands in depth. What the
+   * view looks at sits at the screen (unless the look's `pop` pushes the screen back), the backdrop behind it. The
+   * blobs are drawn as they are (marks, lights), sorted once for each eye. Leave the look out to stop. Kept for the
+   * next actor too. Not in pixel mode; the other looks come first if set, and outlines and the lens wait.
+   */
+  setAnaglyph(look?: AnaglyphLook) {
+    this.anaglyphLook = look
+    if (!look) { this.anaglyph?.dispose(); this.anaglyph = undefined }
+    else this.anaglyph ??= new AnaglyphPass()
+    this.invalidate()
+  }
+
   private glass?: GlassPass
   private glassLook?: GlassLook
   /**
@@ -965,6 +983,13 @@ export class Stage {
       this.knit.setLook(this.knitLook)
       this.knit.setSize(x, y, stitchSize(this.knitLook.size ?? 9, this.renderer.getPixelRatio()))
       this.knit.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.anaglyph && this.anaglyphLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.anaglyph.setSize(x, y)
+      this.anaglyph.setLook(this.anaglyphLook)
+      this.anaglyph.render(this.renderer, this.scene, this.camera, this.orbit.distance)
       return
     }
     if (!this.pixel && this.lines) {
@@ -1258,6 +1283,7 @@ export class Stage {
     this.glass?.dispose()
     this.wash?.dispose()
     this.knit?.dispose()
+    this.anaglyph?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
     this.cel?.dispose()

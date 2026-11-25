@@ -12,6 +12,7 @@ import { GLITCH_AMOUNTS, GLITCH_PACE_CHOICES, GLITCH_START, type GlitchChoice } 
 import { NEON_PACES, NEON_SETS, NEON_START, type NeonChoice } from './neonLooks.ts'
 import { WASH_PAPERS, WASH_START, type WashChoice } from './washLooks.ts'
 import { KNIT_PATTERNS, KNIT_START, KNIT_SWEATERS, type KnitChoice } from './knitLooks.ts'
+import { ANAGLYPH_MIX_CHOICES, ANAGLYPH_START, type AnaglyphChoice } from './anaglyphLooks.ts'
 
 /**
  * The styles API (Matt, 2026-11-22: no page uses a version of a style all its own). Two things, both data:
@@ -462,6 +463,17 @@ export const KNIT_DEF: StyleDef<KnitChoice> = {
   ],
 }
 
+/** 3D glasses' settings. */
+export const ANAGLYPH_DEF: StyleDef<AnaglyphChoice> = {
+  id: 'anaglyph', styles: ['anaglyph'], start: ANAGLYPH_START,
+  settings: [
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
+    { key: 'mix', kind: 'choice', label: 'Colors', address: 'eyes', testid: 'anaglyph-mix', options: ANAGLYPH_MIX_CHOICES },
+    { key: 'depth', kind: 'range', label: 'Depth', address: 'depth', min: 0, max: 2.5, step: 0.1, unit: 'times', zero: 'Flat', hint: 'How far apart the two eyes stand. More is deeper, and harder on the eyes; less is easier to look at.' },
+    { key: 'pop', kind: 'range', label: 'Comes out', address: 'pop', min: 0, max: 1, step: 0.05, unit: 'percent', hint: 'How much of the scene stands in front of the screen. At 0% what the view looks at sits at the screen and the rest goes in behind it.' },
+  ],
+}
+
 /**
  * The scene's own settings, which every style respects: '' is the scene as it is written (its own weather, its own
  * time), and a detail of '' is the one its style starts at (`detailStart`). Weather and cloud cover are one choice on
@@ -504,7 +516,7 @@ export const SCENE: StyleDef<SceneSettings> = {
 export const sceneStart = (q: URLSearchParams = new URLSearchParams()): SceneSettings => fromAddress(SCENE, SCENE.start, q)
 
 /** Every style's settings, by the name they are kept under. */
-export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, boxart: BOX_ART, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF } as const
+export const CATALOG = { pixel: PIXEL, glitch: GLITCH_DEF, marks: MARKS, ascii: ASCII, boxart: BOX_ART, cel: CEL_DEF, blocks: BLOCKS_DEF, neon: NEON_DEF, glass: GLASS_DEF, watercolor: WASH_DEF, knit: KNIT_DEF, anaglyph: ANAGLYPH_DEF } as const
 /** A name settings are kept under: a key of `CATALOG`. */
 export type StyleKey = keyof typeof CATALOG
 
@@ -532,6 +544,8 @@ export interface StylesValue {
   watercolor: WashChoice
   /** Knitting's. */
   knit: KnitChoice
+  /** 3D glasses'. */
+  anaglyph: AnaglyphChoice
 }
 /** The settings of the looks `useDrawnLook` draws: every style but pixel art and its glitch. */
 export type DrawnSettings = Omit<StylesValue, 'pixel' | 'glitch'>
@@ -600,6 +614,7 @@ export function drawnStart(q: URLSearchParams = new URLSearchParams(), on: Start
     glass: fromAddress(GLASS_DEF, GLASS_DEF.start, q),
     watercolor: fromAddress(WASH_DEF, WASH_DEF.start, q),
     knit: fromAddress(KNIT_DEF, on.coarse ? { ...KNIT_DEF.start, stitch: KNIT_DEF.start.stitch - 2 } : KNIT_DEF.start, q),
+    anaglyph: fromAddress(ANAGLYPH_DEF, ANAGLYPH_DEF.start, q),
   }
 }
 
@@ -623,6 +638,7 @@ export function drawnFrom(start: DrawnSettings, kept: unknown): DrawnSettings {
     glass: settingsFrom(GLASS_DEF, start.glass, got.glass),
     watercolor: settingsFrom(WASH_DEF, start.watercolor, got.watercolor),
     knit: settingsFrom(KNIT_DEF, start.knit, got.knit),
+    anaglyph: settingsFrom(ANAGLYPH_DEF, start.anaglyph, got.anaglyph),
   }
 }
 
