@@ -66,6 +66,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   scan: 'Open a Gaussian splat scan from your phone, turn it level, cut away the floor and the floaters, relight it and save it. Everything stays on your device.',
   shift: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner and travels to it.',
   jelly: 'A see-through jellyfish of Gaussian splats drifting in space: you see the stars through its bell, and light pulses run down its tentacles.',
+  crumble: 'Tap a windmill, a tent or a tree in a little scene of Gaussian splats and it falls apart into its blobs, which lie on the ground and then fly back.',
   sweater: 'A Christmas tree, an ornament and a pile of presents knitted into an ugly Christmas sweater, stitch by stitch, from Gaussian splats you can turn.',
   islands: 'A floating island grown from a biome recipe and a number, out of Gaussian splats: hills, a path, trees and stones, each made of materials from one library.',
   bouquet: 'A florist that never makes the same bouquet twice: pick a season and it grows every flower petal by petal out of Gaussian splats and stands them in a vase.',
@@ -114,6 +115,8 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
       return { path, title: `Shape Shifter · ${SITE.name}`, description: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner in the other creature and travels to it, blending its size, facing and color on the way. Pick the pair, send the blobs straight, in a swirl, through a puddle or out in a burst, and see what pairing by place is for.' }
     case 'jelly':
       return { path, title: `Glass Jellyfish · ${SITE.name}`, description: 'A jellyfish made of Gaussian splats, nearly all of them almost clear, drifting through space so you can see the stars through its bell. Each beat of the bell sends light down its canals and along its tentacles, drawn as blobs that give their own light and glow through the lens. An experiment in what opacity alone can draw.' }
+    case 'crumble':
+      return { path, title: `Destructible Diorama · ${SITE.name}`, description: 'A Diorama scene made of Gaussian splats where everything set down in it can be broken. Tap the windmill, a tent, a tree or a sheep and it falls apart into the very blobs it is made of: they scatter, land on the ground and lie there, then fly back one after another, lowest first, and build it again where it stands, still swaying.' }
     case 'sweater':
       return { path, title: `Ugly Sweater · ${SITE.name}`, description: 'Christmas scenes made of Gaussian splats and knitted into an ugly Christmas sweater: a grid of yarn stitches fixed on the screen, the picture in a few yarn colors, and bands of stars, zigzags, little trees and reindeer knitted in above and below it. Pick the sweater and the pattern, and turn the scene while the stitches stay put.' }
     case 'islands':

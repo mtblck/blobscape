@@ -1830,4 +1830,30 @@ export default [
       else if (!bad) ok(`layout: all ${PAGES.length} experiments have their tabs beside a preview of the same size (${[...sizes][0]}), which stays in sight on a phone`)
     },
   },
+  {
+    name: 'destructible-diorama',
+    about: 'Destructible Diorama: a prop breaks into its blobs, they land, and it builds itself back',
+    entries: ['src/blobscape/DestructibleDiorama.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/destructible-diorama/?offscreen=1&scene=windmill&detail=light', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__crumble, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__crumble) return null
+        const { stage, things, crumble, broken } = window.__crumble
+        let t = stage.time
+        const run = async (seconds) => { for (let k = 0; k < seconds * 10; k++) { t += 0.1; await stage.frame(t) } }
+        await run(0.5)
+        const struck = crumble('windmill')
+        await run(1)
+        const during = broken()
+        await run(6)
+        return { things, struck, during, after: broken() }
+      })
+      if (!got) fails.push('destructible diorama: the page never started (no window.__crumble)')
+      else if (!(got.things.includes('windmill') && got.struck && got.during.includes('windmill') && got.after.length === 0)) fails.push(`destructible diorama: ${JSON.stringify(got)}`)
+      else ok(`destructible diorama: the windmill broke and built itself back (${got.things.length} things to break)`)
+      await g.page.screenshot({ path: 'verify-shots/destructible-diorama.png' }).catch(() => {})
+      await g.ctx.close()
+    },
+  },
 ]
