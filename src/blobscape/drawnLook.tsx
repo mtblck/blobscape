@@ -14,8 +14,10 @@ import { HALFTONE, halftoneGround, halftoneLook } from './halftoneLooks.ts'
 import { KNIT, knitGround, knitLook } from './knitLooks.ts'
 import { ANAGLYPH, anaglyphGround, anaglyphLook } from './anaglyphLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, blockBack, blockLook, gridOf } from './blockLooks.ts'
+import { CRT_GROUND, FILTERS, blueprintGround, blueprintLook, clayGround, clayLook, crtLook, cutoutGround, cutoutLook, isFilter, mosaicGround, mosaicLook, thermalGround, thermalLook, type FilterId } from '../splat-engine/styles/filterLooks.ts'
+import type { FilterLook } from '../splat-core/filters.ts'
 import type { TimeOfDay } from './timeOfDay.ts'
-import { ASCII, BLOCKS_DEF, BOX_ART, CEL_DEF, GLASS_DEF, KNIT_DEF, ANAGLYPH_DEF, MARKS, NEON_DEF, WASH_DEF, HALFTONE_DEF, drawnStart, type DrawnSettings, type Shows } from './styles/catalog.ts'
+import { ASCII, BLOCKS_DEF, BOX_ART, CEL_DEF, GLASS_DEF, KNIT_DEF, ANAGLYPH_DEF, MARKS, NEON_DEF, WASH_DEF, HALFTONE_DEF, BLUEPRINT_DEF, CLAY_DEF, CRT_DEF, CUTOUT_DEF, MOSAIC_DEF, THERMAL_DEF, drawnStart, type DrawnSettings, type Shows } from './styles/catalog.ts'
 import { SettingsControls } from './styles/SettingsControls.tsx'
 import { PaletteStrip } from './styles/PaletteStrip.tsx'
 import { PALETTES } from './diorama/scene.ts'
@@ -23,9 +25,9 @@ import { paletteSnap } from '../splat-core/paints.ts'
 import type { Rgb } from '../splat-core/pixel.ts'
 import { BACKDROPS, CEL, CEL_START, FILL_REACH, celLook, nightLight, nightOf } from './celLooks.ts'
 
-/** Every drawn look a page can offer: the marks, Text, Box Art, cel shading, neon, stained glass, watercolor, and the plain blobs. */
-export type Look = LookId | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof HALFTONE.id | typeof KNIT.id | typeof ANAGLYPH.id
-export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, HALFTONE, KNIT, ANAGLYPH, LOOKS[LOOKS.length - 1]]
+/** Every drawn look a page can offer: the marks, Text, Box Art, cel shading, neon, stained glass, watercolor, the looks laid over the whole picture, and the plain blobs. */
+export type Look = LookId | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof HALFTONE.id | typeof KNIT.id | typeof ANAGLYPH.id | FilterId
+export const ALL_LOOKS: { id: Look; label: string; note: string }[] = [...LOOKS.slice(0, -1), CEL, BLOCKS, NEON, GLASS, WASH, HALFTONE, KNIT, ANAGLYPH, ...FILTERS, LOOKS[LOOKS.length - 1]]
 /** The looks that light the blobs themselves, and so want them built with no light baked in (`unlit`). */
 export const wantsPlain = (look: Look | undefined) => lightsItself(look)
 
@@ -91,6 +93,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const mine = useState<DrawnSettings>(() => drawnStart(params(), { coarse: on.light }))
   const [drawn, setDrawn] = kept ?? mine
   const { cel, neon, glass, watercolor: wash, halftone: tone, blocks: block, marks: mk, ascii: asc, boxart: box, knit, anaglyph: stereo } = drawn
+  const { clay, blueprint, thermal, cutout, mosaic, crt } = drawn
   const change = <K extends keyof DrawnSettings>(key: K) => (c: Partial<DrawnSettings[K]>) => setDrawn((d) => ({ ...d, [key]: { ...d[key], ...c } }))
   // a time of day stands the blocks' sun at its own height; the slider moves it from there
   const timeId = on.time?.id, timeHeight = on.time?.height
@@ -116,9 +119,11 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const paintsFor = (id: string) => paints.find((p) => p.id === id) ?? paints[0]
   const blockPaints = paintsFor(block.palette), celPaints = paintsFor(cel.palette)
   const markPaints = paintsFor(mk.palette), asciiPaints = paintsFor(chosen.palette), neonPaints = paintsFor(neon.palette), glassPaints = paintsFor(glass.palette), washPaints = paintsFor(wash.palette), stereoPaints = paintsFor(stereo.palette), tonePaints = paintsFor(tone.palette)
+  const clayPaints = paintsFor(clay.palette), blueprintPaints = paintsFor(blueprint.palette), thermalPaints = paintsFor(thermal.palette), cutoutPaints = paintsFor(cutout.palette), mosaicPaints = paintsFor(mosaic.palette), crtPaints = paintsFor(crt.palette)
   // the palette the look on show paints from (blocks paint their cubes themselves; knitting has its yarns; hatching and
-  // stipple draw ink on paper, and ASCII and neon their own inks unless they take things' own colors)
-  const lookPaints = look === 'cel' ? celPaints : look === 'glass' ? glassPaints : look === 'watercolor' ? washPaints : look === 'anaglyph' ? stereoPaints : look === 'halftone' ? tonePaints
+  // stipple draw ink on paper, and ASCII and neon their own inks unless they take things' own colors; the thermal camera
+  // takes a palette as its heat colors and the blueprint as its paper and lines, so neither paints the scene)
+  const lookPaints = look === 'clay' ? clayPaints : look === 'cutout' ? cutoutPaints : look === 'mosaic' ? mosaicPaints : look === 'crt' ? crtPaints : look === 'cel' ? celPaints : look === 'glass' ? glassPaints : look === 'watercolor' ? washPaints : look === 'anaglyph' ? stereoPaints : look === 'halftone' ? tonePaints
     : look === 'neon' ? (neon.set === 'own' ? neonPaints : undefined) : ascii ? (own ? asciiPaints : undefined)
       : look === 'gouache' || look === 'oil' || look === 'ink' || look === 'blobs' ? markPaints : undefined
   // the subject's own sky is the first backdrop where it has one. Under a dark sky it is night: the shade and line are
@@ -131,7 +136,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const night = inScene ? skyDark : 0
 
   const sheet = PAPERS.find((p) => p.id === paper)!
-  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'blocks' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && look !== 'knit' && look !== 'anaglyph' && look !== 'halftone' && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
+  const marks = useMemo<MarkLook | undefined>(() => (look && look !== 'cel' && look !== 'blocks' && look !== 'neon' && look !== 'glass' && look !== 'watercolor' && look !== 'knit' && look !== 'anaglyph' && look !== 'halftone' && !isFilter(look) && isMark(look) ? { kind: look, size, ink: sheet.ink, paper: sheet.paper, soft } : undefined), [look, size, sheet, soft])
   useEffect(() => { stage?.setMarks(marks) }, [stage, marks, actor])
   // off screen a frame is drawn only when asked for, and must not depend on the one before (`?steady=` says otherwise, for the checks)
   const held = useMemo(() => { const v = params().get('steady'); return v !== null && v !== '' && Number.isFinite(+v) ? +v : offscreen ? 0 : undefined }, [offscreen])
@@ -157,6 +162,16 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const stereo3d = look === 'anaglyph'
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { stage?.setAnaglyph(stereo3d ? anaglyphLook(stereo, sky) : undefined) }, [stage, stereo3d, stereo, skyKey])
+  // the looks laid over the whole picture
+  const filtered = isFilter(look)
+  const thermalColors = thermalPaints.colors, blueprintColors = blueprintPaints.colors
+  useEffect(() => {
+    const still = !offscreen && typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const f: FilterLook | undefined = look === 'clay' ? clayLook(clay, sky, still) : look === 'blueprint' ? blueprintLook(blueprint, blueprintColors) : look === 'thermal' ? thermalLook(thermal, thermalColors, still)
+      : look === 'cutout' ? cutoutLook(cutout, sky) : look === 'mosaic' ? mosaicLook(mosaic, sky) : look === 'crt' ? crtLook(crt, sky, loop, still) : undefined
+    stage?.setFilter(f)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, look, clay, blueprint, thermal, cutout, mosaic, crt, skyKey, loop, offscreen, thermalColors, blueprintColors])
   const knitted = look === 'knit'
   useEffect(() => { stage?.setKnit(knitted ? knitLook(knit, held) : undefined) }, [stage, knitted, knit, held])
   const blocky = look === 'blocks'
@@ -179,7 +194,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     return () => clearTimeout(id)
   }, [stage, blocky, actor, plain, block, spacing, azimuth, blockTint, blockPaints])
   useEffect(() => () => stage?.setBlocks(), [stage])
-  const outline = !!look && !ascii && !lit && !glazed && !painted && !knitted && !stereo3d && !printed && !blocky && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
+  const outline = !!look && !ascii && !lit && !glazed && !painted && !knitted && !stereo3d && !printed && !filtered && !blocky && (outlined ?? (look === 'ink' || look === 'hatch' || look === 'stipple' || look === 'cel'))
   const { pixelCel } = on
   useEffect(() => { stage?.setCel(!look && pixelCel ? { ...pixelCel, ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : look === 'cel' ? { ...celLook({ ...cel, backdrop: celBase, turn: cel.turn + azimuth, line: outline ? pen : 0 }), ambient: timeId ? undefined : nightLight(night), ...(light ? { shadowSize: 1024, shadowEvery: offscreen ? 1 : 2 } : {}) } : undefined) }, [stage, look, cel, celBase, night, timeId, outline, pen, azimuth, light, offscreen, pixelCel])
   // flat fills: each part's colors gathered into a few, shown in place of the blobs' own (which stay as they were);
@@ -187,7 +202,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
   const paintSnap = lookPaints?.colors.length ? lookPaints.colors : undefined
   useEffect(() => {
     // stained glass wants them too: lead runs wherever the color changes, so a mottled surface would be all lead
-    const fills = look === 'cel' ? cel.fills : look === 'glass' ? GLASS_FILLS : !look && pixelCel ? PIXEL_FILLS : 0
+    const fills = look === 'cel' ? cel.fills : look === 'glass' ? GLASS_FILLS : look === 'cutout' ? cutout.fills : !look && pixelCel ? PIXEL_FILLS : 0
     const snap = paletteSnap(paintSnap as Rgb[] | undefined)
     if (!stage || !actor || (fills ? !plain : !snap)) return
     const b = actor.blobs
@@ -199,14 +214,14 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     }
     stage.tint(snap ? (_own, i) => snap(flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]) : (_own, i) => [flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]])
     return () => stage.tint()
-  }, [stage, actor, plain, look, cel.fills, !!pixelCel, paintSnap])
+  }, [stage, actor, plain, look, cel.fills, cutout.fills, !!pixelCel, paintSnap])
   useEffect(() => { stage?.setOutline(outline && look !== 'cel' ? { width: pen, ink: look === 'ink' || look === 'hatch' || look === 'stipple' ? sheet.ink : undefined } : undefined) }, [stage, outline, pen, look, sheet])
 
   const drawnOn = look === 'ink' || look === 'hatch' || look === 'stipple'
   // paint covers its ground, so a subject with a sky of its own stands in front of that
   const isPaint = look === 'gouache' || look === 'oil'
   const backdrop = BACKDROPS.find((b) => b.id === celBase) ?? BACKDROPS[0]
-  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : blocky ? blockBehind.back : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : knitted ? knitGround(knit) : stereo3d ? anaglyphGround(sky) : printed ? halftoneGround(tone) : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
+  const ground = !look || look === 'blobs' ? undefined : look === 'cel' ? (inScene ? skyBack.back : backdrop.back) : blocky ? blockBehind.back : lit ? NEON_GROUND : glazed ? GLASS_GROUND : painted ? washGround(wash) : knitted ? knitGround(knit) : stereo3d ? anaglyphGround(sky) : printed ? halftoneGround(tone) : look === 'clay' ? clayGround(sky) : look === 'blueprint' ? blueprintGround(blueprint, blueprintColors) : look === 'thermal' ? thermalGround(thermal) : look === 'cutout' ? cutoutGround(cutout, sky) : look === 'mosaic' ? mosaicGround(mosaic) : look === 'crt' ? CRT_GROUND : ascii ? css(own ? SCREEN : sheet.paper) : drawnOn ? css(sheet.paper) : skyBack && isPaint ? skyBack.back : GROUND
 
   const paintControl = (picked: (typeof paints)[number], does: string) => ({
     options: paints, active: picked.id, testid: 'drawn-palettes',
@@ -246,6 +261,12 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <SettingsControls def={HALFTONE_DEF} value={tone} onChange={change('halftone')} on={shows} choices={{ palette: paintControl(tonePaints, 'Each color is painted the closest one, then separated into the inks, so the dots mix back to near that color.') }} />
           </div>
         )}
+        {look === 'clay' && <div className="space-y-4" data-testid="brush-clay"><SettingsControls def={CLAY_DEF} value={clay} onChange={change('clay')} on={shows} choices={{ palette: paintControl(clayPaints, 'The clay is mixed from these colors: each color is painted the closest one before it is lit.') }} /></div>}
+        {look === 'blueprint' && <div className="space-y-4" data-testid="brush-blueprint"><SettingsControls def={BLUEPRINT_DEF} value={blueprint} onChange={change('blueprint')} on={shows} choices={{ palette: paintControl(blueprintPaints, 'Its darkest color is the paper and its lightest the lines.') }} /></div>}
+        {look === 'thermal' && <div className="space-y-4" data-testid="brush-thermal"><SettingsControls def={THERMAL_DEF} value={thermal} onChange={change('thermal')} on={shows} choices={{ palette: paintControl(thermalPaints, 'Its colors, darkest to lightest, are the heat colors from cold to hot, each heat the nearest one.') }} /></div>}
+        {look === 'cutout' && <div className="space-y-4" data-testid="brush-cutout"><SettingsControls def={CUTOUT_DEF} value={cutout} onChange={change('cutout')} on={shows} choices={{ palette: paintControl(cutoutPaints, 'The paper is cut from these colors: each sheet is the closest one.') }} /></div>}
+        {look === 'mosaic' && <div className="space-y-4" data-testid="brush-mosaic"><SettingsControls def={MOSAIC_DEF} value={mosaic} onChange={change('mosaic')} on={shows} choices={{ palette: paintControl(mosaicPaints, 'The tiles come in these colors: each is the closest one to what it shows.') }} /></div>}
+        {look === 'crt' && <div className="space-y-4" data-testid="brush-crt"><SettingsControls def={CRT_DEF} value={crt} onChange={change('crt')} on={shows} choices={{ palette: paintControl(crtPaints, 'Each color is painted the closest one before it goes to the screen.') }} /></div>}
         {knitted && (
           <div className="space-y-4" data-testid="brush-knit">
             <SettingsControls def={KNIT_DEF} value={knit} onChange={change('knit')} on={shows} />
@@ -257,7 +278,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
             <p className="text-xs text-ink-faint">Put on red and cyan glasses, red over the left eye. Without them each thing stands doubled, a red picture beside a cyan one.</p>
           </div>
         )}
-        {look !== 'cel' && !blocky && !lit && !glazed && !painted && !knitted && !stereo3d && !printed && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} choices={{ palette: paintControl(markPaints, 'Each blob is painted the closest one, light and shade as the scene was lit, so shade falls in steps of the palette.') }} />}
+        {look !== 'cel' && !blocky && !lit && !glazed && !painted && !knitted && !stereo3d && !printed && !filtered && !ascii && <SettingsControls def={MARKS} value={mk} onChange={change('marks')} on={shows} choices={{ palette: paintControl(markPaints, 'Each blob is painted the closest one, light and shade as the scene was lit, so shade falls in steps of the palette.') }} />}
         {ascii && !boxed && <SettingsControls def={ASCII} value={asc} onChange={change('ascii')} on={shows} choices={{ palette: paintControl(asciiPaints, 'Each character takes the closest one to the color of what it stands for.') }} />}
         {boxed && <SettingsControls def={BOX_ART} value={box} onChange={change('boxart')} on={shows} choices={{ palette: paintControl(asciiPaints, 'Each character takes the closest one to the color of what it stands for.') }} />}
         {ascii && (

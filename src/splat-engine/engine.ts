@@ -907,16 +907,19 @@ export class SplatWorld extends Mesh {
 
   /**
    * The box that holds every blob as the bones stand now, in the world: closer than `bounds`, which is a ball round
-   * the bones' reaches. What a light's view of the scene is fitted to.
+   * the bones' reaches. What a light's view of the scene is fitted to. With `subject`, only the first actor's, leaving
+   * out its loose things in the air (bones named `~…`: the sky's sun, moon and stars, specks): the box a blueprint's
+   * dimension lines are drawn round.
    */
-  posedBox(): { lo: [number, number, number]; hi: [number, number, number] } {
+  posedBox(subject = false): { lo: [number, number, number]; hi: [number, number, number] } {
     // each bone's box at rest, carried by its matrix: the middle moves, the half sizes go through |M|
     const lo: [number, number, number] = [Infinity, Infinity, Infinity], hi: [number, number, number] = [-Infinity, -Infinity, -Infinity]
-    for (let a = 0; a < this.actors.length; a++) {
+    for (let a = 0; a < (subject ? Math.min(1, this.actors.length) : this.actors.length); a++) {
       const sk = this.actors[a].skeleton, m = sk.matrix
       for (let b = 0; b < sk.count; b++) {
         const g = (this.boneOffset[a] + b) * 6
         if (!(sk.scale[b] > 0) || !(this.boneBox[g + 3] + this.boneBox[g + 4] + this.boneBox[g + 5] > 0)) continue
+        if (subject && sk.bones[b].name.startsWith('~')) continue
         const o = b * 16, x = this.boneBox[g], y = this.boneBox[g + 1], z = this.boneBox[g + 2]
         const hx = this.boneBox[g + 3], hy = this.boneBox[g + 4], hz = this.boneBox[g + 5]
         for (let k = 0; k < 3; k++) {

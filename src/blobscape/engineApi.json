@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as a halftone print, knitted, for 3D glasses, as blocks or glitching, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as a halftone print, knitted, for 3D glasses, as clay, a blueprint, a thermal camera, cut paper, a mosaic or an old television, as blocks or glitching, and baking a creature into a sprite sheet."
   },
   {
    "id": "styles",
@@ -615,6 +615,15 @@
        "signatures": [
         {
          "code": "setHalftone(look?: HalftoneLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setFilter",
+       "doc": "One of the looks laid over the whole picture (splat-core/filters.ts): a thermal camera, an old CRT or tape, a\nblueprint, a mosaic, paper cutouts or claymation. The look covers the canvas. The blueprint and paper cutouts draw\nevery blob flat in its own color with no lights; the thermal camera draws what gives its own light over white so\nit runs hot; claymation moves in held frames (`ClayLook.fps`) unless the stage holds its own. Leave the look out to\nstop. Kept for the next actor too. Not in pixel mode; the other looks come first if set, and outlines and the\nlens wait.",
+       "signatures": [
+        {
+         "code": "setFilter(look?: FilterLook): void"
         }
        ]
       },
@@ -1407,10 +1416,10 @@
       },
       {
        "name": "posedBox",
-       "doc": "The box that holds every blob as the bones stand now, in the world: closer than `bounds`, which is a ball round\nthe bones' reaches. What a light's view of the scene is fitted to.",
+       "doc": "The box that holds every blob as the bones stand now, in the world: closer than `bounds`, which is a ball round\nthe bones' reaches. What a light's view of the scene is fitted to. With `subject`, only the first actor's, leaving\nout its loose things in the air (bones named `~…`: the sky's sun, moon and stars, specks): the box a blueprint's\ndimension lines are drawn round.",
        "signatures": [
         {
-         "code": "posedBox(): { lo: [number, number, number]; hi: [number, number, number] }"
+         "code": "posedBox(subject?: boolean): { lo: [number, number, number]; hi: [number, number, number] }"
         }
        ]
       },
@@ -13773,6 +13782,995 @@
    ]
   },
   {
+   "id": "filterPass",
+   "title": "Claymation, blueprint, thermal, paper cutout, mosaic and CRT",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "FilterPass",
+     "kind": "class",
+     "doc": "The six looks laid over the whole picture (splat-core/filters.ts is the CPU twin: change one, change both): a\nthermal camera, an old CRT or tape, a blueprint, a mosaic, paper cutouts and claymation. The frame is drawn once\nas the world is set to draw it, and, where the look asks, a map of depth and one of parts with the same moved and\nsorted blobs (as outlines are, inkLines.ts); then one full-screen pass draws the look over the whole canvas.\n\n`Stage.setFilter` sets the world for each: the blueprint and paper cutouts draw flat marks with no lights; the\nthermal camera draws what gives its own light over white (`THERMAL_EMIT`), so it can tell a lamp from a pale thing;\nclaymation moves in held frames. The frame's camera must be a perspective camera.",
+     "ctor": [
+      {
+       "code": "new FilterPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture, as the world draws it (half floats, so what glows can go over white)."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts, for the looks that want one."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, and how many device pixels a CSS pixel is; `size` is the scene's size in the world, `time` the stage's clock.",
+       "signatures": [
+        {
+         "code": "setLook(look: FilterLook, ratio: number, size: number, time: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene in the look into the renderer's current target, or onto the screen when it has none. `box` is the\nsubject's box in the world (the blueprint's dimension lines are drawn round it).",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, box?: { lo: readonly number[]; hi: readonly number[] }): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "filters",
+   "title": "Six filter looks: the arithmetic",
+   "group": "pixels",
+   "doc": "Six looks laid over the whole picture (Matt picked them, 2026-11-25): a thermal camera, an old CRT or tape, a\nblueprint, a mosaic, paper cutouts and claymation. Each is drawn by `splat-engine/filterPass.ts` from the frame as\nthe blobs draw it (and, where a look asks, a map of depth and one of parts), one full-screen pass a look. The\narithmetic here is pure and is the shader's CPU twin: change one, change both.\n\nPlaces on the screen are device pixels with y counted down from the top; `ratio` is device pixels a CSS pixel, so\na look's sizes (lines, tiles, shadows) are the same size to the eye on every screen.",
+   "entries": [
+    {
+     "name": "Sky01",
+     "kind": "type",
+     "doc": "A sky, top and bottom (sRGB 0–1).",
+     "type": "readonly [Rgb01, Rgb01]"
+    },
+    {
+     "name": "fract",
+     "kind": "const",
+     "doc": "The fractional part.",
+     "type": "(v: number) => number"
+    },
+    {
+     "name": "hash2",
+     "kind": "const",
+     "doc": "A number from 0 to 1 for a place (the shader's `hash`; change both).",
+     "type": "(x: number, y: number) => number"
+    },
+    {
+     "name": "noise2",
+     "kind": "function",
+     "doc": "Smooth value noise from 0 to 1 over whole-number cells (the shader's `noise`; change both).",
+     "signatures": [
+      {
+       "code": "noise2(x: number, y: number): number"
+      }
+     ]
+    },
+    {
+     "name": "luma",
+     "kind": "const",
+     "doc": "A color's luminance (linear in, linear out).",
+     "type": "(c: readonly number[]) => number"
+    },
+    {
+     "name": "toLinear",
+     "kind": "const",
+     "doc": "sRGB 0–1 to linear light.",
+     "type": "(c: Rgb01) => [number, number, number]"
+    },
+    {
+     "name": "skyAt",
+     "kind": "const",
+     "doc": "The sky at `t`, from 0 at the top of the picture to 1 at the bottom (linear in, linear out).",
+     "type": "(top: readonly number[], bottom: readonly number[], t: number) => [number, number, number]"
+    },
+    {
+     "name": "Picture",
+     "kind": "type",
+     "doc": "A picture read at a device pixel: linear light, premultiplied (r, g, b, a).",
+     "type": "(x: number, y: number) => readonly number[]"
+    },
+    {
+     "name": "ThermalLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as a thermal camera sees it (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"thermal\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "ramp",
+       "type": "readonly Rgb01[]",
+       "doc": "The heat colors from cold to hot (sRGB 0–1), 2 to `THERMAL_STOPS` of them, evenly spread."
+      },
+      {
+       "name": "stepped",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Each heat takes the nearest of the ramp's colors, not a mix of two (a palette's colors stay its own)."
+      },
+      {
+       "name": "hot",
+       "optional": true,
+       "type": "number",
+       "doc": "How hot what gives its own light runs (a lamp, a fire, breath), 0 to 1.5 (1)."
+      },
+      {
+       "name": "spread",
+       "optional": true,
+       "type": "number",
+       "doc": "How far heat spreads round what gives its own light, in CSS pixels (20)."
+      },
+      {
+       "name": "warm",
+       "optional": true,
+       "type": "number",
+       "doc": "How warm lit things are, by how bright they are, 0 to 1 (0.8)."
+      },
+      {
+       "name": "noise",
+       "optional": true,
+       "type": "number",
+       "doc": "The sensor's grain, 0 to 1 (0.3)."
+      },
+      {
+       "name": "still",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The grain holds still (reduced motion, or a frame that must not change by the clock)."
+      }
+     ]
+    },
+    {
+     "name": "THERMAL_EMIT",
+     "kind": "const",
+     "doc": "What gives its own light is drawn this many times its color for the thermal camera, so it can be told from a pale thing (as neon's lamps).",
+     "type": "4"
+    },
+    {
+     "name": "THERMAL_STOPS",
+     "kind": "const",
+     "doc": "The most colors a heat ramp has.",
+     "type": "8"
+    },
+    {
+     "name": "THERMAL_TAPS",
+     "kind": "const",
+     "doc": "Where heat is looked for round each pixel, as shares of the look's spread (eight at the full reach, four at half).",
+     "type": "readonly [number, number][]"
+    },
+    {
+     "name": "THERMAL_SPREAD_GAIN",
+     "kind": "const",
+     "doc": "How much of what glows nearby a pixel takes as its own heat.",
+     "type": "0.6"
+    },
+    {
+     "name": "THERMAL_SKY",
+     "kind": "const",
+     "doc": "How hot the empty sky reads at its top and at the horizon.",
+     "type": "readonly [number, number]"
+    },
+    {
+     "name": "THERMAL_FPS",
+     "kind": "const",
+     "doc": "How often the grain changes, a second.",
+     "type": "15"
+    },
+    {
+     "name": "emitted",
+     "kind": "const",
+     "doc": "How much of its color a pixel gives off by itself (linear, not premultiplied): 0 for anything at or under white, 1 at `THERMAL_EMIT` times.",
+     "type": "(c: readonly number[]) => number"
+    },
+    {
+     "name": "hotShare",
+     "kind": "const",
+     "doc": "How much of what glows there counts as hot, by how colored it is: a lamp, a flame or the sun is warm-colored and\nhot, while a glowing cloud, the moon or a star is white and reads cold, as the sky does to a heat camera.",
+     "type": "(c: readonly number[]) => number"
+    },
+    {
+     "name": "THERMAL_WHITE",
+     "kind": "const",
+     "doc": "How much cooler a white thing reads than a dark one in the same light: white throws the sun back (clouds, snow, white walls).",
+     "type": "0.55"
+    },
+    {
+     "name": "heatOf",
+     "kind": "function",
+     "doc": "A pixel's own heat, 0 to about 1.5, from its color (linear, not premultiplied): warmth by how bright it is lit, and the heat of what glows.",
+     "signatures": [
+      {
+       "code": "heatOf(c: readonly number[], look: ThermalLook): number"
+      }
+     ]
+    },
+    {
+     "name": "rampAt",
+     "kind": "function",
+     "doc": "The color for a heat (0 to 1) along a ramp of linear colors, evenly spread; `stepped` takes the nearest one.",
+     "signatures": [
+      {
+       "code": "rampAt(ramp: readonly (readonly number[])[], h: number, stepped?: boolean): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "paletteRamp",
+     "kind": "function",
+     "doc": "A palette (sRGB 0–255) as a heat ramp: its colors from darkest to lightest, at most `THERMAL_STOPS`, spread evenly over it.",
+     "signatures": [
+      {
+       "code": "paletteRamp(colors: readonly (readonly number[])[]): Rgb01[]"
+      }
+     ]
+    },
+    {
+     "name": "grainFrame",
+     "kind": "const",
+     "doc": "The grain's frame at a time.",
+     "type": "(time: number, still?: boolean) => number"
+    },
+    {
+     "name": "thermalAt",
+     "kind": "function",
+     "doc": "One device pixel as the thermal camera sees it (linear out).",
+     "signatures": [
+      {
+       "code": "thermalAt(x: number, y: number, picture: Picture, height: number, look: ThermalLook, ratio?: number, time?: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "CrtLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as an old television playing a tape (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"crt\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "scan",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark the gaps between scanlines are, 0 to 1 (0.5)."
+      },
+      {
+       "name": "every",
+       "optional": true,
+       "type": "number",
+       "doc": "How tall a scanline is, in CSS pixels (3)."
+      },
+      {
+       "name": "bleed",
+       "optional": true,
+       "type": "number",
+       "doc": "How far color smears to the right of where it belongs, 0 to 1 (0.5)."
+      },
+      {
+       "name": "wobble",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the picture's rows wander and a tracking band rolls up the screen, 0 to 1 (0.4)."
+      },
+      {
+       "name": "noise",
+       "optional": true,
+       "type": "number",
+       "doc": "Tape noise, 0 to 1 (0.3)."
+      },
+      {
+       "name": "curve",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the glass bulges, with darker corners, 0 to 1 (0.4)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "Sky01",
+       "doc": "What stands behind the subject, top and bottom (sRGB 0–1)."
+      },
+      {
+       "name": "period",
+       "optional": true,
+       "type": "number",
+       "doc": "Seconds the scene takes to come round again: the wobble goes a whole number of times into it, so a recording joins (12)."
+      },
+      {
+       "name": "still",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The wobble and noise hold still."
+      }
+     ]
+    },
+    {
+     "name": "CRT_BACK",
+     "kind": "const",
+     "doc": "Behind a subject with no sky of its own (sRGB 0–1): a dim studio blue.",
+     "type": "Sky01"
+    },
+    {
+     "name": "CRT_BLEED_PX",
+     "kind": "const",
+     "doc": "How many CSS pixels color smears at full bleed.",
+     "type": "6"
+    },
+    {
+     "name": "CRT_BLEED_TAPS",
+     "kind": "const",
+     "doc": "How many taps the smear is read with.",
+     "type": "6"
+    },
+    {
+     "name": "CRT_BAND_PX",
+     "kind": "const",
+     "doc": "How far the tracking band throws rows aside at full wobble, in CSS pixels.",
+     "type": "14"
+    },
+    {
+     "name": "CRT_BAND",
+     "kind": "const",
+     "doc": "How tall the tracking band is, as a share of the picture.",
+     "type": "0.06"
+    },
+    {
+     "name": "CRT_ROLLS",
+     "kind": "const",
+     "doc": "How many times a loop the tracking band rolls up the screen.",
+     "type": "2"
+    },
+    {
+     "name": "CRT_WANDERS",
+     "kind": "const",
+     "doc": "How many times a loop the slow wander of the rows goes round.",
+     "type": "3"
+    },
+    {
+     "name": "CRT_FPS",
+     "kind": "const",
+     "doc": "How often the tape noise changes, a second.",
+     "type": "30"
+    },
+    {
+     "name": "yiq",
+     "kind": "const",
+     "doc": "YIQ from linear-ish RGB (the television's own split of brightness and color).",
+     "type": "(c: readonly number[]) => [number, number, number]"
+    },
+    {
+     "name": "fromYiq",
+     "kind": "const",
+     "doc": "RGB from YIQ.",
+     "type": "(c: readonly number[]) => [number, number, number]"
+    },
+    {
+     "name": "crtCurve",
+     "kind": "function",
+     "doc": "Where a point of the screen (u, v from 0 to 1) reads the picture through the bulging glass, or undefined off its edge.",
+     "signatures": [
+      {
+       "code": "crtCurve(u: number, v: number, curve: number): [number, number] | undefined"
+      }
+     ]
+    },
+    {
+     "name": "scanShade",
+     "kind": "const",
+     "doc": "How bright a place within a scanline is (`f` from 0 to 1 down the line): bright in its middle, dark between lines.",
+     "type": "(f: number, scan: number) => number"
+    },
+    {
+     "name": "wobbleAt",
+     "kind": "function",
+     "doc": "How far the rows at `v` (0 top, 1 bottom; `y` in CSS pixels) are thrown aside at a time, in CSS pixels.",
+     "signatures": [
+      {
+       "code": "wobbleAt(v: number, yCss: number, time: number, look: CrtLook): number"
+      }
+     ]
+    },
+    {
+     "name": "crtAt",
+     "kind": "function",
+     "doc": "One device pixel of the television (linear out). `picture` is linear and premultiplied.",
+     "signatures": [
+      {
+       "code": "crtAt(x: number, y: number, picture: Picture, width: number, height: number, look: CrtLook, ratio?: number, time?: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "BlueprintLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as a blueprint (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"blueprint\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "paper",
+       "optional": true,
+       "type": "Rgb01",
+       "doc": "The paper (sRGB 0–1)."
+      },
+      {
+       "name": "ink",
+       "optional": true,
+       "type": "Rgb01",
+       "doc": "The lines (sRGB 0–1)."
+      },
+      {
+       "name": "line",
+       "optional": true,
+       "type": "number",
+       "doc": "The outline's width, in CSS pixels (1.5)."
+      },
+      {
+       "name": "inner",
+       "optional": true,
+       "type": "number",
+       "doc": "How strong the lines between a thing's parts are beside its outline, 0 to 1 (0.6)."
+      },
+      {
+       "name": "grid",
+       "optional": true,
+       "type": "number",
+       "doc": "How far apart the grid's lines are, in CSS pixels; 0 draws none (16)."
+      },
+      {
+       "name": "dims",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether dimension lines are drawn across the subject's width and height (true)."
+      },
+      {
+       "name": "fill",
+       "optional": true,
+       "type": "number",
+       "doc": "How strongly the subject is washed in the line color, 0 to 1 (0.25)."
+      }
+     ]
+    },
+    {
+     "name": "BLUEPRINT_PAPER",
+     "kind": "const",
+     "doc": "A blueprint's paper (sRGB 0–1).",
+     "type": "Rgb01"
+    },
+    {
+     "name": "BLUEPRINT_INK",
+     "kind": "const",
+     "doc": "A blueprint's lines (sRGB 0–1).",
+     "type": "Rgb01"
+    },
+    {
+     "name": "GRID_MINOR",
+     "kind": "const",
+     "doc": "How strong the grid's lines are.",
+     "type": "0.16"
+    },
+    {
+     "name": "GRID_MAJOR",
+     "kind": "const",
+     "doc": "How strong every fifth line of the grid is.",
+     "type": "0.32"
+    },
+    {
+     "name": "DIM_GAP",
+     "kind": "const",
+     "doc": "How far the dimension lines stand off the subject, in CSS pixels.",
+     "type": "16"
+    },
+    {
+     "name": "DIM_ARROW",
+     "kind": "const",
+     "doc": "How long the dimension lines' arrowheads are, in CSS pixels.",
+     "type": "7"
+    },
+    {
+     "name": "DIM_TICKS",
+     "kind": "const",
+     "doc": "How many marks divide a dimension line.",
+     "type": "10"
+    },
+    {
+     "name": "gridAt",
+     "kind": "function",
+     "doc": "How much of the grid's lines cover a pixel (0 to 1); `x`, `y` and `every` in device pixels, `ratio` for the line's width.",
+     "signatures": [
+      {
+       "code": "gridAt(x: number, y: number, every: number, ratio?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "ScreenBox",
+     "kind": "type",
+     "doc": "A box on the screen, in device pixels: left, top, right, bottom.",
+     "type": "readonly [number, number, number, number]"
+    },
+    {
+     "name": "dimPlaces",
+     "kind": "function",
+     "doc": "Where a box's dimension lines go (device pixels): the line under it (`yd`) and beside it (`xd`), each moved over or to the left where there is no room, and where their extension lines run; none for a box too small or off the picture.",
+     "signatures": [
+      {
+       "code": "dimPlaces(box: ScreenBox, width: number, height: number, ratio?: number): { yd: number; xd: number; fromY: number; toY: number; fromX: number; toX: number } | undefined"
+      }
+     ]
+    },
+    {
+     "name": "dimsAt",
+     "kind": "function",
+     "doc": "Dimension lines round a box (device pixels, y down): one under it across its width and one beside it down its\nheight (over it and to its left where there is no room), each with extension lines to the box, an arrowhead at each\nend and `DIM_TICKS` marks along it. How much of them covers (x, y), 0 to 1.",
+     "signatures": [
+      {
+       "code": "dimsAt(x: number, y: number, box: ScreenBox, width: number, height: number, ratio?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "MosaicLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as a mosaic (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"mosaic\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "tile",
+       "optional": true,
+       "type": "number",
+       "doc": "A tile's side, in CSS pixels (10)."
+      },
+      {
+       "name": "grout",
+       "optional": true,
+       "type": "number",
+       "doc": "The grout between tiles, in CSS pixels (1.5)."
+      },
+      {
+       "name": "groutColor",
+       "optional": true,
+       "type": "Rgb01",
+       "doc": "The grout's color (sRGB 0–1)."
+      },
+      {
+       "name": "vary",
+       "optional": true,
+       "type": "number",
+       "doc": "How much tiles differ in color from one to the next, 0 to 1 (0.5)."
+      },
+      {
+       "name": "bevel",
+       "optional": true,
+       "type": "number",
+       "doc": "How much each tile's edges catch light and shade, 0 to 1 (0.5)."
+      },
+      {
+       "name": "brick",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Rows set over one another like bricks, half a tile along."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "Sky01",
+       "doc": "What stands behind the subject, top and bottom (sRGB 0–1): tiles in its colors. Left out, plain tiles of `MOSAIC_GROUND`."
+      }
+     ]
+    },
+    {
+     "name": "MOSAIC_GROUT",
+     "kind": "const",
+     "doc": "The grout (sRGB 0–1): a pale mortar.",
+     "type": "Rgb01"
+    },
+    {
+     "name": "MOSAIC_GROUND",
+     "kind": "const",
+     "doc": "Tiles behind a subject when no sky is laid (sRGB 0–1): a warm stone.",
+     "type": "Rgb01"
+    },
+    {
+     "name": "MOSAIC_TAPS",
+     "kind": "const",
+     "doc": "Where a tile's color is read, as shares of the tile about its middle (the middle first).",
+     "type": "readonly [number, number][]"
+    },
+    {
+     "name": "tileAt",
+     "kind": "function",
+     "doc": "The tile a device pixel lies in: its column and row, its middle, and the pixel's place in it (u, v from −½ to ½).",
+     "signatures": [
+      {
+       "code": "tileAt(x: number, y: number, side: number, brick?: boolean): { cell: [number, number]; mid: [number, number]; u: number; v: number }"
+      }
+     ]
+    },
+    {
+     "name": "tileCover",
+     "kind": "function",
+     "doc": "How much of a pixel a tile covers (0 to 1): a rounded square inset by half the grout, a little smaller or larger\nby its own hash so the grout lines wander. `side` and `grout` in device pixels.",
+     "signatures": [
+      {
+       "code": "tileCover(u: number, v: number, cell: readonly [number, number], side: number, grout: number): number"
+      }
+     ]
+    },
+    {
+     "name": "tileTint",
+     "kind": "function",
+     "doc": "A tile's own change of color: how much lighter or darker, and a small shift of each channel.",
+     "signatures": [
+      {
+       "code": "tileTint(cell: readonly [number, number], vary: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "bevelAt",
+     "kind": "function",
+     "doc": "How a tile's face is lit by its bevel at (u, v): lighter toward its top left edge, darker toward its bottom right.",
+     "signatures": [
+      {
+       "code": "bevelAt(u: number, v: number, bevel: number): number"
+      }
+     ]
+    },
+    {
+     "name": "CutoutLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as layered cut paper (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"cutout\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "shadow",
+       "optional": true,
+       "type": "number",
+       "doc": "How far a layer's shadow falls on what is behind it, in CSS pixels (6)."
+      },
+      {
+       "name": "soft",
+       "optional": true,
+       "type": "number",
+       "doc": "How soft the shadow's edge is, 0 to 1 (0.5)."
+      },
+      {
+       "name": "light",
+       "optional": true,
+       "type": "number",
+       "doc": "Where the light comes from on the screen, in degrees (0 from the right, 90 from above; 120)."
+      },
+      {
+       "name": "grain",
+       "optional": true,
+       "type": "number",
+       "doc": "The paper's fibers, 0 to 1 (0.5)."
+      },
+      {
+       "name": "edge",
+       "optional": true,
+       "type": "number",
+       "doc": "The pale cut edge on the side toward the light, in CSS pixels (1)."
+      },
+      {
+       "name": "ragged",
+       "optional": true,
+       "type": "number",
+       "doc": "How ragged the cut edges are, 0 to 1 (0.4)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "Sky01",
+       "doc": "The card behind everything, top and bottom (sRGB 0–1)."
+      }
+     ]
+    },
+    {
+     "name": "CUTOUT_CARD",
+     "kind": "const",
+     "doc": "The card behind a subject with no sky of its own (sRGB 0–1).",
+     "type": "Sky01"
+    },
+    {
+     "name": "CUTOUT_SHADE",
+     "kind": "const",
+     "doc": "How dark a shadow is at full.",
+     "type": "0.42"
+    },
+    {
+     "name": "CUTOUT_LAYER",
+     "kind": "const",
+     "doc": "How much a layer must be nearer than the one under it to cast on it, as a share of the depth.",
+     "type": "0.01"
+    },
+    {
+     "name": "CUTOUT_TAPS",
+     "kind": "const",
+     "doc": "Where a soft shadow's edge is read, as shares of its softness, across the light's way.",
+     "type": "readonly number[]"
+    },
+    {
+     "name": "RAGGED_PX",
+     "kind": "const",
+     "doc": "How far a ragged edge wanders at full, in CSS pixels.",
+     "type": "1.6"
+    },
+    {
+     "name": "RAGGED_GRAIN",
+     "kind": "const",
+     "doc": "How far apart a ragged edge's turns are, in CSS pixels.",
+     "type": "9"
+    },
+    {
+     "name": "lightWay",
+     "kind": "const",
+     "doc": "The way toward the light on the screen (device y down), for a light from `deg` (0 from the right, 90 from above).",
+     "type": "(deg: number) => [number, number]"
+    },
+    {
+     "name": "raggedAt",
+     "kind": "function",
+     "doc": "Where a pixel reads the picture so cut edges wander a little: an offset in device pixels.",
+     "signatures": [
+      {
+       "code": "raggedAt(x: number, y: number, ragged: number, ratio?: number): [number, number]"
+      }
+     ]
+    },
+    {
+     "name": "grainAt",
+     "kind": "function",
+     "doc": "The paper's fibers at a pixel: a brightness from about 0.94 to 1.06 at full grain.",
+     "signatures": [
+      {
+       "code": "grainAt(x: number, y: number, grain: number, ratio?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "shadowAt",
+     "kind": "function",
+     "doc": "How much shadow falls on a pixel (0 to 1): where, a shadow's length toward the light, there is a layer nearer than\nthis one (or anything at all, where this pixel is the card), read at a few places across the light's way for a\nsoft edge. `at(x, y)` says whether something is there and its depth (0 for nothing) and part.",
+     "signatures": [
+      {
+       "code": "shadowAt(x: number, y: number, at: (x: number, y: number) => { depth: number; part: number }, look: CutoutLook, ratio?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "ClayLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as stop-motion clay (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"clay\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "fps",
+       "optional": true,
+       "type": "number",
+       "doc": "Frames a second the scene moves at, as stop motion; 0 moves every frame (12)."
+      },
+      {
+       "name": "prints",
+       "optional": true,
+       "type": "number",
+       "doc": "How deep the thumbprints are, 0 to 1 (0.6)."
+      },
+      {
+       "name": "size",
+       "optional": true,
+       "type": "number",
+       "doc": "How big a thumbprint is, as a share of the scene's size (0.05)."
+      },
+      {
+       "name": "smooth",
+       "optional": true,
+       "type": "number",
+       "doc": "How smooth the clay is: each thing's own colors softened together, 0 to 1 (0.5)."
+      },
+      {
+       "name": "sheen",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the clay shines, 0 to 1 (0.3)."
+      },
+      {
+       "name": "boil",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the thumbprints shift from one frame to the next, as an animator's hands leave them (0.4)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "Sky01",
+       "doc": "What stands behind the subject, top and bottom (sRGB 0–1)."
+      }
+     ]
+    },
+    {
+     "name": "CLAY_BACK",
+     "kind": "const",
+     "doc": "Behind a subject with no sky of its own (sRGB 0–1): a painted studio backdrop.",
+     "type": "Sky01"
+    },
+    {
+     "name": "CLAY_KEY",
+     "kind": "const",
+     "doc": "The clay's key light in the view's own frame (x right, y up, z toward the viewer): from the top left, in front.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "PRINT_DENT",
+     "kind": "const",
+     "doc": "How much a thumbprint's middle darkens the clay at full depth.",
+     "type": "0.26"
+    },
+    {
+     "name": "PRINT_RIDGE",
+     "kind": "const",
+     "doc": "How strong a thumbprint's ridges are at full depth.",
+     "type": "0.1"
+    },
+    {
+     "name": "PRINT_RINGS",
+     "kind": "const",
+     "doc": "How many ridges cross a thumbprint from its middle to its edge.",
+     "type": "5"
+    },
+    {
+     "name": "PRINT_SHARE",
+     "kind": "const",
+     "doc": "The share of the clay's cells that hold a thumbprint.",
+     "type": "0.55"
+    },
+    {
+     "name": "CLAY_SMOOTH_PX",
+     "kind": "const",
+     "doc": "How far round each pixel the clay is softened, in CSS pixels at full smoothness.",
+     "type": "6"
+    },
+    {
+     "name": "CLAY_TAPS",
+     "kind": "const",
+     "doc": "Where it is softened, as shares of that reach (eight ways at the full reach, eight between them at half).",
+     "type": "readonly [number, number][]"
+    },
+    {
+     "name": "CLAY_SHADE_PX",
+     "kind": "const",
+     "doc": "How far round each pixel the clay looks for nearer clay that shades it, in CSS pixels.",
+     "type": "10"
+    },
+    {
+     "name": "CLAY_HOLLOW",
+     "kind": "const",
+     "doc": "How dark a pixel shut in on every side by nearer clay gets.",
+     "type": "0.4"
+    },
+    {
+     "name": "CLAY_DEEP",
+     "kind": "const",
+     "doc": "How much nearer than a pixel its neighbor must be, as a share of its depth, to shade it fully.",
+     "type": "0.03"
+    },
+    {
+     "name": "hollowOf",
+     "kind": "function",
+     "doc": "How shut in a pixel is (0 open to 1 shut in), from its own depth and its neighbors' round it (0 for nothing there): soft shade in the creases between lumps of clay.",
+     "signatures": [
+      {
+       "code": "hollowOf(depth: number, round: readonly number[]): number"
+      }
+     ]
+    },
+    {
+     "name": "printHash",
+     "kind": "const",
+     "doc": "A number from 0 to 1 for a cell of the world (the shader's `cellHash` in filterPass.ts; change both).",
+     "type": "(x: number, y: number, z: number, salt: number) => number"
+    },
+    {
+     "name": "clayFrame",
+     "kind": "const",
+     "doc": "The stop-motion frame a time falls in, which the thumbprints shift by.",
+     "type": "(time: number, fps: number) => number"
+    },
+    {
+     "name": "printAt",
+     "kind": "function",
+     "doc": "The thumbprints at a point of the world, in the prints' own size (the world divided by a print's size): how much\nthe light there is changed, as a multiplier near 1. A print is a shallow round dent with a few ridges round its\nmiddle; each cell of the world holds one or none, and each frame shifts it a little (`boil`), as hands do.",
+     "signatures": [
+      {
+       "code": "printAt(p: readonly [number, number, number], frame: number, boil: number, prints: number): number"
+      }
+     ]
+    },
+    {
+     "name": "clayShade",
+     "kind": "function",
+     "doc": "The clay's own shading for a surface facing `n` (the view's frame, unit length): a soft wrapped key light and a little sheen.",
+     "signatures": [
+      {
+       "code": "clayShade(n: readonly [number, number, number], sheen: number): { shade: number; shine: number }"
+      }
+     ]
+    },
+    {
+     "name": "FilterLook",
+     "kind": "type",
+     "doc": "Any of the looks laid over the whole picture.",
+     "type": "ThermalLook | CrtLook | BlueprintLook | MosaicLook | CutoutLook | ClayLook"
+    },
+    {
+     "name": "FilterKind",
+     "kind": "type",
+     "doc": "Which of them.",
+     "type": "FilterLook[\"kind\"]"
+    }
+   ]
+  },
+  {
    "id": "knitPass",
    "title": "Knitting",
    "group": "pixels",
@@ -14541,7 +15539,7 @@
      "name": "Style",
      "kind": "type",
      "doc": "How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks.",
-     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
+     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof FILTERS[number][\"id\"] | typeof LOOKS[number][\"id\"]"
     },
     {
      "name": "STYLES",
@@ -14584,7 +15582,7 @@
     {
      "name": "lightsItself",
      "kind": "const",
-     "doc": "Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass, blocks and knitting (which wants each thing in its own flat colors).",
+     "doc": "Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass, blocks, knitting and paper cutout (which want each thing in its own flat colors).",
      "type": "(style: Style | undefined) => boolean"
     }
    ]
@@ -15209,6 +16207,42 @@
      "type": "StyleDef<HalftoneChoice>"
     },
     {
+     "name": "CLAY_DEF",
+     "kind": "const",
+     "doc": "Claymation's settings.",
+     "type": "StyleDef<ClayChoice>"
+    },
+    {
+     "name": "BLUEPRINT_DEF",
+     "kind": "const",
+     "doc": "The blueprint's settings.",
+     "type": "StyleDef<BlueprintChoice>"
+    },
+    {
+     "name": "THERMAL_DEF",
+     "kind": "const",
+     "doc": "The thermal camera's settings.",
+     "type": "StyleDef<ThermalChoice>"
+    },
+    {
+     "name": "CUTOUT_DEF",
+     "kind": "const",
+     "doc": "Paper cutout's settings.",
+     "type": "StyleDef<CutoutChoice>"
+    },
+    {
+     "name": "MOSAIC_DEF",
+     "kind": "const",
+     "doc": "The mosaic's settings.",
+     "type": "StyleDef<MosaicChoice>"
+    },
+    {
+     "name": "CRT_DEF",
+     "kind": "const",
+     "doc": "CRT / VHS's settings.",
+     "type": "StyleDef<CrtChoice>"
+    },
+    {
      "name": "KNIT_DEF",
      "kind": "const",
      "doc": "Knitting's settings.",
@@ -15278,7 +16312,7 @@
      "name": "CATALOG",
      "kind": "const",
      "doc": "Every style's settings, by the name they are kept under.",
-     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice>; anaglyph: StyleDef<AnaglyphChoice>; halftone: StyleDef<HalftoneChoice> }"
+     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice>; anaglyph: StyleDef<AnaglyphChoice>; halftone: StyleDef<HalftoneChoice>; clay: StyleDef<ClayChoice>; blueprint: StyleDef<BlueprintChoice>; thermal: StyleDef<ThermalChoice>; cutout: StyleDef<CutoutChoice>; mosaic: StyleDef<MosaicChoice>; crt: StyleDef<CrtChoice> }"
     },
     {
      "name": "StyleKey",
@@ -15355,6 +16389,36 @@
        "name": "anaglyph",
        "type": "AnaglyphChoice",
        "doc": "3D glasses'."
+      },
+      {
+       "name": "clay",
+       "type": "ClayChoice",
+       "doc": "Claymation's."
+      },
+      {
+       "name": "blueprint",
+       "type": "BlueprintChoice",
+       "doc": "The blueprint's."
+      },
+      {
+       "name": "thermal",
+       "type": "ThermalChoice",
+       "doc": "The thermal camera's."
+      },
+      {
+       "name": "cutout",
+       "type": "CutoutChoice",
+       "doc": "Paper cutout's."
+      },
+      {
+       "name": "mosaic",
+       "type": "MosaicChoice",
+       "doc": "The mosaic's."
+      },
+      {
+       "name": "crt",
+       "type": "CrtChoice",
+       "doc": "CRT / VHS's."
       }
      ]
     },
@@ -16183,6 +17247,502 @@
        "code": "halftoneLook(c: HalftoneChoice, sky?: readonly [readonly number[], readonly number[]]): HalftoneLook"
       }
      ]
+    }
+   ]
+  },
+  {
+   "id": "styles-filterLooks",
+   "title": "The six filter looks, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "CLAY",
+     "kind": "const",
+     "doc": "Claymation's chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"clay\"; label: string; note: string }"
+    },
+    {
+     "name": "BLUEPRINT",
+     "kind": "const",
+     "doc": "The blueprint's chip.",
+     "type": "{ id: \"blueprint\"; label: string; note: string }"
+    },
+    {
+     "name": "THERMAL",
+     "kind": "const",
+     "doc": "The thermal camera's chip.",
+     "type": "{ id: \"thermal\"; label: string; note: string }"
+    },
+    {
+     "name": "CUTOUT",
+     "kind": "const",
+     "doc": "Paper cutout's chip.",
+     "type": "{ id: \"cutout\"; label: string; note: string }"
+    },
+    {
+     "name": "MOSAIC",
+     "kind": "const",
+     "doc": "The mosaic's chip.",
+     "type": "{ id: \"mosaic\"; label: string; note: string }"
+    },
+    {
+     "name": "CRT",
+     "kind": "const",
+     "doc": "CRT / VHS's chip.",
+     "type": "{ id: \"crt\"; label: string; note: string }"
+    },
+    {
+     "name": "FILTERS",
+     "kind": "const",
+     "doc": "All six, in the order the Style tab lists them.",
+     "type": "readonly [{ id: \"clay\"; label: string; note: string }, { id: \"blueprint\"; label: string; note: string }, { id: \"thermal\"; label: string; note: string }, { id: \"cutout\"; label: string; note: string }, { id: \"mosaic\"; label: string; note: string }, { id: \"crt\"; label: string; note: string }]"
+    },
+    {
+     "name": "FilterId",
+     "kind": "type",
+     "doc": "Which of them.",
+     "type": "typeof FILTERS[number][\"id\"]"
+    },
+    {
+     "name": "isFilter",
+     "kind": "const",
+     "doc": "Whether a style is one of them.",
+     "type": "(id: string | undefined) => id is FilterId"
+    },
+    {
+     "name": "THERMAL_RAMPS",
+     "kind": "const",
+     "doc": "The heat colors a thermal camera can show, cold to hot (sRGB 0–1).",
+     "type": "{ id: string; label: string; about: string; ramp: Rgb01[] }[]"
+    },
+    {
+     "name": "ThermalChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "colors",
+       "type": "string",
+       "doc": "The heat colors, an id of `THERMAL_RAMPS`."
+      },
+      {
+       "name": "hot",
+       "type": "number",
+       "doc": "How hot what gives its own light runs, 0 to 1.5."
+      },
+      {
+       "name": "spread",
+       "type": "number",
+       "doc": "How far its heat spreads, in CSS pixels."
+      },
+      {
+       "name": "warm",
+       "type": "number",
+       "doc": "How warm lit things are."
+      },
+      {
+       "name": "noise",
+       "type": "number",
+       "doc": "The sensor's grain."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "A palette whose colors, darkest to lightest, are the heat colors in place of `colors`: 'none' keeps the camera's own."
+      }
+     ]
+    },
+    {
+     "name": "THERMAL_START",
+     "kind": "const",
+     "doc": "Where the thermal camera's settings start.",
+     "type": "ThermalChoice"
+    },
+    {
+     "name": "thermalLook",
+     "kind": "function",
+     "doc": "The look for the stage; `palette` is the palette picked (sRGB 0–255), if any.",
+     "signatures": [
+      {
+       "code": "thermalLook(c: ThermalChoice, palette?: readonly (readonly number[])[], still?: boolean): ThermalLook"
+      }
+     ]
+    },
+    {
+     "name": "thermalGround",
+     "kind": "const",
+     "doc": "The color behind the canvas before the camera's picture is drawn.",
+     "type": "(c: ThermalChoice) => string"
+    },
+    {
+     "name": "CrtChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "scan",
+       "type": "number",
+       "doc": "How dark the gaps between scanlines are."
+      },
+      {
+       "name": "every",
+       "type": "number",
+       "doc": "How tall a scanline is, in CSS pixels."
+      },
+      {
+       "name": "bleed",
+       "type": "number",
+       "doc": "How far color smears."
+      },
+      {
+       "name": "wobble",
+       "type": "number",
+       "doc": "How much rows wander and the tracking band rolls."
+      },
+      {
+       "name": "noise",
+       "type": "number",
+       "doc": "Tape noise."
+      },
+      {
+       "name": "curve",
+       "type": "number",
+       "doc": "How much the glass bulges."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from first: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "CRT_START",
+     "kind": "const",
+     "doc": "Where CRT / VHS's settings start.",
+     "type": "CrtChoice"
+    },
+    {
+     "name": "crtLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255); `loop` the seconds it comes round in.",
+     "signatures": [
+      {
+       "code": "crtLook(c: CrtChoice, sky?: Sky255, loop?: number, still?: boolean): CrtLook"
+      }
+     ]
+    },
+    {
+     "name": "CRT_GROUND",
+     "kind": "const",
+     "doc": "The color behind the canvas: the screen's black.",
+     "type": "\"rgb(0 0 0)\""
+    },
+    {
+     "name": "BLUEPRINT_PAPERS",
+     "kind": "const",
+     "doc": "The papers a blueprint can be drawn on, each with its lines (sRGB 0–1).",
+     "type": "{ id: string; label: string; paper: Rgb01; ink: Rgb01 }[]"
+    },
+    {
+     "name": "BlueprintChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "paper",
+       "type": "string",
+       "doc": "The paper and its lines, an id of `BLUEPRINT_PAPERS`."
+      },
+      {
+       "name": "line",
+       "type": "number",
+       "doc": "The outline's width, in CSS pixels."
+      },
+      {
+       "name": "inner",
+       "type": "number",
+       "doc": "How strong the lines between parts are."
+      },
+      {
+       "name": "grid",
+       "type": "number",
+       "doc": "How far apart the grid's lines are, in CSS pixels (0 for none)."
+      },
+      {
+       "name": "dims",
+       "type": "boolean",
+       "doc": "Whether dimension lines are drawn."
+      },
+      {
+       "name": "fill",
+       "type": "number",
+       "doc": "How strongly the subject is washed in the line color."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "A palette whose darkest color is the paper and lightest the lines, in place of `paper`: 'none' keeps the paper's own."
+      }
+     ]
+    },
+    {
+     "name": "BLUEPRINT_START",
+     "kind": "const",
+     "doc": "Where the blueprint's settings start.",
+     "type": "BlueprintChoice"
+    },
+    {
+     "name": "blueprintColors",
+     "kind": "function",
+     "doc": "The paper and lines a blueprint is drawn in: the paper's own, or a palette's darkest and lightest (sRGB 0–255).",
+     "signatures": [
+      {
+       "code": "blueprintColors(c: BlueprintChoice, palette?: readonly (readonly number[])[]): { paper: Rgb01; ink: Rgb01 }"
+      }
+     ]
+    },
+    {
+     "name": "blueprintLook",
+     "kind": "function",
+     "doc": "The look for the stage.",
+     "signatures": [
+      {
+       "code": "blueprintLook(c: BlueprintChoice, palette?: readonly (readonly number[])[]): BlueprintLook"
+      }
+     ]
+    },
+    {
+     "name": "blueprintGround",
+     "kind": "const",
+     "doc": "The color behind the canvas: the paper.",
+     "type": "(c: BlueprintChoice, palette?: readonly (readonly number[])[]) => string"
+    },
+    {
+     "name": "MOSAIC_GROUTS",
+     "kind": "const",
+     "doc": "The grouts a mosaic can be set in (sRGB 0–1).",
+     "type": "{ id: string; label: string; color: Rgb01 }[]"
+    },
+    {
+     "name": "MosaicChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "tile",
+       "type": "number",
+       "doc": "A tile's side, in CSS pixels."
+      },
+      {
+       "name": "grout",
+       "type": "number",
+       "doc": "The grout's width, in CSS pixels."
+      },
+      {
+       "name": "groutColor",
+       "type": "string",
+       "doc": "The grout, an id of `MOSAIC_GROUTS`."
+      },
+      {
+       "name": "vary",
+       "type": "number",
+       "doc": "How much tiles differ."
+      },
+      {
+       "name": "bevel",
+       "type": "number",
+       "doc": "How much each tile's edges catch light."
+      },
+      {
+       "name": "brick",
+       "type": "boolean",
+       "doc": "Rows set like bricks."
+      },
+      {
+       "name": "sky",
+       "type": "boolean",
+       "doc": "Whether the subject's sky is set behind it in tiles, or plain stone tiles."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from first: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "MOSAIC_START",
+     "kind": "const",
+     "doc": "Where the mosaic's settings start.",
+     "type": "MosaicChoice"
+    },
+    {
+     "name": "MOSAIC_SKY",
+     "kind": "const",
+     "doc": "The sky set in tiles behind a subject with no sky of its own (sRGB 0–1).",
+     "type": "Sky01"
+    },
+    {
+     "name": "mosaicLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255).",
+     "signatures": [
+      {
+       "code": "mosaicLook(c: MosaicChoice, sky?: Sky255): MosaicLook"
+      }
+     ]
+    },
+    {
+     "name": "mosaicGround",
+     "kind": "const",
+     "doc": "The color behind the canvas: the grout.",
+     "type": "(c: MosaicChoice) => string"
+    },
+    {
+     "name": "CutoutChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "shadow",
+       "type": "number",
+       "doc": "How far a layer's shadow falls, in CSS pixels."
+      },
+      {
+       "name": "soft",
+       "type": "number",
+       "doc": "How soft the shadow is."
+      },
+      {
+       "name": "light",
+       "type": "number",
+       "doc": "Where the light comes from on the screen, in degrees (0 from the right, 90 from above)."
+      },
+      {
+       "name": "grain",
+       "type": "number",
+       "doc": "The paper's fibers."
+      },
+      {
+       "name": "edge",
+       "type": "number",
+       "doc": "The pale cut edge toward the light, in CSS pixels."
+      },
+      {
+       "name": "ragged",
+       "type": "number",
+       "doc": "How ragged the cut edges are."
+      },
+      {
+       "name": "fills",
+       "type": "number",
+       "doc": "How many flat colors each part's own are gathered into (each a sheet of paper)."
+      },
+      {
+       "name": "sky",
+       "type": "boolean",
+       "doc": "Whether the subject's sky is the card behind it, or plain card."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the paper is cut from: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "CUTOUT_START",
+     "kind": "const",
+     "doc": "Where paper cutout's settings start.",
+     "type": "CutoutChoice"
+    },
+    {
+     "name": "cutoutLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255).",
+     "signatures": [
+      {
+       "code": "cutoutLook(c: CutoutChoice, sky?: Sky255): CutoutLook"
+      }
+     ]
+    },
+    {
+     "name": "cutoutGround",
+     "kind": "const",
+     "doc": "The color behind the canvas: the card.",
+     "type": "(c: CutoutChoice, sky?: Sky255) => string"
+    },
+    {
+     "name": "CLAY_RATES",
+     "kind": "const",
+     "doc": "How fast claymation moves, as the page offers it.",
+     "type": "{ id: number; label: string; about: string }[]"
+    },
+    {
+     "name": "ClayChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "fps",
+       "type": "number",
+       "doc": "Frames a second; 0 moves every frame."
+      },
+      {
+       "name": "prints",
+       "type": "number",
+       "doc": "How deep the thumbprints are."
+      },
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "How big a thumbprint is, as a share of the scene."
+      },
+      {
+       "name": "smooth",
+       "type": "number",
+       "doc": "How smooth the clay is."
+      },
+      {
+       "name": "sheen",
+       "type": "number",
+       "doc": "How much the clay shines."
+      },
+      {
+       "name": "boil",
+       "type": "number",
+       "doc": "How much the thumbprints shift from frame to frame."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the clay is mixed from: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "CLAY_START",
+     "kind": "const",
+     "doc": "Where claymation's settings start.",
+     "type": "ClayChoice"
+    },
+    {
+     "name": "clayLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255). Under reduced motion it moves smoothly and the prints hold.",
+     "signatures": [
+      {
+       "code": "clayLook(c: ClayChoice, sky?: Sky255, still?: boolean): ClayLook"
+      }
+     ]
+    },
+    {
+     "name": "clayGround",
+     "kind": "const",
+     "doc": "The color behind the canvas: the backdrop.",
+     "type": "(sky?: Sky255) => string"
     }
    ]
   },
