@@ -271,18 +271,13 @@ export const LIT_CANDLE: PropDoc = {
     ],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
-    bones: [
-      { name: 'candle0', at: [-0.9, 0.3, 0.95] },
-    ],
     parts: [
       { shape: { kind: 'cylinder', at: [-0.9, 0, 0.95], height: 0.3, r: 0.05 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#f4e4c0', '#e0b878'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [-0.9, 0.33, 0.95], to: [-0.9, 0.44, 0.95], r: 0.035, rTo: 0.01 }, paint: '#ffd24a', bone: 'candle0', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     ],
-    moves: [
-      { kind: 'pulse', bone: 'candle0', size: [0.7, 1.15], times: 9, phase: 0 },
-    ],
+    // its flame is the shared fire recipe (fire.ts), a small bed at the wick
+    fires: [{ at: [-0.9, 0.312, 0.95], r: 0.022, height: 0.15, sparks: 0, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 1 }],
     lights: [
-      { at: [-0.9, 0.5, 0.95], color: '#ffd24a', strength: 1, range: 1.2, lit: 'dark', flicker: { by: 0.3, times: 11 } },
+      { at: [-0.9, 0.42, 0.95], color: '#ffd24a', strength: 1, range: 1.2, lit: 'dark', flicker: { by: 0.3, times: 11 }, fire: 0 },
     ],
   },
 }
@@ -302,16 +297,11 @@ export const SHORT_CANDLE: PropDoc = {
     ],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
-    bones: [
-      { name: 'candle1', at: [1.25, 0.22, 0.95] },
-    ],
     parts: [
       { shape: { kind: 'cylinder', at: [1.25, 0, 0.95], height: 0.22, r: 0.05 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#f4e4c0', '#e0b878'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [1.25, 0.25, 0.95], to: [1.25, 0.36, 0.95], r: 0.035, rTo: 0.01 }, paint: '#ffd24a', bone: 'candle1', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     ],
-    moves: [
-      { kind: 'pulse', bone: 'candle1', size: [0.7, 1.15], times: 10, phase: 0.27 },
-    ],
+    // its flame is the shared fire recipe (fire.ts), a small bed at the wick
+    fires: [{ at: [1.25, 0.232, 0.95], r: 0.022, height: 0.15, sparks: 0, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 2 }],
   },
 }
 
@@ -330,16 +320,11 @@ export const TALL_CANDLE: PropDoc = {
     ],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
-    bones: [
-      { name: 'candle2', at: [0.1, 0.36, -1.25] },
-    ],
     parts: [
       { shape: { kind: 'cylinder', at: [0.1, 0, -1.25], height: 0.36, r: 0.05 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#f4e4c0', '#e0b878'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [0.1, 0.39, -1.25], to: [0.1, 0.5, -1.25], r: 0.035, rTo: 0.01 }, paint: '#ffd24a', bone: 'candle2', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     ],
-    moves: [
-      { kind: 'pulse', bone: 'candle2', size: [0.7, 1.15], times: 11, phase: 0.54 },
-    ],
+    // its flame is the shared fire recipe (fire.ts), a small bed at the wick
+    fires: [{ at: [0.1, 0.372, -1.25], r: 0.022, height: 0.15, sparks: 0, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 3 }],
   },
 }
 
@@ -358,19 +343,14 @@ export const BOOKS_AND_CANDLE: PropDoc = {
     ],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
-    bones: [
-      { name: 'candle3', at: [-1.05, 0.45, -0.72] },
-    ],
     parts: [
       { shape: { kind: 'box', at: [-1.05, 0.045, -0.75], half: [0.24, 0.04, 0.16] }, paint: { kind: 'faces', top: '#3a4ab0', side: { kind: 'bands', axis: 'y', size: 0.03, colors: ['#3a4ab0', '#f4e4c0'] } }, noShadow: true },
       { shape: { kind: 'box', at: [-1.05, 0.135, -0.75], half: [0.21, 0.04, 0.16] }, paint: { kind: 'faces', top: '#6a1050', side: { kind: 'bands', axis: 'y', size: 0.03, colors: ['#6a1050', '#f4e4c0'] } }, noShadow: true },
       { shape: { kind: 'box', at: [-1.05, 0.225, -0.75], half: [0.19, 0.04, 0.16] }, paint: { kind: 'faces', top: '#7a4a28', side: { kind: 'bands', axis: 'y', size: 0.03, colors: ['#7a4a28', '#f4e4c0'] } }, noShadow: true },
       { shape: { kind: 'cylinder', at: [-1.05, 0.27, -0.72], height: 0.18, r: 0.05 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#f4e4c0', '#e0b878'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [-1.05, 0.48, -0.72], to: [-1.05, 0.59, -0.72], r: 0.035, rTo: 0.01 }, paint: '#ffd24a', bone: 'candle3', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     ],
-    moves: [
-      { kind: 'pulse', bone: 'candle3', size: [0.7, 1.15], times: 12, phase: 0.81 },
-    ],
+    // its flame is the shared fire recipe (fire.ts), a small bed at the wick
+    fires: [{ at: [-1.05, 0.462, -0.72], r: 0.022, height: 0.15, sparks: 0, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 4 }],
   },
 }
 
