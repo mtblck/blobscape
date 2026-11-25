@@ -14661,22 +14661,40 @@
      "type": "readonly [number, number, number]"
     },
     {
-     "name": "PRINT_DENT",
+     "name": "PRINT_R",
      "kind": "const",
-     "doc": "How much a thumbprint's middle darkens the clay at full depth.",
-     "type": "0.26"
+     "doc": "How far a thumbprint reaches from its middle, in the prints' own size (a cell of the world is 1).",
+     "type": "0.42"
     },
     {
-     "name": "PRINT_RIDGE",
+     "name": "PRINT_TILT",
      "kind": "const",
-     "doc": "How strong a thumbprint's ridges are at full depth.",
-     "type": "0.1"
+     "doc": "How steeply a thumbprint's walls tip the clay's facing at full depth (its slope per unit of `printAt`'s gradient).",
+     "type": "0.7"
     },
     {
-     "name": "PRINT_RINGS",
+     "name": "PRINT_LIP",
      "kind": "const",
-     "doc": "How many ridges cross a thumbprint from its middle to its edge.",
-     "type": "5"
+     "doc": "How high the clay pushed out of a thumbprint stands round its edge, as a share of the dent's depth.",
+     "type": "0.3"
+    },
+    {
+     "name": "PRINT_LIP_W",
+     "kind": "const",
+     "doc": "How wide that lip is, as a share of the print's reach.",
+     "type": "0.2"
+    },
+    {
+     "name": "PRINT_SHUT",
+     "kind": "const",
+     "doc": "How much darker the bottom of a thumbprint is at full depth, shut in by its own walls.",
+     "type": "0.16"
+    },
+    {
+     "name": "PRINT_LIGHT",
+     "kind": "const",
+     "doc": "How much more a thumbprint's tipped walls turn toward or away from the light than the clay's soft key alone shows.",
+     "type": "0.55"
     },
     {
      "name": "PRINT_SHARE",
@@ -14737,12 +14755,49 @@
      "type": "(time: number, fps: number) => number"
     },
     {
-     "name": "printAt",
+     "name": "Print",
+     "kind": "interface",
+     "doc": "A thumbprint at a point: its height (−1 at the bottom of the dent up to `PRINT_LIP` on its lip, 0 elsewhere) and that height's slope, per unit of the prints' own size, in the world's frame.",
+     "props": [
+      {
+       "name": "h",
+       "type": "number",
+       "doc": "The height: −1 at the bottom of the dent, up to `PRINT_LIP` on its lip, 0 away from any print."
+      },
+      {
+       "name": "g",
+       "type": "[number, number, number]",
+       "doc": "How fast the height rises, each way of the world, per unit of the prints' own size."
+      }
+     ]
+    },
+    {
+     "name": "printProfile",
      "kind": "function",
-     "doc": "The thumbprints at a point of the world, in the prints' own size (the world divided by a print's size): how much\nthe light there is changed, as a multiplier near 1. A print is a shallow round dent with a few ridges round its\nmiddle; each cell of the world holds one or none, and each frame shifts it a little (`boil`), as hands do.",
+     "doc": "A thumbprint's height across it, from its middle (0) out (`PRINT_R` is 1), and how fast that changes outward.",
      "signatures": [
       {
-       "code": "printAt(p: readonly [number, number, number], frame: number, boil: number, prints: number): number"
+       "code": "printProfile(u: number): [number, number]"
+      }
+     ]
+    },
+    {
+     "name": "printAt",
+     "kind": "function",
+     "doc": "The thumbprints at a point of the world, in the prints' own size (the world divided by a print's size). A print is\na round dent pressed into the clay with a little clay pushed up round its edge; each cell of the world holds one or\nnone, and each frame shifts it a little (`boil`), as hands do. The dent is lit by tipping the clay's facing\n(`pressed`), so its wall toward the light falls in shade and the far wall catches it.",
+     "signatures": [
+      {
+       "code": "printAt(p: readonly [number, number, number], frame: number, boil: number): Print"
+      }
+     ]
+    },
+    {
+     "name": "pressed",
+     "kind": "function",
+     "doc": "Clay facing `n` (the view's frame, unit length) with a thumbprint pressed in, its slope `g` already turned into the\nview's frame: the facing tipped by the print's walls, and how much the light there changes beyond what `clayShade`\ngives that facing (deeper shade on the wall toward the light, the bottom shut in).",
+     "signatures": [
+      {
+       "code": "pressed(n: readonly [number, number, number], g: readonly [number, number, number], h: number, prints: number): { n: [number, number, number]; light: number }"
       }
      ]
     },
