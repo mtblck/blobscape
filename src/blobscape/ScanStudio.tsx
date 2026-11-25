@@ -12,15 +12,25 @@ import { handOff, handOffScan } from './handoff.ts'
 import { download, kb } from './files.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, Workbench } from '../shared/Workbench.tsx'
-import { about, extent, keepOnly } from './scan/clean.ts'
+import { about, extent, keepOnly, type Mask } from './scan/clean.ts'
+import { wayInWords } from './scan/delight.ts'
+import type { DelightAnswer, DelightAsk } from './scan/delight.worker.ts'
 import { sampleScan } from './scan/sample.ts'
 import { LOOKS, type LookId } from './brushLooks.ts'
 import { useDrawnLook } from './drawnLook.tsx'
 import { ColliderOverlay, ColliderPanel } from './scan/Colliders.tsx'
 import { ColliderFileError, guessColliders, pickCollider, placed, readColliderGlb, writeColliderGlb, type Collider } from '../splat-engine/colliders.ts'
-import { trimEdits, DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, finishing, lightsFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
+import { trimEdits, DEFAULT_CLEAN, LIGHTS, UNTURNED, autoOrient, cleaner, finish, finishing, lightingFor, preview, stillActor, tip, working, type Clean, type LightId, type Orient } from './scan/studio.ts'
 
 const FILE_TYPES = '.ply,.spz,.splat,.ksplat,.sog'
+
+/** What was found of the scanned light, in a line. */
+function foundWords(f: DelightAnswer['found']): string {
+  if (f.strength === 0 || f.explained < 0.05) return 'It was lit evenly: there was little light and shade to take out.'
+  return `It was lit from ${wayInWords(f.way)}, its full light about ${(1 + f.strength).toFixed(1)} times the light round about. Taking that out explains ${Math.round(f.explained * 100)}% of its shading.`
+}
+/** An hour as a clock time. */
+const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`
 /** Slider ends that mean "off". */
 const RADIUS_OFF = 2, TOP_OFF = 3, HUGE_OFF = 0.3
 
@@ -72,6 +82,12 @@ export function ScanStudio() {
   const [angle, setAngle] = useState(40)
   const [ambient, setAmbient] = useState(1)
   const [keepLight, setKeepLight] = useState(true)
+  /** Whether the light the scan was made in is taken out (#463), so the lights here light its paint, not its old light and shade. */
+  const [delight, setDelight] = useState(false)
+  /** The Sun and moon preset's hour. */
+  const [hour, setHour] = useState(15)
+  /** The paint of the kept blobs, for the scan and the cut it was worked out for. */
+  const [delit, setDelit] = useState<{ of: Blobs; mask: Mask | undefined; color: Float32Array; found: DelightAnswer['found'] }>()
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -102,7 +118,34 @@ export function ScanStudio() {
   // each step's mask is remembered by its own setting, so one slider only redoes its own step
   const [clean1] = useState(cleaner)
   const masks = useMemo(() => (work ? clean1(work.blobs, applied) : undefined), [work, applied, clean1])
-  const shown = useMemo(() => (work && masks ? preview(work.blobs, masks.all, showCut) : undefined), [work, masks, showCut])
+  // taking the scanned light out, in a worker, whenever the scan or what is kept changes while it is asked for
+  const delighter = useRef<{ worker: Worker; asked: number }>(undefined)
+  useEffect(() => () => delighter.current?.worker.terminate(), [])
+  const delitNow = !!(delight && work && masks && delit && delit.of === work.blobs && delit.mask === masks.all)
+  useEffect(() => {
+    if (!delight || !work || !masks || delitNow) return
+    const d = (delighter.current ??= { worker: new Worker(new URL('./scan/delight.worker.ts', import.meta.url), { type: 'module' }), asked: 0 })
+    const id = ++d.asked
+    const kept = keepOnly(work.blobs, masks.all)
+    const n = kept.count
+    const ask: DelightAsk = { id, count: n, center: kept.center.slice(0, n * 3), scale: kept.scale.slice(0, n * 3), quat: kept.quat.slice(0, n * 4), color: kept.color.slice(0, n * 3), opacity: kept.opacity.slice(0, n) }
+    const of = work.blobs, mask = masks.all
+    d.worker.onmessage = (ev: MessageEvent<DelightAnswer>) => { if (ev.data.id === d.asked) setDelit({ of, mask, color: ev.data.color, found: ev.data.found }) }
+    d.worker.onerror = (ev) => { ev.preventDefault(); console.warn(ev.message); setDelight(false); setError('Couldn\'t work out the light this scan was made in, so its colors are left as scanned.') }
+    d.worker.postMessage(ask, [ask.center.buffer, ask.scale.buffer, ask.quat.buffer, ask.color.buffer, ask.opacity.buffer])
+  }, [delight, work, masks, delitNow])
+  /** The working scan, its kept blobs in their paint while the scanned light is taken out. */
+  const painted = useMemo(() => {
+    if (!work || !delitNow || !delit) return work?.blobs
+    const out = work.blobs.clone()
+    for (let i = 0, j = 0; i < out.count; i++) {
+      if (delit.mask && !delit.mask[i]) continue
+      out.color.set(delit.color.subarray(j * 3, j * 3 + 3), i * 3)
+      j++
+    }
+    return out
+  }, [work, delit, delitNow])
+  const shown = useMemo(() => (painted && masks ? preview(painted, masks.all, showCut) : undefined), [painted, masks, showCut])
   const box = useMemo(() => (work && masks ? extent(work.blobs, masks.all) : undefined), [work, masks])
 
   useEffect(() => {
@@ -140,8 +183,9 @@ export function ScanStudio() {
   }, [stage, shown])
   useEffect(() => {
     if (!stage || !box) return
-    stage.setLights(lightsFor(light, angle, box.lo, box.hi), ambient)
-  }, [stage, box, light, angle, ambient])
+    const l = lightingFor(light, angle, box.lo, box.hi, ambient, hour)
+    stage.setLights(l.lights, l.ambient)
+  }, [stage, box, light, angle, ambient, hour])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 
   const opening = useRef(false)
@@ -205,13 +249,14 @@ export function ScanStudio() {
     // the sliders as they stand, even if the view hasn't caught up with the last move yet
     if (clean !== applied) setApplied(clean)
     const m = clean1(work.blobs, clean)
-    const kept = keepOnly(work.blobs, m.all)
+    const kept = keepOnly(painted ?? work.blobs, m.all)
     if (!kept.count) return undefined
     const { bakeLights } = await import('../splat-engine/light.ts')
     const { lo, hi } = extent(kept)
+    const lit = lightingFor(light, angle, lo, hi, ambient, hour)
     // the shapes go where the scan goes: sized and stood with it
     const { scale, shift } = finishing(kept)
-    return { blobs: finish(light !== 'scanned' && keepLight ? bakeLights(kept, lightsFor(light, angle, lo, hi), ambient) : kept, undefined), shapes: colliders.map((c) => placed(c, scale, shift)), scale, shift }
+    return { blobs: finish(light !== 'scanned' && keepLight ? bakeLights(kept, lit.lights, lit.ambient) : kept, undefined), shapes: colliders.map((c) => placed(c, scale, shift)), scale, shift }
   }
   const base = (scan?.name ?? 'scan').replace(/\.[a-z0-9]+$/i, '').replace(/[^\w-]+/g, '-').toLowerCase() || 'scan'
   /** Runs an export with the buttons held, and says what went wrong if it fails. */
@@ -430,9 +475,13 @@ export function ScanStudio() {
                 <p className="text-xs text-ink-faint">Live lights, drawn on {backend}.</p>
                 <div className="grid gap-3">
                 <div className="flex flex-wrap gap-1.5">
-                  {LIGHTS.map((l) => <Chip key={l.id} active={light === l.id} onClick={() => { setLight(l.id); setAmbient(l.ambient) }}>{l.label}</Chip>)}
+                  {LIGHTS.map((l) => <Chip key={l.id} active={light === l.id} onClick={() => { if (light === 'scanned' && l.id !== 'scanned') setDelight(true); setLight(l.id); setAmbient(l.ambient) }}>{l.label}</Chip>)}
                 </div>
                 <p className="text-xs text-ink-faint">{lightNote}</p>
+                </div>
+                <div className="grid gap-1.5">
+                  <Toggle label="Take out the light it was scanned in" checked={delight} onChange={setDelight} />
+                  <p className="text-xs text-ink-faint" data-testid="scan-delight" aria-live="polite">{!delight ? 'Off: the lights here add to the light and shade the scan came with.' : !delitNow ? 'Finding the light it was scanned in…' : foundWords(delit!.found)}</p>
                 </div>
                 <Field label="Drawn as">
                   <div className="flex flex-wrap gap-1.5" data-testid="scan-looks">
@@ -441,6 +490,7 @@ export function ScanStudio() {
                   <p className="mt-1.5 text-xs text-ink-faint">{drawnAs === 'blobs' ? 'Or as brush marks, pen strokes or characters. Only the view changes: the file keeps its blobs.' : `${LOOKS.find((l) => l.id === drawnAs)!.note} Only the view changes: the file keeps its blobs.`}</p>
                 </Field>
                 {drawnAs !== 'blobs' && looked.controls}
+                {light === 'sky' && <Slider label="Hour" value={hour} min={0} max={24} step={0.25} onChange={setHour} format={clock} hint="Where the sun or the moon stands, and the sky's own light." />}
                 {light !== 'scanned' && <>
                   <Slider label="Light from" value={angle} min={0} max={359} step={1} onChange={setAngle} format={(v) => `${v}°`} />
                   <Slider label="Room light" value={ambient} min={0} max={1} step={0.01} onChange={setAmbient} format={(v) => `${Math.round(v * 100)}%`} hint="How bright it is away from the light." />
@@ -495,8 +545,11 @@ export function ScanStudio() {
             the scan so that's level, and cuts below it. Floaters go by clumping blobs into small cells and keeping only the big clump.
           </p>
           <p>
-            The light from the day you scanned is baked into the colors. The lights here add to it, worked out for each blob from which
-            way it faces, so a lamp brightens the near side of a mug. Blobscape's own splat engine draws it, the one that moves the
+            The light from the day you scanned is baked into the colors. Taking it out finds that light from the scan itself: it
+            tries a light from every way round at every strength, and keeps the one that best explains why blobs of one color nearby
+            are lighter or darker, by which way each faces, how shut in it is and whether something stood between it and the light.
+            Dividing that out leaves the paint, which the sun, the moon or a lamp here light again, worked out for each blob from
+            which way it faces. Blobscape's own splat engine draws it, the one that moves the
             creatures in <a href={href({ page: 'creature' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Splat Creatures</a> and
             lights the torches in <a href={href({ page: 'dungeon' })} className="underline decoration-rule underline-offset-2 hover:text-accent">Dungeon Run</a>.
           </p>

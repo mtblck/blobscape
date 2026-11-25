@@ -9,6 +9,7 @@ import { isModel, rawTexture, type ModelJob } from './models.ts'
 import { meshColor, meshShape } from '../../splat-engine/meshShape.ts'
 import { unpack, type PackedCut } from './pack.ts'
 import { Blobs } from '../../splat-core/blobs.ts'
+import { litScan, takeOutLight, type Delit } from '../scan/delight.ts'
 import { creatureLook, isCreature, libraryCreature, libraryProp } from './library.ts'
 import { placer, type Placement } from '../../splat-engine/project.ts'
 import { tagged } from '../../splat-engine/tags.ts'
@@ -40,6 +41,17 @@ const compiled = (project: SceneProject): CompiledProject => {
   return kept.cp
 }
 
+/** A scan land's paint, by its model id: finding its light takes a few seconds on a big scan, so it is done once (the last two kept). */
+const delits = new Map<string, Delit>()
+function delitOf(id: string, b: Blobs): Delit {
+  let d = delits.get(id)
+  if (d && d.blobs.count === b.count) return d
+  d = takeOutLight(b)
+  delits.set(id, d)
+  if (delits.size > 2) delits.delete(delits.keys().next().value!)
+  return d
+}
+
 /** Cuts what a job asks for. */
 export function cut(job: CutJob): Built {
   const texel = job.finish?.texel ?? 0
@@ -54,8 +66,16 @@ function cutOne(job: CutJob): Built {
     if (!job.plain) sunlit(b, { ...DEFAULT_LIGHT, ...landSpec(compiled(job.project), job.spacing).light })
     return withShadow(b, placed.at)
   }
-  // a scan for a land (#381) is drawn as captured, its light its own; one the page no longer has is a speck
-  if (job.kind === 'land' && typeof job.project.land === 'string' && isModel(job.project.land)) return job.model?.kind === 'splats' ? unpack(copied(job.model.rest)) : speck()
+  // a scan for a land (#381) takes the scene's light (#463): the light it was scanned in is found and taken out once,
+  // and the land's baked sun lit back in, or its paint alone where light is live or the style lights it; one the page
+  // no longer has is a speck
+  if (job.kind === 'land' && typeof job.project.land === 'string' && isModel(job.project.land)) {
+    if (job.model?.kind !== 'splats') return speck()
+    const b = unpack(copied(job.model.rest))
+    const d = delitOf(job.project.land, b.blobs)
+    b.blobs = job.plain ? d.blobs.clone() : litScan(d, { ...DEFAULT_LIGHT, ...landSpec(compiled(job.project), job.spacing).light })
+    return b
+  }
   if (job.plain) return unlit(() => cutOne({ ...job, plain: false }))
   if (job.kind === 'whole') {
     const d = DIORAMAS.find((x) => x.id === job.scene)
