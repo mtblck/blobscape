@@ -50,6 +50,19 @@ test('a block takes the commonest color among its blobs, not their mix, and fain
   assert.ok(c[0] > 0.5 && c[1] < 0.05 && c[2] < 0.05, `${[...c.slice(0, 3)]}`)
 })
 
+test('with a palette a block is painted its nearest color, chosen from the commonest of its blobs before snapping', () => {
+  const red: Rgb = [0.8, 0.1, 0.1], white: Rgb = [0.9, 0.9, 0.9]
+  const list = [blob(0, 0, 0, red), blob(0.01, 0, 0, red), blob(0, 0.01, 0, white)]
+  const palette = [[20, 20, 30], [230, 60, 50], [240, 240, 230]] as const
+  const c = buildBlocks([source(list)], { ...plain, palette }).pieces[0].colors
+  // the red block takes the palette's red, linear
+  const lin = (v: number) => ((v / 255) <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+  for (let j = 0; j < 3; j++) assert.ok(Math.abs(c[j] - lin(palette[1][j])) < 1e-4, `${[...c.slice(0, 3)]}`)
+  // and full color leaves it as it was
+  const own = buildBlocks([source(list)], plain).pieces[0].colors
+  assert.ok(Math.abs(own[0] - lin(0.8 * 255)) < 1e-3)
+})
+
 test('a pane laid on its frame, or a lamp, gives its cell its color though the frame has more blobs there', () => {
   const frame: Rgb = [0.1, 0.1, 0.15], pane: Rgb = [0.66, 0.76, 0.83]
   const list = [blob(0, 0, 0, frame), blob(0.01, 0, 0, frame), blob(0.02, 0, 0, frame), blob(0, 0.01, 0, pane)]

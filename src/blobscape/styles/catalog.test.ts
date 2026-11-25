@@ -86,9 +86,12 @@ test('a setting shows only when its style and subject call for it, and a trial o
   assert.ok(keys(BLOCKS_DEF, BLOCKS_DEF.start, { style: 'blocks', water: true }).includes('water'))
   assert.ok(!keys(BLOCKS_DEF, BLOCKS_DEF.start, { style: 'blocks', water: true }).includes('swell'))
   assert.ok(keys(BLOCKS_DEF, { ...BLOCKS_DEF.start, water: 'blocks' as const }, { style: 'blocks', water: true }).includes('swell'))
-  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'oil' }), ['size', 'outline'])
-  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'ink' }), ['size', 'outline', 'pen', 'paper'])
-  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'blobs' }), ['outline'])
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'oil' }), ['palette', 'size', 'outline'])
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'ink' }), ['palette', 'size', 'outline', 'pen', 'paper'])
+  assert.deepEqual(keys(MARKS, MARKS.start, { style: 'blobs' }), ['palette', 'outline'])
+  // hatching and stipple draw ink on paper, so they have no palette
+  assert.ok(!keys(MARKS, MARKS.start, { style: 'hatch' }).includes('palette'))
+  assert.ok(!keys(ASCII, { ...ASCII.start, own: false }, { style: 'ascii' }).includes('palette'))
   assert.ok(!keys(ASCII, { ...ASCII.start, chars: 'braille' as const }, { style: 'ascii' }).includes('strokes'))
   const tried: StyleDef<{ a: number }> = { id: 't', styles: ['oil'], start: { a: 1 }, settings: [{ key: 'a', kind: 'range', label: 'A', min: 0, max: 2, step: 1, unit: 'count', trial: 'Biome Islands' }] }
   assert.deepEqual(keys(tried, tried.start, { style: 'oil' }), [])
@@ -155,4 +158,15 @@ test('every page with brush looks, a time of day or weather draws them through t
   }
   for (const page of ['../PixelDiorama.tsx', '../SceneCreator.tsx']) assert.ok(read(page).includes('<WeatherControls '), `${page} lays out its own weather`)
   for (const page of ['../PixelDiorama.tsx', '../BrushInk.tsx']) assert.ok(read(page).includes('<TimeControls '), `${page} lays out its own time of day`)
+})
+
+test('every drawn style but knitting paints from a palette named in the address, and starts in full color', async () => {
+  const { ASCII, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, KNIT_DEF, fromAddress } = await import('./catalog.ts')
+  const q = new URLSearchParams('palette=pico8')
+  for (const def of [MARKS, ASCII, CEL_DEF, BLOCKS_DEF, NEON_DEF, GLASS_DEF, WASH_DEF] as StyleDef<{ palette: string }>[]) {
+    assert.equal(def.start.palette, 'none', def.id)
+    assert.equal(fromAddress(def, def.start, q).palette, 'pico8', def.id)
+    assert.equal(fromAddress(def, def.start, new URLSearchParams('palette=<b>')).palette, 'none', `${def.id} keeps only an id`)
+  }
+  assert.ok(!KNIT_DEF.settings.some((s) => (s.key as string) === 'palette'), 'knitting picks from its own yarns')
 })

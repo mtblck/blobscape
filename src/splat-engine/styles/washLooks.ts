@@ -26,9 +26,11 @@ export interface WashChoice {
   pencil: number
   /** The paper, an id of `WASH_PAPERS`. */
   paper: string
+  /** The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 /** Where watercolor's settings start. */
-export const WASH_START: WashChoice = { bleed: 4, pool: 0.6, grain: 0.35, strength: 0.7, pencil: 0.55, paper: 'white' }
+export const WASH_START: WashChoice = { bleed: 4, pool: 0.6, grain: 0.35, strength: 0.7, pencil: 0.55, paper: 'white', palette: 'none' }
 
 const paperOf = (id: string) => WASH_PAPERS.find((p) => p.id === id) ?? WASH_PAPERS[0]
 /** The color to put behind the canvas before the paper is drawn. */

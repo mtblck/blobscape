@@ -675,7 +675,7 @@ export function SceneCreator() {
   }, [stage, pixelsNow, look, skyOf, weathered, skyColors])
   // one of Brush and Ink's looks in place of pixel art. Cel shading's and stained glass's flat fills are gathered on the land
   const drawing = useDrawnLook(stage, pixelsNow ? undefined : styleNow, {
-    pixelCel, actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
+    pixelCel, palette, actor: built?.[0], spacing: DETAIL.find((d) => d.id === detail)?.spacing, plain: !!chosen[0]?.plain, azimuth: shown.orbit.azimuth, offscreen, light: coarse, loop: shown.loop,
     sky: px.sky || skyForced ? [skyShown[0], skyShown[1]] : undefined,
   }, drawnKept)
   const drawStyle = (id: Style) => {
