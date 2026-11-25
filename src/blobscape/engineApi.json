@@ -12220,6 +12220,12 @@
        "optional": true,
        "type": "number",
        "doc": "How many times higher than it stands a ripple is drawn as blocks (default `FLOW_SWELL`); 0 keeps the tops level, so only their color moves."
+      },
+      {
+       "name": "palette",
+       "optional": true,
+       "type": "readonly (readonly [number, number, number])[]",
+       "doc": "Paints every block takes its color from (sRGB 0–255): a cell's commonest color is snapped to the nearest in OKLab before light falls on it (`paletteSnap`). Left out, blocks keep their own colors. Water columns and soft actors keep theirs."
       }
      ]
     },
@@ -14096,6 +14102,11 @@
        "name": "pen",
        "type": "number",
        "doc": "The line's width, in CSS pixels."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is lit: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
       }
      ]
     },
@@ -14778,6 +14789,11 @@
        "name": "swell",
        "type": "number",
        "doc": "How many times higher than it stands a ripple is drawn as blocks."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the blocks are painted from: 'none' keeps each block's own color, 'own' is the scene's, else a shared one (Diorama's `PALETTES`)."
       }
      ]
     },
@@ -14860,7 +14876,7 @@
      "doc": "The look for the stage: `grid` is one cell's side, `azimuth` the starting view's turn, `ambient` a night's light.",
      "signatures": [
       {
-       "code": "blockLook(c: BlockChoice, grid: number, azimuth?: number, ambient?: readonly [number, number, number]): BlockLook"
+       "code": "blockLook(c: BlockChoice, grid: number, azimuth?: number, ambient?: readonly [number, number, number], palette?: readonly (readonly [number, number, number])[]): BlockLook"
       }
      ]
     }

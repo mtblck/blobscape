@@ -156,3 +156,12 @@ test('every page with brush looks, a time of day or weather draws them through t
   for (const page of ['../PixelDiorama.tsx', '../SceneCreator.tsx']) assert.ok(read(page).includes('<WeatherControls '), `${page} lays out its own weather`)
   for (const page of ['../PixelDiorama.tsx', '../BrushInk.tsx']) assert.ok(read(page).includes('<TimeControls '), `${page} lays out its own time of day`)
 })
+
+test('blocks and cel shading paint from a palette named in the address, and start in full color', async () => {
+  const { BLOCKS_DEF, CEL_DEF, fromAddress } = await import('./catalog.ts')
+  assert.equal(BLOCKS_DEF.start.palette, 'none')
+  assert.equal(CEL_DEF.start.palette, 'none')
+  const q = new URLSearchParams('palette=pico8')
+  assert.equal(fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q).palette, 'pico8')
+  assert.equal(fromAddress(CEL_DEF, CEL_DEF.start, q).palette, 'pico8')
+})

@@ -1,5 +1,6 @@
 import type { Blobs } from '../splat-core/blobs.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
+import { paletteSnap } from '../splat-core/paints.ts'
 import type { Skin } from './rig.ts'
 
 /**
@@ -39,6 +40,8 @@ export interface BlockLook {
   weather?: 'blocks' | 'blobs'
   /** How many times higher than it stands a ripple is drawn as blocks (default `FLOW_SWELL`); 0 keeps the tops level, so only their color moves. */
   swell?: number
+  /** Paints every block takes its color from (sRGB 0–255): a cell's commonest color is snapped to the nearest in OKLab before light falls on it (`paletteSnap`). Left out, blocks keep their own colors. Water columns and soft actors keep theirs. */
+  palette?: readonly (readonly [number, number, number])[]
 }
 
 /** The default way to the light. */
@@ -246,6 +249,7 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
   const least = look.least ?? 0.3, from = look.from ?? BLOCK_FROM
   const shade = look.shade ?? BLOCK_SHADE, corners = (look.corners ?? 0.5) * CORNER_MOST, vary = (look.vary ?? 0.35) * VARY_MOST
   const sun = faceLight(from)
+  const snap = paletteSnap(look.palette as [number, number, number][] | undefined)
 
   // every cell, over all the sources: where it is, whose it is, its color and its own light
   const where: number[] = [], owner: number[] = [], bones: number[] = [], loose: number[] = [], paint: number[] = [], glows: number[] = []
@@ -349,7 +353,8 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
           had++
         }
         owner.push(a); bones.push(bone); loose.push(specks ? 1 : 0)
-        paint.push(srgbToLinear(r / had), srgbToLinear(g / had), srgbToLinear(b / had))
+        const [pr, pg, pb] = snap ? snap(r / had, g / had, b / had) : [r / had, g / had, b / had]
+        paint.push(srgbToLinear(pr), srgbToLinear(pg), srgbToLinear(pb))
         glows.push(own / had)
       }
       // which cells are one bone's, for leaving out the faces between them

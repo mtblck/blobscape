@@ -188,6 +188,8 @@ export interface CelSettings {
   outline: boolean
   /** The line's width, in CSS pixels. */
   pen: number
+  /** The palette the scene is painted from before it is lit: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
+  palette: string
 }
 
 /** Pixel art's settings, as the Style and Finish controls set them. */
@@ -329,13 +331,14 @@ export const ASCII: StyleDef<AsciiSettings> = {
 /** Cel shading's settings. */
 export const CEL_DEF: StyleDef<CelSettings> = {
   id: 'cel', styles: ['cel'],
-  start: { turn: CEL_START.turn, height: CEL_START.height, tones: CEL_START.tones, shadows: CEL_START.shadows, smooth: CEL_START.smooth, fills: CEL_START.fills, backdrop: '', outline: true, pen: CEL_START.line },
+  start: { turn: CEL_START.turn, height: CEL_START.height, tones: CEL_START.tones, shadows: CEL_START.shadows, smooth: CEL_START.smooth, fills: CEL_START.fills, backdrop: '', outline: true, pen: CEL_START.line, palette: 'none' },
   settings: [
     { ...turn<CelSettings>(), address: 'turn' },
     { ...height<CelSettings>(), address: 'height' },
     { key: 'tones', kind: 'choice', label: 'Tones', address: 'tones', options: [{ id: 2, label: 'Light and shade' }, { id: 3, label: 'Three tones' }] },
     { key: 'shadows', kind: 'toggle', label: 'Cast shadows', address: 'shadows' },
     { key: 'smooth', kind: 'range', label: 'Shadow shapes', address: 'smooth', min: 1, max: 12, step: 0.5, unit: 'px', hint: 'How far the light is smoothed over a surface before it is cut into tones: more gives rounder, simpler shapes.' },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
     { key: 'fills', kind: 'range', label: 'Colors in each part', address: 'fills', min: 0, max: 4, step: 1, unit: 'count', zero: 'As painted', whole: true, hint: 'Each part\'s colors gathered into a few flat ones, so a mottled surface becomes areas of one color and a stripe stays a stripe.' },
     { key: 'backdrop', kind: 'choice', label: 'Backdrop', options: [{ id: 'scene', label: 'Scene\'s sky' }, ...BACKDROPS] },
     { key: 'outline', kind: 'toggle', label: 'Outlines', address: 'outline', testid: 'brush-outline', about: 'An even line round the subject, where one thing stands in front of another, and between its parts.' },
@@ -348,6 +351,7 @@ export const BLOCKS_DEF: StyleDef<BlockChoice> = {
   id: 'blocks', styles: ['blocks'], start: BLOCK_START,
   settings: [
     { key: 'size', kind: 'range', label: 'Block size', address: 'block', min: BLOCK_SIZES.min, max: BLOCK_SIZES.max, step: 1, unit: 'times', whole: true, hint: 'How big a block is beside the grid the scene was cut on. Bigger blocks suit a big scene; a small creature loses its face.' },
+    { key: 'palette', kind: 'choice', label: 'Palette', address: 'palette', testid: 'drawn-palettes', options: [{ id: 'none', label: 'Full color' }], open: true },
     turn<BlockChoice>(),
     height<BlockChoice>(),
     { key: 'shadows', kind: 'toggle', label: 'Cast shadows' },
@@ -511,7 +515,7 @@ export function fromAddress<V>(def: StyleDef<V>, start: V, q: URLSearchParams): 
     const asked = s.address ? q.get(s.address) : null
     if (asked === null) continue
     if (s.kind === 'range') { const v = asked === '' ? NaN : Number(asked); if (Number.isFinite(v)) out[s.key] = held(s, v) }
-    else if (s.kind === 'choice') { const o = s.options.find((x) => String(x.id) === asked); if (o) out[s.key] = o.id }
+    else if (s.kind === 'choice') { const o = s.options.find((x) => String(x.id) === asked); if (o) out[s.key] = o.id; else if (s.open && /^[a-z0-9-]{1,32}$/.test(asked)) out[s.key] = asked }
     else if (s.kind === 'toggle') { if (s.on) out[s.key] = asked === s.on; else if (asked === '1') out[s.key] = true; else if (asked === '0') out[s.key] = false }
     else if (s.kind === 'text') { if (asked.trim()) out[s.key] = asked.slice(0, s.most) }
   }
