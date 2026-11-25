@@ -318,6 +318,9 @@ export function aboveView(camera: View): number {
   return round(Math.max(cloudBase(camera), eye + along * Math.tan(up) + 0.08 * d))
 }
 
+/** The lowest the box rain and snow fall through reaches: scenes stand on about 0, and a small scene's air ends at -4. */
+const FALL_FLOOR = -3
+
 /** Rain or snow over the middle of a view, falling from the clouds' height (or `top`) onto whatever stands there: one swarm, for any scene. */
 export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'rain' ? RAIN_MOST : SNOW_MOST, top = cloudBase(camera)): SpeckDoc {
   const [x, y, z] = camera.target, r = fallReach(camera)
@@ -325,7 +328,10 @@ export function falling(kind: 'rain' | 'snow', camera: View, count = kind === 'r
     kind, count, colors: kind === 'rain' ? RAIN_COLORS : SNOW_COLORS, land: true,
     // fine streaks of rain and small flakes, in proportion to the view rather than the scene's own specks
     ...(kind === 'rain' ? { size: 0.003, long: round(Math.max(0.03, camera.distance * 0.011)) } : { size: round(Math.max(0.006, camera.distance * 0.0025)) }),
-    from: [round(x - r), round(y - 1), round(z - r)], to: [round(x + r), top, round(z + r)],
+    // down as far below the view's middle as the eye is from it (as the snow lying is laid), so a view aimed high
+    // over a scene (the storm octopus, 1.3 over its sea) still has its rain reach the ground and the water under it;
+    // no lower than `FALL_FLOOR`, inside the reach of a small scene's air (Scene Creator lays it in a land's)
+    from: [round(x - r), round(Math.min(y - 1, Math.max(FALL_FLOOR, y - camera.distance))), round(z - r)], to: [round(x + r), top, round(z + r)],
     // no wind of its own: the sky's wind of the moment blows it (`CompiledScene.blow`)
   }
 }
