@@ -137,3 +137,19 @@ test('pieces thrown toward the edge of an island land on it, not on the air past
   for (let i = 0; i < n; i++) if (!g.onLand(out[i * 3], out[i * 3 + 2])) off++
   assert.ok(off <= 3, `${off} of ${n} off the land`)
 })
+
+test('a bird flying over the land is not ground: no cell stands higher than what stays put', () => {
+  // flat land at 0 with one point high up where a bird is
+  const pts: number[] = []
+  for (let x = 0; x <= 1; x += 0.05) for (let z = 0; z <= 1; z += 0.05) pts.push(x, 0, z)
+  const b = 12 / 23 // on a point of the 24-a-side grid
+  pts.push(b, 2, b)
+  const fooled = HeightMap.fromPoints(new Float32Array(pts), [0, 0], [1, 1], -1, 24)
+  assert.ok(fooled.at(b, b) > 1, 'without the still ground the bird reads as ground')
+  const map = HeightMap.fromPoints(new Float32Array(pts), [0, 0], [1, 1], -1, 24, () => 0.01)
+  assert.ok(map.at(b, b) < 0.02)
+  // so a piece thrown past where the bird was falls to the ground instead of stopping in the air
+  const start = new Float32Array([0.3, 0.5, b])
+  const c = new Crumble(start, [0.2, 0.5, b], 0, 1, 2, map, 3)
+  assert.ok(c.lying(0)[1] < 0.02)
+})

@@ -1887,7 +1887,7 @@ export default [
         const from = M.look
         M.next()
         const wait = async (until, ms) => { for (let k = 0; k < ms / 100 && !until(); k++) await new Promise((r) => setTimeout(r, 100)) }
-        await wait(() => window.__morph?.look !== from, 60000)
+        await wait(() => window.__morph && window.__morph.look !== from, 60000)
         await wait(() => !document.querySelector('[data-testid=morph-wipe]')?.hidden, 20000)
         const wiping = !document.querySelector('[data-testid=morph-wipe]')?.hidden
         const s = window.__morph.stage
@@ -1898,7 +1898,7 @@ export default [
       if (!got) fails.push('style morph: the page never started (no window.__morph)')
       else if (got.from !== 'blobs' || got.to !== 'cel' || !got.wiping || !got.done || got.name !== 'Cel shading') fails.push(`style morph: ${JSON.stringify(got)}`)
       else ok(`style morph: blobs gave way to ${got.name.toLowerCase()} under a clock wipe`)
-      await g.ctx.close()
+      await p.ctx.close()
     },
   },
   {
@@ -1923,7 +1923,6 @@ export default [
       else if (noon.season !== 1 || noon.night || !night.night || winter.season !== 3 || winter.snow < 0.9 || !/^Summer, /.test(noon.when ?? '')) fails.push(`time-lapse: ${JSON.stringify({ noon, night, winter })}`)
       else ok(`time-lapse: ${noon.when} by day, ${night.when} with the lamps on, ${winter.when} under snow`)
       await p.ctx.close()
-      await g.ctx.close()
     },
   },
   {

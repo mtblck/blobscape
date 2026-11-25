@@ -3396,6 +3396,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on."
+      },
+      {
+       "name": "grid",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of the grid it was cut on (voxel.ts), so a look that snaps blobs to cells (Blocks) snaps them to the same grid."
       }
      ]
     },
@@ -17034,10 +17040,10 @@
     {
      "name": "gridOf",
      "kind": "function",
-     "doc": "The side of one cell for a subject: the grid it was cut on, or a share of its longest side.",
+     "doc": "The side of one cell for a subject: the grid the page says it was cut on, else the grid the cut records (`Built.grid`,\nfrom voxel.ts), else a share of its longest side. A guessed cell that is not the cut's own grid falls between the\nblobs' rows and leaves rows of empty cells, so blocks drawn from a cut always snap to its grid.",
      "signatures": [
       {
-       "code": "gridOf(spacing: number | undefined, centers: ArrayLike<number>, count: number): number"
+       "code": "gridOf(spacing: number | undefined, centers: ArrayLike<number>, count: number, own?: number): number"
       }
      ]
     },

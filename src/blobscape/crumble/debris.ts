@@ -111,8 +111,13 @@ export class HeightMap {
     }
   }
 
-  /** The ground as the highest of some points over each cell (the land's own blobs, so a thing never lands on itself); a cell with none takes its neighbors'. */
-  static fromPoints(points: Float32Array, lo: [number, number], hi: [number, number], least: number, side = 48) {
+  /**
+   * The ground as the highest of some points over each cell (the land's own blobs, so a thing never lands on itself); a
+   * cell with none takes its neighbors'. `under`, where given, is the ground of what stays put (`CompiledScene.ground`),
+   * and no cell stands higher than it: a land's birds fly on bones of their own, and taken for ground they stood a wall
+   * in the sky that pieces stopped against and stacked up on.
+   */
+  static fromPoints(points: Float32Array, lo: [number, number], hi: [number, number], least: number, side = 48, under?: (x: number, z: number) => number) {
     const step = Math.max(hi[0] - lo[0], hi[1] - lo[1]) / (side - 1) || 1
     let top = new Float32Array(side * side).fill(NaN)
     const land = new Uint8Array(side * side)
@@ -144,7 +149,11 @@ export class HeightMap {
       top = next
       if (!empty) break
     }
-    const map = new HeightMap((x, z) => top[Math.round((z - lo[1]) / step) * side + Math.round((x - lo[0]) / step)], lo, hi, least, side)
+    const map = new HeightMap((x, z) => {
+      const h = top[Math.round((z - lo[1]) / step) * side + Math.round((x - lo[0]) / step)]
+      const most = under?.(x, z)
+      return most !== undefined && Number.isFinite(most) ? Math.min(h, most) : h
+    }, lo, hi, least, side)
     map.land = land
     return map
   }

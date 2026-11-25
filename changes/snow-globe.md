@@ -1,1 +1,1 @@
-Snow Globe (unlisted while it is reviewed): a Diorama scene sealed under a glass dome of water and snow. Tap it, press Shake or shake your phone, and the snow swirls up and drifts back down onto the scene's own roofs, hats and ground.
+Snow Globe: a Diorama scene sealed under a glass dome of water and snow. Tap it, press Shake or shake your phone, and the snow swirls up and drifts back down onto the scene's own roofs, hats and ground.
