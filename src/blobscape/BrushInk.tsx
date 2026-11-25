@@ -15,7 +15,7 @@ import { DETAIL } from './diorama/scene.ts'
 import { DIORAMAS } from './diorama/scenes.ts'
 import { ALL_LOOKS, useDrawnLook, useHeld, wantsPlain, type Look } from './drawnLook.tsx'
 import { timeOf, type TimeId } from './timeOfDay.ts'
-import { sceneStart } from './styles/catalog.ts'
+import { BOX_SETS, sceneStart } from './styles/catalog.ts'
 import { TimeControls } from './styles/SceneControls.tsx'
 import { unlit } from '../splat-engine/voxel.ts'
 import { href } from './routes.ts'
@@ -135,7 +135,11 @@ export function DrawnPage({ def }: { def: DrawnPageDef }) {
   const [playing, setPlaying] = useState(!calm)
   const [subject, setSubject] = useState(() => SUBJECTS.find((s) => s.id === params().get('subject'))?.id ?? SUBJECTS[0].id)
   const [detail, setDetail] = useState<Detail>(() => { const asked = detailAsked(DETAILS, labelNames); return asked ? (DETAILS.indexOf(asked) as Detail) : coarse ? 0 : 1 })
-  const [look, setLook] = useState<Look>(() => ALL_LOOKS.find((l) => l.id === params().get('look'))?.id ?? def.looks[0])
+  const [look, setLook] = useState<Look>(() => {
+    // Text in box drawing or quarter blocks is Box Art now (`?look=ascii&chars=lines`, from before 2026-11-25)
+    const q = params(), asked = q.get('look') === 'ascii' && BOX_SETS.includes(q.get('chars') ?? '') ? 'boxart' : q.get('look')
+    return ALL_LOOKS.find((l) => l.id === asked)?.id ?? def.looks[0]
+  })
   // cel shading lights the blobs itself, so its subjects are built with no light baked in
   const plain = wantsPlain(look)
   const sub = SUBJECTS.find((s) => s.id === subject)!
@@ -184,7 +188,7 @@ export function DrawnPage({ def }: { def: DrawnPageDef }) {
   const lookNow0 = useHeld(look, !!ready)
   const drawing = useDrawnLook(stage, lookNow0, { actor: built?.actor, plain: !!built?.plain, azimuth: sub.orbit.azimuth, soft: sub.soft, offscreen, sky: built?.sky, time: built?.time ? timeOf(built.time) : undefined })
   useEffect(() => { drawing.forget() }, [subject]) // eslint-disable-line react-hooks/exhaustive-deps
-  const ascii = look === 'ascii'
+  const ascii = look === 'ascii' || look === 'boxart'
   useEffect(() => { if (stage) stage.playing = playing }, [stage, playing])
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 

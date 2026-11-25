@@ -864,7 +864,7 @@ export default [
         await pick(k.page, 'Blobs', 'blobs')
         const blobs = await read(k.page)
         // ASCII: a grid of characters on a dark screen, the same picture when drawn twice, and the same grid as text
-        await pick(k.page, 'ASCII', 'ascii')
+        await pick(k.page, 'Text', 'ascii')
         const ascii = await read(k.page), asciiAgain = await read(k.page)
         const text = (await k.page.evaluate(() => window.__brush.text())) ?? ''
         const screen = await k.page.getByTestId('brush-ground').evaluate((e) => getComputedStyle(e).backgroundColor)
@@ -882,8 +882,9 @@ export default [
         const unfurred = (plainText.match(/[|_/\\]/g) ?? []).length
         if (!(strokes > unfurred + 20)) fails.push(`brush and ink on ${backend}: ASCII strokes along fur: ${strokes} strokes with them, ${unfurred} without`)
         else ok(`brush and ink on ${backend}: ASCII draws the fox's fur as strokes the way it runs (${strokes} strokes, ${unfurred} without them)`)
-        // braille and blocks: the same grid in their own characters, a frame drawn twice the same
-        for (const [label, set, only] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/], ['Quarter blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/]]) {
+        // braille (Text) and quarter blocks (Box Art): the same grid in their own characters, a frame drawn twice the same
+        for (const [label, set, only, look] of [['Braille', 'braille', /^[\u2800-\u28ff\s]*$/, 'ascii'], ['Quarter blocks', 'blocks', /^[ ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█░▒▓\n]*$/, 'boxart']]) {
+          if (look === 'boxart') await pick(k.page, 'Box Art', 'boxart')
           await tabClick(k.page.getByTestId('brush-chars').getByRole('button', { name: label, exact: true }))
           const a = await read(k.page), b = await read(k.page)
           const t = (await k.page.evaluate(() => window.__brush.text())) ?? ''
@@ -892,6 +893,7 @@ export default [
           else ok(`brush and ink on ${backend}: ${set} draws the fox as ${n} characters of its own, the same when drawn twice`)
           if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, `blobscape-brush-${set}.png`) })
         }
+        await pick(k.page, 'Text', 'ascii')
         await tabClick(k.page.getByTestId('brush-chars').getByRole('button', { name: 'ASCII', exact: true }))
         await pick(k.page, 'Blobs', 'blobs')
         // cel shading: the fox is cut again without its baked light, lit live and cut into tones

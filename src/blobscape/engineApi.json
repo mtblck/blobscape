@@ -13849,9 +13849,13 @@
     },
     {
      "name": "styleAsked",
-     "kind": "const",
-     "doc": "The style an address asks for (`?style=oil`), or the default.",
-     "type": "(asked: string | null) => Style"
+     "kind": "function",
+     "doc": "The style an address or a kept scene asks for (`?style=oil`), or the default. Text keeps the id `ascii` (`?style=text`\nmeans it too), and a Text picture in box drawing or quarter blocks (`?style=ascii&chars=lines`, kept before\n2026-11-25) is Box Art now, so `chars` is the address's or the kept Text settings' set of characters.",
+     "signatures": [
+      {
+       "code": "styleAsked(asked: string | null, chars?: string | null): Style"
+      }
+     ]
     },
     {
      "name": "styleWords",
@@ -14165,7 +14169,7 @@
       {
        "name": "chars",
        "type": "GlyphSet",
-       "doc": "Which characters: ASCII, braille, blocks, box drawing, words or a typewriter's."
+       "doc": "Which characters: ASCII, braille, words or a typewriter's (Box Art's sets are its own style)."
       },
       {
        "name": "words",
@@ -14191,6 +14195,43 @@
        "name": "strands",
        "type": "boolean",
        "doc": "Whether fur and grass are drawn as strokes along the way they lie."
+      },
+      {
+       "name": "own",
+       "type": "boolean",
+       "doc": "Whether each character takes the color of what it shows."
+      },
+      {
+       "name": "paper",
+       "type": "string",
+       "doc": "The ground and ink, an id of `PAPERS`."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "BoxArtSettings",
+     "kind": "interface",
+     "doc": "The settings of the picture drawn as Box Art: the box-drawing and block characters, apart from Text (Matt, 2026-11-25).",
+     "props": [
+      {
+       "name": "chars",
+       "type": "\"blocks\" | \"lines\"",
+       "doc": "Which characters: box drawing ('lines') or quarter blocks and shades ('blocks')."
+      },
+      {
+       "name": "letter",
+       "type": "number",
+       "doc": "A character's height, in CSS pixels."
+      },
+      {
+       "name": "weight",
+       "type": "number",
+       "doc": "How heavy the characters are drawn."
       },
       {
        "name": "own",
@@ -14412,6 +14453,18 @@
      "type": "StyleDef<AsciiSettings>"
     },
     {
+     "name": "BOX_SETS",
+     "kind": "const",
+     "doc": "Box Art's sets of characters, which Text drew until 2026-11-25: `?style=ascii&chars=lines` is Box Art now.",
+     "type": "readonly string[]"
+    },
+    {
+     "name": "BOX_ART",
+     "kind": "const",
+     "doc": "The settings of the picture drawn as Box Art (Matt, 2026-11-25: box drawing and quarter blocks, out of Text).",
+     "type": "StyleDef<BoxArtSettings>"
+    },
+    {
      "name": "CEL_DEF",
      "kind": "const",
      "doc": "Cel shading's settings.",
@@ -14505,7 +14558,7 @@
      "name": "CATALOG",
      "kind": "const",
      "doc": "Every style's settings, by the name they are kept under.",
-     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice> }"
+     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice> }"
     },
     {
      "name": "StyleKey",
@@ -14537,6 +14590,11 @@
        "name": "ascii",
        "type": "AsciiSettings",
        "doc": "The characters'."
+      },
+      {
+       "name": "boxart",
+       "type": "BoxArtSettings",
+       "doc": "Box Art's."
       },
       {
        "name": "cel",
@@ -14703,7 +14761,7 @@
      "name": "LookId",
      "kind": "type",
      "doc": "How the blobs are drawn: as they are, or as one of the marks.",
-     "type": "\"blobs\" | \"ascii\" | MarkKind"
+     "type": "\"blobs\" | \"ascii\" | \"boxart\" | MarkKind"
     },
     {
      "name": "isMark",

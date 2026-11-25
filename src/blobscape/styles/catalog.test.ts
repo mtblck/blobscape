@@ -161,12 +161,30 @@ test('every page with brush looks, a time of day or weather draws them through t
 })
 
 test('every drawn style but knitting paints from a palette named in the address, and starts in full color', async () => {
-  const { ASCII, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, KNIT_DEF, fromAddress } = await import('./catalog.ts')
+  const { ASCII, BOX_ART, BLOCKS_DEF, CEL_DEF, GLASS_DEF, MARKS, NEON_DEF, WASH_DEF, KNIT_DEF, fromAddress } = await import('./catalog.ts')
   const q = new URLSearchParams('palette=pico8')
-  for (const def of [MARKS, ASCII, CEL_DEF, BLOCKS_DEF, NEON_DEF, GLASS_DEF, WASH_DEF] as StyleDef<{ palette: string }>[]) {
+  for (const def of [MARKS, ASCII, BOX_ART, CEL_DEF, BLOCKS_DEF, NEON_DEF, GLASS_DEF, WASH_DEF] as StyleDef<{ palette: string }>[]) {
     assert.equal(def.start.palette, 'none', def.id)
     assert.equal(fromAddress(def, def.start, q).palette, 'pico8', def.id)
     assert.equal(fromAddress(def, def.start, new URLSearchParams('palette=<b>')).palette, 'none', `${def.id} keeps only an id`)
   }
   assert.ok(!KNIT_DEF.settings.some((s) => (s.key as string) === 'palette'), 'knitting picks from its own yarns')
+})
+
+test('Text and Box Art split the characters between them, and a scene kept in Text\'s old box sets opens in Box Art', async () => {
+  const { ASCII, BOX_ART } = await import('./catalog.ts')
+  const sets = (def: StyleDef<{ chars: string }>) => (def.settings.find((s) => s.key === 'chars') as unknown as { options: { id: string }[] }).options.map((o) => o.id)
+  assert.deepEqual(sets(ASCII as StyleDef<{ chars: string }>), ['ascii', 'braille', 'words', 'typed'])
+  assert.deepEqual(sets(BOX_ART as StyleDef<{ chars: string }>), ['lines', 'blocks'])
+  // an old address (`?style=ascii&chars=lines`) gives Box Art its set and leaves Text on its own
+  const old = drawnStart(new URLSearchParams('chars=blocks'))
+  assert.equal(old.boxart.chars, 'blocks')
+  assert.equal(old.ascii.chars, 'ascii')
+  // kept before the split: Text's settings in a box set become Box Art's
+  const kept = drawnFrom(drawnStart(), { ascii: { chars: 'lines', letter: 16, own: false } })
+  assert.equal(kept.boxart.chars, 'lines')
+  assert.equal(kept.boxart.letter, 16)
+  assert.equal(kept.boxart.own, false)
+  assert.equal(kept.ascii.chars, 'ascii', 'Text falls back to ASCII')
+  assert.equal(drawnFrom(drawnStart(), { ascii: { chars: 'braille' } }).boxart.chars, 'lines', 'a Text set leaves Box Art as it starts')
 })
