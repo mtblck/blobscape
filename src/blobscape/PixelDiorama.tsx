@@ -65,6 +65,9 @@ const swung = (orbit: Orbit, swing: number, loop: number, t: number): Orbit => (
  * by the engine's pixel mode (splat-engine/pixelPass.ts): the scene rendered
  * small, snapped to a palette, and scaled up in whole pixels.
  */
+/** How often at most the picture on show is copied while the next scene is cut, for the transition to start from (ms). */
+const KEEP_EVERY = 250
+
 /** What one blob holds: a center, three sizes, a facing, a color and an opacity, each number four bytes. */
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
@@ -79,6 +82,12 @@ export function PixelDiorama() {
   // water mirrors the scene where the GPU sorts (WebGPU); `?mirror=0` leaves it the sky alone
   const mirrored = stage?.backend === 'webgpu' && new URLSearchParams(location.search).get('mirror') !== '0'
   const [drawn, setDrawn] = useState(false)
+  // Whether a frame holding the scene that is in the view now has really been drawn. Handing a cut scene to the stage
+  // is not the end of the wait: its buffers have to be filled, its cubes made and its shaders built, which on a phone
+  // took seconds after the waiting mark had gone (Matt, 2026-11-25), so the mark stays up until `shown()` resolves.
+  const [arrived, setArrived] = useState(false)
+  /** The built scene the stage was last given, so only a new cut waits for a frame (a switch like Rock the view does not). */
+  const given = useRef<Built | undefined>(undefined)
   const [failed, setFailed] = useState<string>()
   const offscreen = useMemo(() => new URLSearchParams(location.search).get('offscreen') === '1', [])
   const webgl = useMemo(() => new URLSearchParams(location.search).get('webgl') === '1', [])
@@ -314,6 +323,12 @@ export function PixelDiorama() {
     const heavens = heavenBones(scene.built.skeleton.bones.map((b) => b.name))
     const own = ownClouds(scene.of)
     stage.setActor(scene.built, undefined, [...(pond ? [pond.surface] : []), ...(pond?.spray ? [pond.spray] : []), ...(flames ? [flames.actor] : []), ...(fall?.actors ?? [])])
+    // a new cut is not on screen until a frame holding it is through the GPU: the waiting mark stays up until then
+    if (given.current !== scene.built) {
+      const mine = given.current = scene.built
+      setArrived(false)
+      void stage.shown().then(() => { if (given.current === mine) setArrived(true) })
+    }
     seen.current = null
     // the surface as it stands at the stage's time, for the eye as it stands: after a pose, a turn of the view or a new picture in the mirror
     wet.current = pond && (() => {
@@ -633,8 +648,13 @@ export function PixelDiorama() {
     sheet.height = cv.height
     const ctx = sheet.getContext('2d', { alpha: false })!
     const kept = { sheet, got: false, stop: () => {} }
+    // Copying the view costs a read of the whole canvas, and the picture hardly moves while the new scene is cut:
+    // at most one copy this often, so the wait is the cut's own and not the copies' (Matt, 2026-11-25).
+    let last = 0
     const copy = () => {
-      if (sheet.width < 2) return
+      const now = performance.now()
+      if (sheet.width < 2 || (kept.got && now - last < KEEP_EVERY)) return
+      last = now
       paintView(ctx, box, sheet.width, sheet.height, (el) => (el === overlayCanvas.current ? undefined : el))
       kept.got = true
     }
@@ -748,8 +768,8 @@ export function PixelDiorama() {
     }
   }
   const backend = stage ? (stage.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2') : 'WebGPU or WebGL 2'
-  const loading = !failed && (!drawn || !scene)
-  const loadingLabel = stage ? 'Cutting the scene into blobs…' : 'Starting the splat engine…'
+  const loading = !failed && (!drawn || !scene || !arrived)
+  const loadingLabel = stage ? (scene ? 'Drawing the scene…' : 'Cutting the scene into blobs…') : 'Starting the splat engine…'
 
   return (
     <div className="pb-4">
