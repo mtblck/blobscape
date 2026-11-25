@@ -1887,7 +1887,7 @@ export default [
         const from = M.look
         M.next()
         const wait = async (until, ms) => { for (let k = 0; k < ms / 100 && !until(); k++) await new Promise((r) => setTimeout(r, 100)) }
-        await wait(() => window.__morph?.look !== from, 60000)
+        await wait(() => window.__morph && window.__morph.look !== from, 60000)
         await wait(() => !document.querySelector('[data-testid=morph-wipe]')?.hidden, 20000)
         const wiping = !document.querySelector('[data-testid=morph-wipe]')?.hidden
         const s = window.__morph.stage
