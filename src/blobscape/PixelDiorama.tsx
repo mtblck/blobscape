@@ -986,12 +986,14 @@ export function PixelDiorama() {
           {
             id: 'export', label: 'Export', content: (
               <div className={TAB_SECTIONS}>
-                <p className="text-sm text-ink-muted">Saves the scene in the style it is drawn in now. A loop is drawn one frame at a time from start to end, so it joins up when it repeats and no frame is dropped, however slow the device.</p>
+                <div className="grid gap-2">
+                  <p className="text-sm text-ink-muted">Share a link to the scene with every setting you changed, or save it in the style it is drawn in now: a frame, the loop or a 3D model. A loop is drawn one frame at a time from start to end, so it joins up when it repeats and no frame is dropped, however slow the device.</p>
+                  <div><Button small onClick={shareLink} data-testid="diorama-share-open">Share</Button></div>
+                </div>
                 {exportChoices(false)}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Button small disabled={cantExport} onClick={record} data-testid="diorama-record">{exportLabel}</Button>
-                  <Button small onClick={shareLink} data-testid="diorama-share-open">Share</Button>
                   <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
                 </div>
                 <p role="status" className="text-xs text-ink-faint empty:-mt-2">{exportNote}</p>

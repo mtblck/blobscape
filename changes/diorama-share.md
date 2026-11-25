@@ -1,1 +1,1 @@
-- Diorama: a Share button beside Export the loop opens a link to the scene with every setting you changed (style, time, weather, finish, view), to copy or post to Facebook, X or Reddit.
+- Diorama: a Share button at the top of the Export tab opens a link to the scene with every setting you changed (style, time, weather, finish, view), to copy or post to Facebook, X or Reddit.
