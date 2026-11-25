@@ -1898,6 +1898,30 @@ export default [
       if (!got) fails.push('style morph: the page never started (no window.__morph)')
       else if (got.from !== 'blobs' || got.to !== 'cel' || !got.wiping || !got.done || got.name !== 'Cel shading') fails.push(`style morph: ${JSON.stringify(got)}`)
       else ok(`style morph: blobs gave way to ${got.name.toLowerCase()} under a clock wipe`)
+      await g.ctx.close()
+    },
+  },
+  {
+    name: 'time-lapse',
+    about: 'Time-lapse: the year runs through the seasons, the light follows the hour, and the lamps come on in the dark',
+    entries: ['src/blobscape/TimeLapse.tsx'],
+    async run({ fails, ok, open }) {
+      const p = await open('/experiments/time-lapse/?offscreen=1&scene=windmill&detail=light', { viewport: { width: 1280, height: 900 } })
+      await p.page.waitForFunction(() => window.__timelapse, null, { timeout: 120000 }).catch(() => {})
+      const at = (u) => p.page.evaluate(async (u) => {
+        const T = window.__timelapse
+        if (!T) return null
+        await T.stage.frame(u * T.seconds)
+        await new Promise((r) => setTimeout(r, 1200))
+        const T2 = window.__timelapse
+        await T2.stage.frame(u * T2.seconds)
+        const m = T2.moment()
+        return { season: m.season, hour: Math.round(m.hour * 10) / 10, snow: m.snow, night: T2.night(), when: document.querySelector('[data-testid=timelapse-when]')?.textContent }
+      }, u)
+      const noon = await at(0.25 + 8 / 96), night = await at(0.25 + 21 / 96), winter = await at(0.75 + 23 / 96)
+      if (!noon || !night || !winter) fails.push('time-lapse: the page never started (no window.__timelapse)')
+      else if (noon.season !== 1 || noon.night || !night.night || winter.season !== 3 || winter.snow < 0.9 || !/^Summer, /.test(noon.when ?? '')) fails.push(`time-lapse: ${JSON.stringify({ noon, night, winter })}`)
+      else ok(`time-lapse: ${noon.when} by day, ${night.when} with the lamps on, ${winter.when} under snow`)
       await p.ctx.close()
       await g.ctx.close()
     },

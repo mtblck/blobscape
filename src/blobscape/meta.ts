@@ -69,6 +69,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   globe: "Shake a snow globe holding a little scene of Gaussian splats: the snow swirls up in water you can't see and settles on roofs, hats and the ground.",
   morph: 'One little Gaussian splat scene going from style to style, paint, cel shading, characters, cubes, neon, each change wiped across the picture.',
   crumble: 'Tap a windmill, a tent or a tree in a little scene of Gaussian splats and it falls apart into its blobs, which lie on the ground and then fly back.',
+  timelapse: 'A year in thirty seconds: one Gaussian splat scene through a day in each season, under the real sun, rain, snow that piles up and melts.',
   sweater: 'A Christmas tree, an ornament and a pile of presents knitted into an ugly Christmas sweater, stitch by stitch, from Gaussian splats you can turn.',
   islands: 'A floating island grown from a biome recipe and a number, out of Gaussian splats: hills, a path, trees and stones, each made of materials from one library.',
   bouquet: 'A florist that never makes the same bouquet twice: pick a season and it grows every flower petal by petal out of Gaussian splats and stands them in a vase.',
@@ -123,6 +124,8 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
       return { path, title: `Style Morph · ${SITE.name}`, description: 'One little scene made of Gaussian splats going from style to style: soft blobs, gouache, cel shading, characters, cubes, neon, halftone dots and stained glass, each change wiped across the picture by an iris, a clock hand, blinds or a dither. The blobs never change, only how they are drawn. Pick the styles, the wipe and how long each holds.' }
     case 'crumble':
       return { path, title: `Destructible Diorama · ${SITE.name}`, description: 'A Diorama scene made of Gaussian splats where everything set down in it can be broken. Tap the windmill, a tent, a tree or a sheep and it falls apart into the very blobs it is made of: they scatter, land on the ground and lie there, then fly back one after another, lowest first, and build it again where it stands, still swaying.' }
+    case 'timelapse':
+      return { path, title: `Time-lapse · ${SITE.name}`, description: 'One scene made of Gaussian splats through a whole year in about thirty seconds: a day in each of the four seasons, from a spring dawn after rain through a long summer afternoon, a stormy fall and a winter day of snow that piles up and lies into the night, then melts as spring comes back. The sun stands where it would on each season\'s day, the weather eases from one spell to the next, and lamps come on at dusk. Drag the year to any moment.' }
     case 'sweater':
       return { path, title: `Ugly Sweater · ${SITE.name}`, description: 'Christmas scenes made of Gaussian splats and knitted into an ugly Christmas sweater: a grid of yarn stitches fixed on the screen, the picture in a few yarn colors, and bands of stars, zigzags, little trees and reindeer knitted in above and below it. Pick the sweater and the pattern, and turn the scene while the stitches stay put.' }
     case 'islands':
