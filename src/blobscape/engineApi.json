@@ -13150,6 +13150,12 @@
        "optional": true,
        "type": "readonly [readonly [number, number, number], readonly [number, number, number]]",
        "doc": "A wash behind the subject, top and bottom (sRGB 0–1), laid short of the paper's edge. Left out, the paper is bare."
+      },
+      {
+       "name": "border",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether the wash behind stops short of the paper's edge, leaving a border of bare paper (true). False lays it to the edge."
       }
      ]
     },
@@ -15317,6 +15323,11 @@
        "name": "paper",
        "type": "string",
        "doc": "The paper, an id of `WASH_PAPERS`."
+      },
+      {
+       "name": "border",
+       "type": "boolean",
+       "doc": "Whether a border of bare paper is left round the wash behind the subject."
       },
       {
        "name": "palette",

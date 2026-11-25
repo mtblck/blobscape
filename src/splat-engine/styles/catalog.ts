@@ -447,6 +447,7 @@ export const WASH_DEF: StyleDef<WashChoice> = {
     { key: 'strength', kind: 'range', label: 'Paint strength', min: 0.3, max: 1, step: 0.05, unit: 'percent', hint: 'Lower is paler, with more of the paper showing through.' },
     { key: 'pencil', kind: 'range', label: 'Pencil', min: 0, max: 1, step: 0.05, unit: 'percent', zero: 'None', hint: 'A pencil line under the paint, round each thing and between its parts.' },
     { key: 'paper', kind: 'choice', label: 'Paper', options: WASH_PAPERS },
+    { key: 'border', kind: 'toggle', label: 'Paper border', address: 'border', about: 'Leaves a border of bare paper round the painting. Off, the wash behind the subject runs to the edge.' },
   ],
 }
 
