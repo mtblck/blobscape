@@ -11,6 +11,8 @@ import { LavaHeat, lavaColor } from './lava.ts'
 const WIND_ROLLS = 5
 /** How high one level of wind waves stands (the root mean square of the height), as a share of the scene's rain splash depth. */
 export const WAVE_LEVEL = 0.12
+/** Where a float feels the water: rings at these shares of its size, with this many points each (the middle once). */
+const RIDE_RINGS: readonly (readonly [number, number])[] = [[0, 1], [0.35, 6], [0.7, 10], [1, 14]]
 
 /** A number from 0 to 1 for a whole number, the same everywhere. */
 function hash(i: number): number {
@@ -182,10 +184,20 @@ export class SceneWater {
     const w = this.water, steep = this.plan.ripple
     for (const f of floats) {
       if (f.bone < 0) continue
+      // the plane that best fits the surface over the whole float (rings of points out to its size), not two points
+      // either side: a raindrop's ring smaller than the float lifts one side as the other falls and cancels out, as
+      // it would under a real hull, where two points let every drop flick it (Matt saw the storm octopus's buoy jerk)
       const [x, , z] = f.at, d = f.size
-      const sx = ((w.heightAt(x + d, z) - w.heightAt(x - d, z)) / (2 * d)) * steep
-      const sz = ((w.heightAt(x, z + d) - w.heightAt(x, z - d)) / (2 * d)) * steep
-      sk.offset[f.bone * 3 + 1] += w.heightAt(x, z) * steep
+      let h0 = 0, hx = 0, hz = 0, xx = 0, n = 0
+      for (const [r, k] of RIDE_RINGS) {
+        for (let i = 0; i < k; i++) {
+          const a = (i / k) * TAU, px = Math.cos(a) * r * d, pz = Math.sin(a) * r * d, h = w.heightAt(x + px, z + pz)
+          h0 += h; hx += h * px; hz += h * pz; xx += px * px; n++
+        }
+      }
+      // xx is Σx², the same as Σz² for points spread evenly round each ring
+      const sx = xx > 0 ? (hx / xx) * steep : 0, sz = xx > 0 ? (hz / xx) * steep : 0
+      sk.offset[f.bone * 3 + 1] += (h0 / n) * steep
       // up turned onto the surface's normal (−sx, 1, −sz): about up × normal, by the angle between them
       const ax = -sz, az = sx, s2 = Math.hypot(ax, az)
       if (s2 > 1e-9) {

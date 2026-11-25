@@ -38,8 +38,8 @@ export const STORMY_SEA: PropDoc = {
 export const STORM_OCTOPUS: PropDoc = {
   name: 'Storm octopus',
   foot: [0.1235, -0.12, 0.146],
-  // the buoy rides whatever water it is set down in and pushes it aside as it bobs
-  water: { rides: [{ bone: 'buoy', at: [0, 0, 0], size: 0.6 }], wakes: [{ bone: 'buoy', at: [0, -0.2, 0], r: 0.5 }] },
+  // the buoy rides whatever water it is set down in (a wake at its own foot rocked it once a loop, so it has none)
+  water: { rides: [{ bone: 'buoy', at: [0, 0, 0], size: 0.6 }] },
   doc: {
     name: 'Storm octopus',
     loop: 12,
