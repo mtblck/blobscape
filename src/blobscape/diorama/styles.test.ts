@@ -91,6 +91,9 @@ test('blocks are whole cells of the grid a scene was cut on, or a share of a sub
   assert.equal(styleWords('blocks'), 'as blocks')
   assert.equal(gridOf(0.03, [], 0), 0.03)
   assert.ok(Math.abs(gridOf(undefined, [0, 0, 0, 4.8, 1, 0], 2) - 4.8 / BLOCK_SPAN) < 1e-9)
+  // a cut that says its grid is snapped to that grid, not to a guess that falls between its rows of blobs
+  assert.equal(gridOf(undefined, [0, 0, 0, 4.8, 1, 0], 2, 0.03), 0.03)
+  assert.equal(gridOf(0.05, [], 0, 0.03), 0.05)
   const look = blockLook({ ...BLOCK_START, size: 3 }, 0.02, 90)
   assert.ok(Math.abs(look.cell - 0.06) < 1e-9)
   // the light is measured from the starting view: a quarter turn of the view turns it with it

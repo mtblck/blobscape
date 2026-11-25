@@ -130,7 +130,7 @@ export function DestructibleDiorama() {
         land.push(cut.blobs.center[i * 3], cut.blobs.center[i * 3 + 1], cut.blobs.center[i * 3 + 2])
       }
       const ground = land.length
-        ? HeightMap.fromPoints(new Float32Array(land), [lo[0], lo[2]], [hi[0], hi[2]], lo[1])
+        ? HeightMap.fromPoints(new Float32Array(land), [lo[0], lo[2]], [hi[0], hi[2]], lo[1], 48, d.ground && ((x, z) => d.ground!(x, z, top, lo[1])))
         : new HeightMap((x, z) => d.ground?.(x, z, top, lo[1]) ?? lo[1], [lo[0], lo[2]], [hi[0], hi[2]], lo[1])
       const pieces = stillActor(emptyPieces(room))
       broken.current = []

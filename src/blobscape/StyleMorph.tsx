@@ -116,53 +116,67 @@ export function StyleMorph() {
   useEffect(() => { if (stage) stage.playing = !calm || offscreen }, [stage, calm, offscreen])
   useEffect(() => { if (stage && orbit) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
 
-  // the change: the picture as it stands is kept, the next style drawn, and the kept picture wiped away over it
-  const kept = useRef<{ sheet: HTMLCanvasElement; got: boolean; stop: () => void } | null>(null)
+  // the change: the picture as it stands is kept and laid over the view first, and only then is the next style asked
+  // for, so nothing under the kept picture (the backdrop behind the canvas above all) changes while it can be seen
+  const kept = useRef<{ sheet: HTMLCanvasElement; got: boolean; stop: () => void; seed: number } | null>(null)
   const overlayOf = useRef<TransitionOverlay | null>(null)
+  const wipe = TRANSITIONS.find((x) => x.id === kind)
+  const cellSize = () => Math.max(1, Math.round(6 * (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1)))
+  const coverColor: [number, number, number] = [0.05, 0.06, 0.1]
+  /** Lays the kept picture over the view as the wipe's first moment; false where it cannot be shown. */
+  const coverWith = (keep: NonNullable<typeof kept.current>) => {
+    const el = overlayCanvas.current
+    if (!el || !wipe || !keep.got) return false
+    try { overlayOf.current ??= new TransitionOverlay(el) } catch (e) { console.warn(e); return false }
+    overlayOf.current.setFrom(keep.sheet)
+    overlayOf.current.draw(wipe, 0, cellSize(), coverColor, keep.seed)
+    el.hidden = false
+    return true
+  }
   const go = (next: Look) => {
     if (next === look || !stage) return
-    if (!calm && drawn && canvas.current && !kept.current) {
+    if (kept.current) return
+    if (!calm && drawn && canvas.current) {
       const cv = canvas.current, box = cv.parentElement!
       const sheet = document.createElement('canvas')
       sheet.width = cv.width; sheet.height = cv.height
       const ctx = sheet.getContext('2d', { alpha: false })!
-      const keep = { sheet, got: false, stop: () => {} }
-      const copy = () => { if (sheet.width > 1) { paintView(ctx, box, sheet.width, sheet.height, (el) => (el === overlayCanvas.current ? undefined : el)); keep.got = true } }
+      const keep = { sheet, got: false, stop: () => {}, seed: Math.floor(Math.random() * 1000) }
+      kept.current = keep
+      const copy = () => {
+        if (sheet.width > 1) { paintView(ctx, box, sheet.width, sheet.height, (el) => (el === overlayCanvas.current ? undefined : el)); keep.got = true }
+        if (!coverWith(keep)) kept.current = null
+        setLook(next)
+      }
       // a GPU canvas can be read only straight after a draw; off screen the page's canvas holds its picture
       if (offscreen) copy()
-      else { const stop = watchDraws((to) => { if (to === cv) { copy(); stop() } }); keep.stop = stop; stage.invalidate() }
-      kept.current = keep
+      else { const stop = watchDraws((to) => { if (to === cv) { stop(); copy() } }); keep.stop = stop; stage.invalidate() }
+      return
     }
     setLook(next)
   }
   // once the next style is on the stage, the kept picture gives way to it
   useEffect(() => {
     const keep = kept.current
-    if (!keep || lookNow !== look || !stage) return
+    if (!keep || !keep.got || lookNow !== look || !stage) return
     kept.current = null
     keep.stop()
-    const el = overlayCanvas.current, t = TRANSITIONS.find((x) => x.id === kind)
-    if (!el || !t || !keep.got) return
-    let overlay: TransitionOverlay
-    try { overlay = overlayOf.current ??= new TransitionOverlay(el) } catch (e) { console.warn(e); return }
-    overlay.setFrom(keep.sheet)
-    const cell = Math.max(1, Math.round(6 * (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1)))
-    const cover: [number, number, number] = [0.05, 0.06, 0.1], seed = Math.floor(Math.random() * 1000)
-    overlay.draw(t, 0, cell, cover, seed)
-    el.hidden = false
+    const el = overlayCanvas.current, overlay = overlayOf.current, t = wipe
+    if (!el || !overlay || !t) return
+    const cell = cellSize()
     setPassing(true)
     void (offscreen ? Promise.resolve() : stage.shown()).then(() => {
       const now = () => (offscreen ? stage.time : performance.now() / 1000)
       const start = now()
       const step = () => {
         const p = Math.min(1, Math.max(0, now() - start) / slow)
-        overlay.draw(t, p, cell, cover, seed)
+        overlay.draw(t, p, cell, coverColor, keep.seed)
         if (p < 1) requestAnimationFrame(step)
         else { el.hidden = true; setPassing(false) }
       }
       requestAnimationFrame(step)
     })
-  }, [lookNow, look, stage, kind, slow, offscreen])
+  }, [lookNow, look, stage, kind, slow, offscreen]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => overlayOf.current?.dispose(), [])
 
   // the styles come round in turn, each held a while once its wipe is done

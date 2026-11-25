@@ -123,8 +123,10 @@ export function TimeLapse() {
       // the snow lying is the year's: it builds through winter and melts in spring's first hours
       if (fall.pile(m.snow)) stage.reshape(fall.cover)
       d.blow?.(sk, t, windAt(m.sky, t, d.loop), undefined, m.sky.wind)
-      // the scene's own sun never shows: the season's does; its moon and stars only in the dark, put out by cloud
+      // the scene's own stars only in the dark, put out by cloud; its sun and moon never show (Matt, 2026-11-25: a day
+      // goes by in seconds, so the moon only flickered into the sky now and then): the light is still the real sun's and moon's
       showHeavens(sk.size, c.heavens, lamps ? m.sky.clouds : 1)
+      for (const b of [...c.heavens.moon, ...c.heavens.sun]) sk.size[b] = 0
       sk.update()
       fall.follow(sk)
       const light = lightAt(m, shadowsNow.current && stage.backend === 'webgpu')

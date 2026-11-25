@@ -187,7 +187,7 @@ export function useDrawnLook(stage: CreatureStage | undefined, look: Look | unde
     // while the subject is cut again the cubes on show stay: the stage makes them again for the next actor itself
     if (!actor || !plain) return
     const b = actor.blobs
-    const set = () => { blocksUp.current = true; stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count), azimuth, blockTint, blockPaints.colors)) }
+    const set = () => { blocksUp.current = true; stage.setBlocks(blockLook(block, gridOf(spacing, b.center, b.count, (actor as { grid?: number }).grid), azimuth, blockTint, blockPaints.colors)) }
     // the first cubes go up at once, so no frame shows the bare blobs under them; a slider's changes wait a moment
     if (!blocksUp.current) { set(); return }
     const id = setTimeout(set, 120)

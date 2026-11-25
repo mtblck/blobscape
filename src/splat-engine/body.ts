@@ -70,6 +70,8 @@ export interface Built extends Creature {
   glow?: Uint8Array
   /** Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on. */
   laid?: Uint8Array
+  /** The side of the grid it was cut on (voxel.ts), so a look that snaps blobs to cells (Blocks) snaps them to the same grid. */
+  grid?: number
 }
 
 const LIGHT: Vec3 = norm([-0.45, 0.75, 0.5])

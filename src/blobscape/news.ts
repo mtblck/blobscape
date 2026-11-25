@@ -30,6 +30,21 @@ const CHANGES = 'https://github.com/mtblck/blobscape/blob/main/CHANGELOG.md'
 
 export const POSTS: Post[] = [
   {
+    id: 'snow-globe',
+    date: '2026-11-25',
+    title: 'A snow globe to shake',
+    summary: 'Snow Globe is a new experiment: a Diorama scene sealed under a glass dome of water and snow. Tap it, or shake your phone, and the snow swirls up and settles again over a quarter of a minute.',
+    search: 'Snow Globe is a new experiment: a little scene under a glass dome of water and snow. Tap it or shake your phone and the snow swirls up and settles again.',
+    image: { src: '/covers/snow-globe.webp', alt: 'A snowman in a top hat on a snowy knoll under a glass dome, with snowflakes drifting down inside the glass.' },
+    body: [
+      '[Snow Globe](/experiments/snow-globe/) puts a scene from [Diorama](/experiments/diorama/) under glass: a snowman, a Christmas tree, presents, a sleigh, Santa, the snowed-in cabin, the lantern grove or an ornament, sealed in a dome full of water and snow.',
+      '## Shake it',
+      'Tap the globe, or shake your phone, and the water starts to turn. It throws the snow up off the ground and carries it round, and then the snow drifts down slowly through the water, the way it does in a real globe, over about a quarter of a minute. It settles on whatever is inside: on the snowman\'s hat, the cabin\'s roof, the presents and the branches. A harder shake throws more of it up.',
+      '## Made of the same blobs',
+      'The dome is the smallest sphere that holds every blob of the scene, and the glass is a few thousand discs lying on it, each almost clear, so you look at the scene through two thin layers of them. The snow never leaves the glass. Pick the scene, the time of day and how much snow there is, from a flurry to a blizzard.',
+    ],
+  },
+  {
     id: 'release-0-6-0',
     date: '2026-11-23',
     version: '0.6.0',
