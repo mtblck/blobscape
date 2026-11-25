@@ -478,12 +478,18 @@ export interface ClayLook {
 export const CLAY_BACK: Sky01 = [[0.6, 0.74, 0.86], [0.92, 0.86, 0.74]]
 /** The clay's key light in the view's own frame (x right, y up, z toward the viewer): from the top left, in front. */
 export const CLAY_KEY: readonly [number, number, number] = [-0.45, 0.6, 0.66]
-/** How much a thumbprint's middle darkens the clay at full depth. */
-export const PRINT_DENT = 0.26
-/** How strong a thumbprint's ridges are at full depth. */
-export const PRINT_RIDGE = 0.1
-/** How many ridges cross a thumbprint from its middle to its edge. */
-export const PRINT_RINGS = 5
+/** How far a thumbprint reaches from its middle, in the prints' own size (a cell of the world is 1). */
+export const PRINT_R = 0.42
+/** How steeply a thumbprint's walls tip the clay's facing at full depth (its slope per unit of `printAt`'s gradient). */
+export const PRINT_TILT = 0.7
+/** How high the clay pushed out of a thumbprint stands round its edge, as a share of the dent's depth. */
+export const PRINT_LIP = 0.3
+/** How wide that lip is, as a share of the print's reach. */
+export const PRINT_LIP_W = 0.2
+/** How much darker the bottom of a thumbprint is at full depth, shut in by its own walls. */
+export const PRINT_SHUT = 0.16
+/** How much more a thumbprint's tipped walls turn toward or away from the light than the clay's soft key alone shows. */
+export const PRINT_LIGHT = 0.55
 /** The share of the clay's cells that hold a thumbprint. */
 export const PRINT_SHARE = 0.55
 /** How far round each pixel the clay is softened, in CSS pixels at full smoothness. */
@@ -514,24 +520,59 @@ export const printHash = (x: number, y: number, z: number, salt: number) => frac
 /** The stop-motion frame a time falls in, which the thumbprints shift by. */
 export const clayFrame = (time: number, fps: number) => (fps > 0 ? Math.floor(time * fps + 1e-6) : 0)
 
+/** A thumbprint at a point: its height (−1 at the bottom of the dent up to `PRINT_LIP` on its lip, 0 elsewhere) and that height's slope, per unit of the prints' own size, in the world's frame. */
+export interface Print {
+  /** The height: −1 at the bottom of the dent, up to `PRINT_LIP` on its lip, 0 away from any print. */
+  h: number
+  /** How fast the height rises, each way of the world, per unit of the prints' own size. */
+  g: [number, number, number]
+}
+
+/** A thumbprint's height across it, from its middle (0) out (`PRINT_R` is 1), and how fast that changes outward. */
+export function printProfile(u: number): [number, number] {
+  let h = 0, dh = 0
+  if (u < 1) { const w = 1 - u * u; h = -w * w; dh = 4 * u * w }
+  const t = (u - 1) / PRINT_LIP_W, e = Math.exp(-t * t)
+  h += PRINT_LIP * e
+  dh += (PRINT_LIP * e * -2 * t) / PRINT_LIP_W
+  return [h, dh]
+}
+
 /**
- * The thumbprints at a point of the world, in the prints' own size (the world divided by a print's size): how much
- * the light there is changed, as a multiplier near 1. A print is a shallow round dent with a few ridges round its
- * middle; each cell of the world holds one or none, and each frame shifts it a little (`boil`), as hands do.
+ * The thumbprints at a point of the world, in the prints' own size (the world divided by a print's size). A print is
+ * a round dent pressed into the clay with a little clay pushed up round its edge; each cell of the world holds one or
+ * none, and each frame shifts it a little (`boil`), as hands do. The dent is lit by tipping the clay's facing
+ * (`pressed`), so its wall toward the light falls in shade and the far wall catches it.
  */
-export function printAt(p: readonly [number, number, number], frame: number, boil: number, prints: number): number {
+export function printAt(p: readonly [number, number, number], frame: number, boil: number): Print {
   const bx = Math.floor(p[0]), by = Math.floor(p[1]), bz = Math.floor(p[2])
-  let best = Infinity, has = 0
+  let best = Infinity, has = 0, ox = 0, oy = 0, oz = 0
   for (let z = -1; z <= 1; z++) for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) {
     const cx = bx + x, cy = by + y, cz = bz + z
     const j = (salt: number) => printHash(cx, cy, cz, salt) + (printHash(cx, cy, cz, salt + frame * 3.1) - 0.5) * boil * 0.3
-    const dx = cx + j(1) - p[0], dy = cy + j(2) - p[1], dz = cz + j(3) - p[2]
+    const dx = p[0] - (cx + j(1)), dy = p[1] - (cy + j(2)), dz = p[2] - (cz + j(3))
     const d = Math.hypot(dx, dy, dz)
-    if (d < best) { best = d; has = printHash(cx, cy, cz, 4) < PRINT_SHARE ? 1 : 0 }
+    if (d < best) { best = d; has = printHash(cx, cy, cz, 4) < PRINT_SHARE ? 1 : 0; ox = dx; oy = dy; oz = dz }
   }
-  const dent = smooth(0.45, 0, best) * has
-  const ridge = Math.sin((best / 0.45) * PRINT_RINGS * Math.PI * 2) * dent
-  return 1 - prints * (PRINT_DENT * dent - PRINT_RIDGE * ridge)
+  const [h, dh] = printProfile(best / PRINT_R)
+  const s = (has * dh) / PRINT_R / Math.max(best, 1e-6)
+  return { h: h * has, g: [ox * s, oy * s, oz * s] }
+}
+
+/**
+ * Clay facing `n` (the view's frame, unit length) with a thumbprint pressed in, its slope `g` already turned into the
+ * view's frame: the facing tipped by the print's walls, and how much the light there changes beyond what `clayShade`
+ * gives that facing (deeper shade on the wall toward the light, the bottom shut in).
+ */
+export function pressed(n: readonly [number, number, number], g: readonly [number, number, number], h: number, prints: number): { n: [number, number, number]; light: number } {
+  const k = CLAY_KEY, kl = Math.hypot(k[0], k[1], k[2])
+  const s = PRINT_TILT * prints, gn = g[0] * n[0] + g[1] * n[1] + g[2] * n[2]
+  const m: [number, number, number] = [n[0] - s * (g[0] - n[0] * gn), n[1] - s * (g[1] - n[1] * gn), n[2] - s * (g[2] - n[2] * gn)]
+  const ml = Math.hypot(m[0], m[1], m[2]) || 1
+  const t: [number, number, number] = [m[0] / ml, m[1] / ml, m[2] / ml]
+  const turn = ((t[0] - n[0]) * k[0] + (t[1] - n[1]) * k[1] + (t[2] - n[2]) * k[2]) / kl
+  const light = (1 + PRINT_LIGHT * turn) * (1 - PRINT_SHUT * prints * Math.max(0, -h))
+  return { n: t, light }
 }
 
 /** The clay's own shading for a surface facing `n` (the view's frame, unit length): a soft wrapped key light and a little sheen. */

@@ -4,7 +4,7 @@ import { SplatDepth } from './depth.ts'
 import { LINE_DEPTH, LINE_PART } from '../splat-core/marks.ts'
 import {
   BLUEPRINT_INK, BLUEPRINT_PAPER, CLAY_BACK, CLAY_KEY, CLAY_SMOOTH_PX, CLAY_TAPS, CRT_BACK, CRT_BAND, CRT_BAND_PX, CRT_BLEED_PX, CRT_BLEED_TAPS, CRT_FPS, CRT_ROLLS, CRT_WANDERS,
-  CUTOUT_CARD, CUTOUT_LAYER, CUTOUT_SHADE, CUTOUT_TAPS, DIM_ARROW, DIM_TICKS, GRID_MAJOR, GRID_MINOR, MOSAIC_GROUND, MOSAIC_GROUT, MOSAIC_TAPS, PRINT_DENT, PRINT_RIDGE, PRINT_RINGS,
+  CUTOUT_CARD, CUTOUT_LAYER, CUTOUT_SHADE, CUTOUT_TAPS, DIM_ARROW, DIM_TICKS, GRID_MAJOR, GRID_MINOR, MOSAIC_GROUND, MOSAIC_GROUT, MOSAIC_TAPS, PRINT_LIGHT, PRINT_LIP, PRINT_LIP_W, PRINT_R, PRINT_SHUT, PRINT_TILT,
   PRINT_SHARE, CLAY_DEEP, CLAY_HOLLOW, CLAY_SHADE_PX, RAGGED_GRAIN, RAGGED_PX, THERMAL_EMIT, THERMAL_SKY, THERMAL_SPREAD_GAIN, THERMAL_STOPS, THERMAL_TAPS, THERMAL_WHITE, clayFrame, dimPlaces, grainFrame, lightWay, toLinear,
   type FilterKind, type FilterLook, type ScreenBox,
 } from '../splat-core/filters.ts'
@@ -12,7 +12,7 @@ import {
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TSL = TSLTyped as unknown as Record<string, any>
-const { Fn, abs, clamp, cross, dot, float, floor, fract, int, length, max, min, mix, normalize, pow, select, sin, smoothstep, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
+const { Fn, abs, clamp, cross, dot, exp, float, floor, fract, int, length, max, min, mix, normalize, pow, select, sin, smoothstep, texture, uniform, uniformArray, uv, vec2, vec3, vec4 } = TSL
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any
 
@@ -70,6 +70,7 @@ export class FilterPass {
   private readonly res = uniform(new Vector2(1, 1))
   private readonly ratio = uniform(1)
   private readonly camWorld = uniform(new Matrix4())
+  private readonly camView = uniform(new Matrix4())
   private readonly camLens = uniform(new Vector2(1, 1))
   /** The look's sky, top and bottom (linear). */
   private readonly skyTop = uniform(new Vector3())
@@ -149,6 +150,7 @@ export class FilterPass {
     if (needs.parts) this.drawParts(renderer, scene, camera)
     camera.updateMatrixWorld()
     this.camWorld.value.copy(camera.matrixWorld)
+    this.camView.value.copy(camera.matrixWorldInverse)
     this.camLens.value.set(camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5])
     if (look.kind === 'blueprint') this.placeDims(camera, box)
     let quad = this.quads.get(look.kind)
@@ -417,7 +419,7 @@ export class FilterPass {
     })()
   }
 
-  /** Claymation. CPU twins: `printAt`, `clayShade`. */
+  /** Claymation. CPU twins: `printAt`, `pressed`, `clayShade`, `hollowOf`. */
   private clay() {
     const pic = this.picture.texture, ids = this.ids.texture, depth = this.depth.target.texture
     const { a: prints, b: size, c: reach, d: sheen, e: boil, f: frame } = this.k
@@ -445,8 +447,34 @@ export class FilterPass {
         return select(useA, viewAt(sa, select(da.greaterThan(0), da, d0)).sub(here), here.sub(viewAt(sb, select(db.greaterThan(0), db, d0))))
       }
       const nrm = normalize(cross(side(vec2(px.x.mul(1.5), 0)), side(vec2(0, px.y.mul(1.5).negate())))).toVar()
-      const facing = select(nrm.z.lessThan(0), nrm.negate(), nrm).toVar()
+      const flat = select(nrm.z.lessThan(0), nrm.negate(), nrm).toVar()
       const key = normalize(vec3(...CLAY_KEY))
+      // thumbprints pressed into the clay, fixed in the world: each tips the clay's facing by its walls
+      const world = this.camWorld.mul(vec4(here, 1)).xyz.div(size).toVar()
+      const bp = floor(world).toVar()
+      const best = float(1e9).toVar(), has = float(0).toVar(), off = vec3(0).toVar()
+      for (let z = -1; z <= 1; z++) for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) {
+        const cc = bp.add(vec3(x, y, z)).toVar()
+        const j = (salt: number) => cellHash(cc, salt).add(cellHash(cc, frame.mul(3.1).add(salt)).sub(0.5).mul(boil).mul(0.3))
+        const o = world.sub(cc.add(vec3(j(1), j(2), j(3)))).toVar()
+        const d = length(o)
+        const nearer = d.lessThan(best)
+        has.assign(select(nearer, select(cellHash(cc, 4).lessThan(PRINT_SHARE), float(1), float(0)), has))
+        off.assign(select(nearer, o, off))
+        best.assign(select(nearer, d, best))
+      }
+      // the print's height across it and its slope outward (CPU twin: `printProfile`)
+      const u = best.div(PRINT_R)
+      const w = max(float(1).sub(u.mul(u)), 0)
+      const lt = u.sub(1).div(PRINT_LIP_W), le = exp(lt.mul(lt).negate())
+      const ph = w.mul(w).negate().add(le.mul(PRINT_LIP)).mul(has)
+      const dh = u.mul(4).mul(w).add(le.mul(PRINT_LIP * -2 / PRINT_LIP_W).mul(lt)).mul(has)
+      const gw = off.mul(dh.div(PRINT_R).div(max(best, 1e-6)))
+      const g = this.camView.mul(vec4(gw, 0)).xyz.toVar()
+      const tilt = prints.mul(PRINT_TILT)
+      const facing = normalize(flat.sub(g.sub(flat.mul(dot(g, flat))).mul(tilt))).toVar()
+      const turn = dot(facing.sub(flat), key)
+      const print = float(1).add(turn.mul(PRINT_LIGHT)).mul(float(1).sub(prints.mul(PRINT_SHUT).mul(max(ph.negate(), 0))))
       const shade = float(0.6).add(float(0.52).mul(dot(facing, key).mul(0.5).add(0.5)))
       // soft shade in the creases, where nearer clay shuts a pixel in (CPU twin: `hollowOf`)
       const hollow = float(0).toVar()
@@ -457,21 +485,6 @@ export class FilterPass {
       const crease = float(1).sub(hollow.div(8).mul(CLAY_HOLLOW))
       const h = normalize(key.add(vec3(0, 0, 1)))
       const shine = sheen.mul(0.22).mul(pow(max(dot(facing, h), 0), 14))
-      // thumbprints, fixed on the clay in the world
-      const world = this.camWorld.mul(vec4(here, 1)).xyz.div(size).toVar()
-      const bp = floor(world).toVar()
-      const best = float(1e9).toVar(), has = float(0).toVar()
-      for (let z = -1; z <= 1; z++) for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) {
-        const cc = bp.add(vec3(x, y, z)).toVar()
-        const j = (salt: number) => cellHash(cc, salt).add(cellHash(cc, frame.mul(3.1).add(salt)).sub(0.5).mul(boil).mul(0.3))
-        const d = length(cc.add(vec3(j(1), j(2), j(3))).sub(world))
-        const nearer = d.lessThan(best)
-        has.assign(select(nearer, select(cellHash(cc, 4).lessThan(PRINT_SHARE), float(1), float(0)), has))
-        best.assign(select(nearer, d, best))
-      }
-      const dent = float(1).sub(smoothstep(0, 0.45, best)).mul(has)
-      const ridge = sin(best.div(0.45).mul(PRINT_RINGS * Math.PI * 2)).mul(dent)
-      const print = float(1).sub(prints.mul(dent.mul(PRINT_DENT).sub(ridge.mul(PRINT_RIDGE))))
       const gray = lumaOf(base)
       const rich = max(mix(vec3(gray), base, 1.12), vec3(0))
       const lit = rich.mul(shade).mul(crease).mul(print).add(shine)

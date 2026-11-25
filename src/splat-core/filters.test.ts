@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  CRT_BACK, THERMAL_STOPS, clayFrame, clayShade, crtAt, crtCurve, dimPlaces, dimsAt, gridAt, heatOf, hollowOf, paletteRamp, printAt, rampAt, scanShade,
+  CRT_BACK, THERMAL_STOPS, clayFrame, clayShade, pressed, printProfile, crtAt, crtCurve, dimPlaces, dimsAt, gridAt, heatOf, hollowOf, paletteRamp, printAt, PRINT_LIP, rampAt, scanShade,
   shadowAt, thermalAt, tileAt, tileCover, toLinear, wobbleAt, type Picture, type ThermalLook,
 } from './filters.ts'
 import { THERMAL_RAMPS, blueprintColors, BLUEPRINT_START, THERMAL_START, thermalLook } from '../splat-engine/styles/filterLooks.ts'
@@ -110,10 +110,19 @@ test('clay is shut in where nearer clay surrounds it, held still between stop-mo
   assert.equal(clayFrame(5, 0), 0)
   const up = clayShade([-0.45, 0.6, 0.66], 0).shade, away = clayShade([0.45, -0.6, -0.66], 0).shade
   assert.ok(up > away)
-  let lo = Infinity, hi = -Infinity
-  for (let i = 0; i < 400; i++) { const v = printAt([i * 0.037, i * 0.011, 0.3], 0, 0.4, 1); lo = Math.min(lo, v); hi = Math.max(hi, v) }
-  assert.ok(lo < 0.9 && hi <= 1.2, `prints dent the clay (${lo.toFixed(2)} to ${hi.toFixed(2)})`)
-  assert.equal(printAt([0.3, 0.3, 0.3], 0, 0.4, 0), 1, 'no prints, no change')
+  const [bottom] = printProfile(0), [lip] = printProfile(1), [, wall] = printProfile(0.5)
+  assert.ok(bottom < -0.99 && lip > 0 && wall > 0, 'a print is a dent with a lip, rising outward')
+  // a dent in clay facing the viewer: its wall toward the light (up and left) faces away from it, the far wall into it
+  const face = [0, 0, 1] as const
+  const near = pressed(face, [-0.8, 0.8, 0], -0.5, 1), far = pressed(face, [0.8, -0.8, 0], -0.5, 1)
+  const lightOf = (p: { n: number[]; light: number }) => clayShade(p.n as [number, number, number], 0).shade * p.light
+  assert.ok(lightOf(near) < lightOf(far) - 0.25, `the near wall is in shade (${lightOf(near).toFixed(2)} against ${lightOf(far).toFixed(2)})`)
+  assert.ok(pressed(face, [0, 0, 0], -1, 1).light < 1, 'the bottom is shut in')
+  const none = pressed(face, [0.8, -0.8, 0], -0.5, 0)
+  assert.deepEqual([none.n, none.light], [[0, 0, 1], 1], 'no prints, no change')
+  let dents = 0
+  for (let i = 0; i < 400; i++) { const p = printAt([(i % 20) * 0.2, Math.floor(i / 20) * 0.2, 0.3], 0, 0.4); if (p.h < -0.3) dents++; if (!(Number.isFinite(p.g[0]) && p.h <= PRINT_LIP)) assert.fail(`print at ${i}`) }
+  assert.ok(dents > 10, `prints are pressed in (${dents})`)
 })
 
 test('a blueprint in a palette takes its darkest color as the paper and its lightest as the ink', () => {
