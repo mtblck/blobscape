@@ -8,7 +8,7 @@ import { POSTS } from './news.ts'
  * previews see every page. In the browser it's still one app: links between
  * these pages swap the page without a reload (useLinkNavigation).
  */
-export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creator' } | { page: 'fourways' } | { page: 'creature' } | { page: 'forest' } | { page: 'pond' } | { page: 'clockwork' } | { page: 'shift' } | { page: 'flow' } | { page: 'brush' } | { page: 'text' } | { page: 'daynight' } | { page: 'bouquet' } | { page: 'islands' } | { page: 'sweater' } | { page: 'jelly' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'api' } | { page: 'contact' } | { page: 'news' } | { page: 'post'; id: string } | { page: 'notfound' }
+export type Route = { page: 'home' } | { page: 'lessons' } | { page: 'lesson'; id: string } | { page: 'sandbox' } | { page: 'creator' } | { page: 'fourways' } | { page: 'creature' } | { page: 'forest' } | { page: 'pond' } | { page: 'clockwork' } | { page: 'shift' } | { page: 'flow' } | { page: 'brush' } | { page: 'text' } | { page: 'daynight' } | { page: 'bouquet' } | { page: 'islands' } | { page: 'sweater' } | { page: 'jelly' } | { page: 'morph' } | { page: 'diorama' } | { page: 'dungeon' } | { page: 'scan' } | { page: 'experiments' } | { page: 'engine' } | { page: 'spec' } | { page: 'api' } | { page: 'contact' } | { page: 'news' } | { page: 'post'; id: string } | { page: 'notfound' }
 
 export const LESSONS = [
   { id: 'one-blob', title: 'One blob', summary: 'Five kinds of number, 14 in all, make one Gaussian. Pull each one and see what it does.' },
@@ -220,6 +220,7 @@ export function parsePath(pathname: string): Route | null {
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'biome-islands') return { page: 'islands' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'ugly-sweater') return { page: 'sweater' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'glass-jellyfish') return { page: 'jelly' }
+  if (m.length === 2 && m[0] === 'experiments' && m[1] === 'style-morph') return { page: 'morph' }
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'diorama') return { page: 'diorama' }
   // Diorama's address while it was Pixel Diorama (Vercel redirects it too)
   if (m.length === 2 && m[0] === 'experiments' && m[1] === 'pixel-diorama') return { page: 'diorama' }
@@ -261,6 +262,7 @@ export function href(r: Route): string {
   if (r.page === 'bouquet') return '/experiments/seasonal-bouquets/'
   if (r.page === 'islands') return '/experiments/biome-islands/'
   if (r.page === 'sweater') return '/experiments/ugly-sweater/'
+  if (r.page === 'morph') return '/experiments/style-morph/'
   if (r.page === 'jelly') return '/experiments/glass-jellyfish/'
   if (r.page === 'diorama') return '/experiments/diorama/'
   if (r.page === 'scan') return '/experiments/scan-studio/'

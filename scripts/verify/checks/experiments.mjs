@@ -1830,4 +1830,32 @@ export default [
       else if (!bad) ok(`layout: all ${PAGES.length} experiments have their tabs beside a preview of the same size (${[...sizes][0]}), which stays in sight on a phone`)
     },
   },
+  {
+    name: 'style-morph',
+    about: 'Style Morph: the next style is drawn under the kept picture, which a wipe then takes away',
+    entries: ['src/blobscape/StyleMorph.tsx'],
+    async run({ fails, ok, open }) {
+      const p = await open('/experiments/style-morph/?offscreen=1&scene=windmill&detail=light&wipe=clock&slow=1&styles=blobs,cel,ascii', { viewport: { width: 1280, height: 900 } })
+      await p.page.waitForFunction(() => window.__morph, null, { timeout: 120000 }).catch(() => {})
+      const got = await p.page.evaluate(async () => {
+        const M = window.__morph
+        if (!M) return null
+        await M.stage.frame(1)
+        const from = M.look
+        M.next()
+        const wait = async (until, ms) => { for (let k = 0; k < ms / 100 && !until(); k++) await new Promise((r) => setTimeout(r, 100)) }
+        await wait(() => window.__morph?.look !== from, 60000)
+        await wait(() => !document.querySelector('[data-testid=morph-wipe]')?.hidden, 20000)
+        const wiping = !document.querySelector('[data-testid=morph-wipe]')?.hidden
+        const s = window.__morph.stage
+        for (let t = 1.1; t < 3; t += 0.25) { await s.frame(t); await new Promise((r) => setTimeout(r, 120)) }
+        await wait(() => !window.__morph.passing(), 5000)
+        return { from, to: window.__morph.look, wiping, done: !window.__morph.passing(), name: document.querySelector('[data-testid=morph-name]')?.textContent }
+      })
+      if (!got) fails.push('style morph: the page never started (no window.__morph)')
+      else if (got.from !== 'blobs' || got.to !== 'cel' || !got.wiping || !got.done || got.name !== 'Cel shading') fails.push(`style morph: ${JSON.stringify(got)}`)
+      else ok(`style morph: blobs gave way to ${got.name.toLowerCase()} under a clock wipe`)
+      await p.ctx.close()
+    },
+  },
 ]
