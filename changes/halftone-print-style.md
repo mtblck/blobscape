@@ -1,0 +1,2 @@
+- Diorama and Scene Creator: a new Halftone print style screen prints the scene in a few see-through inks, each as dots on its own turned screen, with four sets of inks (four color, a bright poster, duotone and newsprint), the dot size, how far the plates sit off register, ink texture, paper and the palette to choose.
+- Engine: `Stage.setHalftone` prints a stage in halftone (`HalftonePass`, with its arithmetic in `splat-core/halftone.ts`).

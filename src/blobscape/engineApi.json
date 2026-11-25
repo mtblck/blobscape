@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, knitted, for 3D glasses, as blocks or glitching, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as a halftone print, knitted, for 3D glasses, as blocks or glitching, and baking a creature into a sprite sheet."
   },
   {
    "id": "styles",
@@ -530,6 +530,15 @@
        "signatures": [
         {
          "code": "setWash(look?: WashLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setHalftone",
+       "doc": "Halftone screen print (splat-core/halftone.ts): the picture printed in the look's few see-through inks, each as\ndots on its own turned screen fixed on the paper, the dots growing and running together where the picture is\ndark in that ink, the plates a little off true and the ink taking unevenly; the subject's sky is printed behind\nit, or the paper left bare. The paper covers the canvas. Every blob is drawn flat in its own color while it is\non, under the stage's own lights. Leave the look out to stop. Kept for the next actor too. Not in pixel mode;\nASCII, cel shading, neon, stained glass and watercolor come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setHalftone(look?: HalftoneLook): void"
         }
        ]
       },
@@ -13259,6 +13268,307 @@
    ]
   },
   {
+   "id": "halftonePass",
+   "title": "Halftone print",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "HalftonePass",
+     "kind": "class",
+     "doc": "Halftone screen print (splat-core/halftone.ts is the CPU twin: change one, change both). The frame is drawn once,\nevery blob flat in its own color under the stage's lights. A small pass then works out every cell of every ink's\nscreen (a texel a cell, one block of rows an ink): the picture read round the cell's middle, over the sky or the\npaper, separated into the inks (`separate`), keeping that ink's share. A second pass prints: each pixel finds its\ncell on each ink's turned screen, cuts that cell's dot to its share (`dotCover`) and lays the inks over the paper\n(`printed`). The print covers the canvas.\n\nThe world should be drawing flat marks (`Stage.setHalftone` sets them).",
+     "ctor": [
+      {
+       "code": "new HalftonePass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, and how many device pixels a CSS pixel is.",
+       "signatures": [
+        {
+         "code": "setLook(look: HalftoneLook, ratio: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Prints the scene in halftone into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "halftone",
+   "title": "Halftone print: the arithmetic",
+   "group": "pixels",
+   "doc": "Halftone screen print (Matt asked for our own, 2026-11-25): the picture printed in a few inks, each laid through\nits own screen of dots. A screen is a grid of cells fixed on the paper (so on the screen), turned to the ink's own\nangle; each cell holds one dot whose area is how much of that ink the picture wants there, read at the cell's\nmiddle, so a light place is small dots and a dark one dots that run together into a field with small holes. Inks\nare see-through and print over one another, so where dots of two inks overlap the paper shows through both. Each\nink's plate can sit a little off the others (misregistration), and the ink takes unevenly. The arithmetic here is\npure; `splat-engine/halftonePass.ts` is its shader twin (change both).",
+   "entries": [
+    {
+     "name": "Rgb01",
+     "kind": "type",
+     "doc": "An sRGB color, 0–1.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "HalftoneInk",
+     "kind": "interface",
+     "doc": "One ink and its screen.",
+     "props": [
+      {
+       "name": "color",
+       "type": "Rgb01",
+       "doc": "The ink's color as printed full on white paper (sRGB 0–1)."
+      },
+      {
+       "name": "angle",
+       "type": "number",
+       "doc": "The screen's angle, in degrees."
+      },
+      {
+       "name": "key",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The key ink (black): it takes over the gray the other inks share, as a printer's black does (one a set, at most)."
+      }
+     ]
+    },
+    {
+     "name": "HalftoneLook",
+     "kind": "interface",
+     "doc": "How a stage prints in halftone (`Stage.setHalftone`).",
+     "props": [
+      {
+       "name": "inks",
+       "type": "readonly HalftoneInk[]",
+       "doc": "The inks, printed in this order; at most `HALFTONE_INKS`."
+      },
+      {
+       "name": "paper",
+       "optional": true,
+       "type": "Rgb01",
+       "doc": "The paper (sRGB 0–1)."
+      },
+      {
+       "name": "cell",
+       "optional": true,
+       "type": "number",
+       "doc": "A cell of the screen, in CSS pixels (7)."
+      },
+      {
+       "name": "shift",
+       "optional": true,
+       "type": "number",
+       "doc": "How far each plate sits off true, in CSS pixels (1)."
+      },
+      {
+       "name": "texture",
+       "optional": true,
+       "type": "number",
+       "doc": "How unevenly the ink takes, 0 to 1 (0.4)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "readonly [Rgb01, Rgb01]",
+       "doc": "The sky printed behind the subject, top and bottom (sRGB 0–1). Left out, the paper is bare there."
+      }
+     ]
+    },
+    {
+     "name": "HALFTONE_INKS",
+     "kind": "const",
+     "doc": "The most inks a print has.",
+     "type": "4"
+    },
+    {
+     "name": "HALFTONE_PAPER",
+     "kind": "const",
+     "doc": "The paper (sRGB 0–1): a bright white with a little warmth.",
+     "type": "Rgb01"
+    },
+    {
+     "name": "SEPARATE_PASSES",
+     "kind": "const",
+     "doc": "How many times the separation goes round the inks.",
+     "type": "8"
+    },
+    {
+     "name": "KEY_TAKES",
+     "kind": "const",
+     "doc": "How much of the gray the colored inks share a key ink (black) takes over (`separate`).",
+     "type": "0.9"
+    },
+    {
+     "name": "KEY_FROM",
+     "kind": "const",
+     "doc": "Black starts only past this much gray, as a printer's skeleton black: small black dots in a light gray read as\ndirt, so the lightest grays stay in the colored inks.",
+     "type": "0.3"
+    },
+    {
+     "name": "SPOT_FIT",
+     "kind": "const",
+     "doc": "The dot's spot function is (cos 2πu + cos 2πv) / 2 over a cell (u, v from -½ to ½ about its middle): round dots\nwhen small, a checkerboard at half, round holes when large. These turn a dot's area into the level the spot\nfunction is cut at, as an odd polynomial in 1 − 2·area (fitted to the spot's own areas, within 0.7%).",
+     "type": "readonly number[]"
+    },
+    {
+     "name": "SHIFT_WAYS",
+     "kind": "const",
+     "doc": "Each plate's direction off true, by its place in the print (radians): spread so no two lie the same way.",
+     "type": "readonly number[]"
+    },
+    {
+     "name": "INK_GRAIN",
+     "kind": "const",
+     "doc": "How wide a patch of unevenly taken ink is, in CSS pixels.",
+     "type": "6"
+    },
+    {
+     "name": "INK_UNEVEN",
+     "kind": "const",
+     "doc": "How much darker or lighter ink takes from place to place at full texture.",
+     "type": "0.35"
+    },
+    {
+     "name": "inkLinear",
+     "kind": "const",
+     "doc": "An ink's color in linear light.",
+     "type": "(c: Rgb01) => [number, number, number]"
+    },
+    {
+     "name": "separate",
+     "kind": "function",
+     "doc": "How much of each ink a color wants (each 0 to 1), for a print on `paper` (both linear). Dots of inks on different\nscreens fall over one another as if at random, so a place with shares a of each ink reflects, on average,\npaper · Π (1 − aᵢ·(1 − inkᵢ)) in each channel. The shares are found ink by ink with the others held, each step a\nGauss–Newton step on the error in log light, again and again. A `key` ink (black) is left out at first; then it\ntakes `KEY_TAKES` of the gray the other inks have in common (the least of their shares) past `KEY_FROM`, as a\nprinter replaces three inks' gray with black, and the others are found again round it. Let in at the start, black took the dark\nchannel of every color and greens came out gray.",
+     "signatures": [
+      {
+       "code": "separate(color: readonly number[], paper: readonly number[], inks: readonly (readonly number[])[], key?: number): number[]"
+      }
+     ]
+    },
+    {
+     "name": "spotLevel",
+     "kind": "function",
+     "doc": "The level the spot function is cut at for a dot of this area (0 to 1): 1 for none, −1 for a full field.",
+     "signatures": [
+      {
+       "code": "spotLevel(area: number): number"
+      }
+     ]
+    },
+    {
+     "name": "spotAt",
+     "kind": "const",
+     "doc": "The spot function at a place in a cell (u, v from -½ to ½ about its middle).",
+     "type": "(u: number, v: number) => number"
+    },
+    {
+     "name": "screenAt",
+     "kind": "function",
+     "doc": "Where a point of the paper (in device pixels) falls on a plate's screen: which cell (counted from the one at the\nscreen's turning point, `about`), the cell's middle on the paper, and the point's place in its cell. `cell` is in\ndevice pixels, `angle` in degrees, `off` where the plate sits off true. Screens turn about the picture's middle.",
+     "signatures": [
+      {
+       "code": "screenAt(x: number, y: number, cell: number, angle: number, off?: readonly [number, number], about?: readonly [number, number]): { at: [number, number]; mid: [number, number]; u: number; v: number }"
+      }
+     ]
+    },
+    {
+     "name": "CELL_TAPS",
+     "kind": "const",
+     "doc": "Where a cell's color is read, round its middle, along the screen's own two ways: shares of a cell (the middle and four more).",
+     "type": "readonly [number, number][]"
+    },
+    {
+     "name": "cellShare",
+     "kind": "function",
+     "doc": "How much of ink `i` a plate's cell holds: the picture read round the cell's middle (`mid`, device pixels; `t` from\n0 at the top to 1 at the bottom, for the sky), over the sky or the paper, separated into the look's inks.",
+     "signatures": [
+      {
+       "code": "cellShare(i: number, mid: readonly [number, number], angle: number, cell: number, height: number, picture: (x: number, y: number) => readonly number[], look: HalftoneLook): number"
+      }
+     ]
+    },
+    {
+     "name": "dotCover",
+     "kind": "function",
+     "doc": "How much of a pixel a dot of `area` covers at (u, v) in its cell, softened over one pixel (`soft`: a device pixel in cell units).",
+     "signatures": [
+      {
+       "code": "dotCover(u: number, v: number, area: number, soft: number): number"
+      }
+     ]
+    },
+    {
+     "name": "plateOff",
+     "kind": "const",
+     "doc": "Where plate `i` sits off true, in device pixels, for a look's `shift` in device pixels.",
+     "type": "(i: number, shift: number) => [number, number]"
+    },
+    {
+     "name": "printed",
+     "kind": "function",
+     "doc": "The paper with inks on it: `cover` is how much of the pixel each ink's dot covers, `thick` how heavily it took there (1 as printed). Linear in, linear out.",
+     "signatures": [
+      {
+       "code": "printed(paper: readonly number[], inks: readonly (readonly number[])[], cover: readonly number[], thick?: readonly number[]): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "inkNoise",
+     "kind": "function",
+     "doc": "A small, smooth noise over the paper (0 to 1), in CSS pixels, for how unevenly ink takes: the shader's twin.",
+     "signatures": [
+      {
+       "code": "inkNoise(x: number, y: number): number"
+      }
+     ]
+    },
+    {
+     "name": "halftoneAt",
+     "kind": "function",
+     "doc": "One device pixel of the print. `picture(x, y)` is the picture there, linear and premultiplied (r, g, b, a), with y\ncounted from the top; `width` and `height` are the picture's, `ratio` device pixels a CSS pixel.",
+     "signatures": [
+      {
+       "code": "halftoneAt(x: number, y: number, picture: (x: number, y: number) => readonly number[], width: number, height: number, look: HalftoneLook, ratio?: number): [number, number, number]"
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "knitPass",
    "title": "Knitting",
    "group": "pixels",
@@ -14027,7 +14337,7 @@
      "name": "Style",
      "kind": "type",
      "doc": "How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks.",
-     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
+     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
     },
     {
      "name": "STYLES",
@@ -14689,6 +14999,12 @@
      "type": "StyleDef<WashChoice>"
     },
     {
+     "name": "HALFTONE_DEF",
+     "kind": "const",
+     "doc": "Halftone screen print's settings.",
+     "type": "StyleDef<HalftoneChoice>"
+    },
+    {
      "name": "KNIT_DEF",
      "kind": "const",
      "doc": "Knitting's settings.",
@@ -14758,7 +15074,7 @@
      "name": "CATALOG",
      "kind": "const",
      "doc": "Every style's settings, by the name they are kept under.",
-     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice>; anaglyph: StyleDef<AnaglyphChoice> }"
+     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice>; anaglyph: StyleDef<AnaglyphChoice>; halftone: StyleDef<HalftoneChoice> }"
     },
     {
      "name": "StyleKey",
@@ -14820,6 +15136,11 @@
        "name": "watercolor",
        "type": "WashChoice",
        "doc": "Watercolor's."
+      },
+      {
+       "name": "halftone",
+       "type": "HalftoneChoice",
+       "doc": "Halftone screen print's."
       },
       {
        "name": "knit",
@@ -15560,6 +15881,102 @@
      "signatures": [
       {
        "code": "washLook(c: WashChoice, sky?: readonly [readonly number[], readonly number[]]): WashLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-halftoneLooks",
+   "title": "Halftone print, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "HALFTONE",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"halftone\"; label: string; note: string }"
+    },
+    {
+     "name": "HALFTONE_SETS",
+     "kind": "const",
+     "doc": "The sets of inks a print can be made in. Black takes the grays first where a set has it.",
+     "type": "{ id: string; label: string; about: string; inks: HalftoneInk[] }[]"
+    },
+    {
+     "name": "HALFTONE_PAPERS",
+     "kind": "const",
+     "doc": "The papers a print can be pulled on (sRGB 0–1). All light: ink only darkens what is under it.",
+     "type": "{ id: string; label: string; paper: Rgb01 }[]"
+    },
+    {
+     "name": "HalftoneChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "inks",
+       "type": "string",
+       "doc": "The inks, an id of `HALFTONE_SETS`."
+      },
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A cell of the screen, in CSS pixels."
+      },
+      {
+       "name": "shift",
+       "type": "number",
+       "doc": "How far each plate sits off true, in CSS pixels."
+      },
+      {
+       "name": "texture",
+       "type": "number",
+       "doc": "How unevenly the ink takes, 0 to 1."
+      },
+      {
+       "name": "paper",
+       "type": "string",
+       "doc": "The paper, an id of `HALFTONE_PAPERS`."
+      },
+      {
+       "name": "sky",
+       "type": "boolean",
+       "doc": "Whether the subject's sky is printed behind it, or the paper left bare there."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is printed: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "HALFTONE_START",
+     "kind": "const",
+     "doc": "Where halftone's settings start.",
+     "type": "HalftoneChoice"
+    },
+    {
+     "name": "halftoneGround",
+     "kind": "const",
+     "doc": "The color to put behind the canvas before the print is drawn.",
+     "type": "(c: HalftoneChoice) => string"
+    },
+    {
+     "name": "HALFTONE_SKY",
+     "kind": "const",
+     "doc": "The sky printed behind a subject with no sky of its own, top and bottom (sRGB 0–1): a pale blue going warm toward the ground.",
+     "type": "readonly [Rgb01, Rgb01]"
+    },
+    {
+     "name": "halftoneLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), or `HALFTONE_SKY` where it has none.",
+     "signatures": [
+      {
+       "code": "halftoneLook(c: HalftoneChoice, sky?: readonly [readonly number[], readonly number[]]): HalftoneLook"
       }
      ]
     }

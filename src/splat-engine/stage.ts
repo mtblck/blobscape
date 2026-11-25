@@ -26,6 +26,8 @@ import { NEON_EMIT, type NeonLook } from '../splat-core/neon.ts'
 import { GlassPass } from './glassPass.ts'
 import type { GlassLook } from '../splat-core/glass.ts'
 import { WashPass } from './washPass.ts'
+import { HalftonePass } from './halftonePass.ts'
+import type { HalftoneLook } from '../splat-core/halftone.ts'
 import { KnitPass } from './knitPass.ts'
 import { AnaglyphPass } from './anaglyphPass.ts'
 import type { AnaglyphLook } from '../splat-core/anaglyph.ts'
@@ -708,6 +710,24 @@ export class Stage {
     this.invalidate()
   }
 
+  private halftone?: HalftonePass
+  private halftoneLook?: HalftoneLook
+  /**
+   * Halftone screen print (splat-core/halftone.ts): the picture printed in the look's few see-through inks, each as
+   * dots on its own turned screen fixed on the paper, the dots growing and running together where the picture is
+   * dark in that ink, the plates a little off true and the ink taking unevenly; the subject's sky is printed behind
+   * it, or the paper left bare. The paper covers the canvas. Every blob is drawn flat in its own color while it is
+   * on, under the stage's own lights. Leave the look out to stop. Kept for the next actor too. Not in pixel mode;
+   * ASCII, cel shading, neon, stained glass and watercolor come first if set, and outlines and the lens wait.
+   */
+  setHalftone(look?: HalftoneLook) {
+    this.halftoneLook = look
+    if (!look) { this.halftone?.dispose(); this.halftone = undefined }
+    else this.halftone ??= new HalftonePass()
+    this.dress()
+    this.invalidate()
+  }
+
   private knit?: KnitPass
   private knitLook?: KnitLook
   /**
@@ -766,7 +786,7 @@ export class Stage {
     if (!world) return
     const cel = this.opts.lights ? this.celLook : undefined
     world.cel = !!cel
-    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook || this.knitLook ? { kind: 'flat' } : this.marks)
+    world.setMarks(cel || this.neonLook || this.glassLook || this.washLook || this.halftoneLook || this.knitLook ? { kind: 'flat' } : this.marks)
     this.soft?.setMarks(this.marks)
     if (!this.opts.lights) return
     this.light()
@@ -782,7 +802,7 @@ export class Stage {
     if (!world || !this.opts.lights) return
     const cel = this.celLook
     world.glowGain = this.emits
-    if (!cel && (this.neonLook || this.glassLook || (this.knitLook && !this.washLook))) world.setLights([], 1)
+    if (!cel && (this.neonLook || this.glassLook || (this.knitLook && !this.washLook && !this.halftoneLook))) world.setLights([], 1)
     else if (cel) world.setLights([{ direction: [...(cel.from ?? CEL_FROM)] as [number, number, number], color: [1, 1, 1] }, ...this.lit.lights.slice(0, MAX_LIGHTS - 1).map((l) => ({ ...l, shadow: false }))], 1)
     else world.setLights(this.lit.lights, this.lit.ambient)
   }
@@ -976,6 +996,13 @@ export class Stage {
       this.wash.setSize(x, y)
       this.wash.setLook(this.washLook, this.renderer.getPixelRatio())
       this.wash.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.halftone && this.halftoneLook) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.halftone.setLook(this.halftoneLook, this.renderer.getPixelRatio())
+      this.halftone.setSize(x, y)
+      this.halftone.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel && this.knit && this.knitLook) {
@@ -1284,6 +1311,7 @@ export class Stage {
     this.wash?.dispose()
     this.knit?.dispose()
     this.anaglyph?.dispose()
+    this.halftone?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
     this.cel?.dispose()

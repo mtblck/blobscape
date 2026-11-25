@@ -915,9 +915,9 @@ export default [
           else ok(`brush and ink on ${backend}: cel shading draws the fox in flat tones (${(c.flat * 100).toFixed(0)}% of its pixels match their neighbor, ${(c.flatBlobs * 100).toFixed(0)}% as blobs), a third tone changes ${(c.three * 100).toFixed(2)}% of the view, and a frame drawn twice is the same`)
           if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, 'blobscape-brush-cel.png') })
         }
-        // neon, stained glass and watercolor: each its own picture, the same when drawn twice; neon's light moves, and the other two cover the view
+        // neon, stained glass, watercolor and halftone: each its own picture, the same when drawn twice; neon's light moves, and the other two cover the view
         const styles = {}
-        for (const [name, look, plain] of [['Neon', 'neon', true], ['Stained glass', 'glass', true], ['Watercolor', 'watercolor', false]]) {
+        for (const [name, look, plain] of [['Neon', 'neon', true], ['Stained glass', 'glass', true], ['Watercolor', 'watercolor', false], ['Halftone print', 'halftone', false]]) {
           await pick(k.page, name, look)
           const up = await k.page.waitForFunction(([look, plain]) => window.__brush?.look === look && window.__brush.plain === plain, [look, plain], { timeout: 120000 }).then(() => true, () => false)
           if (!up) { fails.push(`brush and ink on ${backend}: the fox was never cut for ${name.toLowerCase()}`); continue }
@@ -964,7 +964,7 @@ export default [
         const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90), n = differ(pictures.webgpu.ink, pictures.webgl.ink, 90)
         if (!(g < 0.02 && h < 0.02 && n < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash with its outlines`)
         else ok(`brush and ink: WebGPU and WebGL draw the same marks and outlines (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash)`)
-        for (const look of ['neon', 'glass', 'watercolor']) {
+        for (const look of ['neon', 'glass', 'watercolor', 'halftone']) {
           const x = pictures.webgpu.styles[look], y = pictures.webgl.styles[look]
           if (!x || !y) continue
           const d = differ(x, y, 90)

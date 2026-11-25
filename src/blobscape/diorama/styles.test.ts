@@ -8,6 +8,7 @@ import { TIMES, paletteAt, timeAsked, timeOf, under } from '../timeOfDay.ts'
 import { WASH, WASH_PAPERS, WASH_SKY_COLORS as WASH_SKY, WASH_START, washLook } from '../washLooks.ts'
 import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
+import { HALFTONE } from '../halftoneLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
 import { ANAGLYPH, ANAGLYPH_START, anaglyphLook } from '../anaglyphLooks.ts'
 import { ANAGLYPH_BACK } from '../../splat-core/anaglyph.ts'
@@ -18,8 +19,8 @@ test('blocks come first and are the default, then pixel art and every look Brush
   assert.equal(STYLES[1].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH, ANAGLYPH]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 9)
+  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH, ANAGLYPH, HALFTONE]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
+  assert.equal(ids.length, LOOKS.length + 10)
   assert.equal(STYLES[2].id, 'glitch')
 })
 
