@@ -67,6 +67,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   shift: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner and travels to it.',
   jelly: 'A see-through jellyfish of Gaussian splats drifting in space: you see the stars through its bell, and light pulses run down its tentacles.',
   globe: "Shake a snow globe holding a little scene of Gaussian splats: the snow swirls up in water you can't see and settles on roofs, hats and the ground.",
+  morph: 'One little Gaussian splat scene going from style to style, paint, cel shading, characters, cubes, neon, each change wiped across the picture.',
   timelapse: 'A year in thirty seconds: one Gaussian splat scene through a day in each season, under the real sun, rain, snow that piles up and melts.',
   sweater: 'A Christmas tree, an ornament and a pile of presents knitted into an ugly Christmas sweater, stitch by stitch, from Gaussian splats you can turn.',
   islands: 'A floating island grown from a biome recipe and a number, out of Gaussian splats: hills, a path, trees and stones, each made of materials from one library.',
@@ -118,6 +119,8 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
       return { path, title: `Glass Jellyfish · ${SITE.name}`, description: 'A jellyfish made of Gaussian splats, nearly all of them almost clear, drifting through space so you can see the stars through its bell. Each beat of the bell sends light down its canals and along its tentacles, drawn as blobs that give their own light and glow through the lens. An experiment in what opacity alone can draw.' }
     case 'globe':
       return { path, title: `Snow Globe · ${SITE.name}`, description: "A little scene made of Gaussian splats, sealed under a glass dome full of water and snow. Shake it, by tapping it or shaking your phone, and the snow swirls up and drifts back down over a quarter of a minute, settling on whatever is inside: the snowman's hat, the cabin's roof, the presents. Pick the scene, the time of day and how much snow." }
+    case 'morph':
+      return { path, title: `Style Morph · ${SITE.name}`, description: 'One little scene made of Gaussian splats going from style to style: soft blobs, gouache, cel shading, characters, cubes, neon, halftone dots and stained glass, each change wiped across the picture by an iris, a clock hand, blinds or a dither. The blobs never change, only how they are drawn. Pick the styles, the wipe and how long each holds.' }
     case 'timelapse':
       return { path, title: `Time-lapse · ${SITE.name}`, description: 'One scene made of Gaussian splats through a whole year in about thirty seconds: a day in each of the four seasons, from a spring dawn after rain through a long summer afternoon, a stormy fall and a winter day of snow that piles up and lies into the night, then melts as spring comes back. The sun stands where it would on each season\'s day, the weather eases from one spell to the next, and lamps come on at dusk. Drag the year to any moment.' }
     case 'sweater':
