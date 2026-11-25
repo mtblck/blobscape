@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Blobs } from '../splat-core/blobs.ts'
-import { BLOCK_FROM, BLOCK_SHADE, FACE_VOTE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, faceTone, faceSeesLamp, flowMesh, flowStep, lampSight, lampsOf, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
+import { BLOCK_FROM, BLOCK_SHADE, FACE_VOTE, FLOW_DROP, FLOW_MOST, FLOW_STEPS, FLOW_SWELL, SPECK_SIZE, blockHash, buildBlocks, faceLight, holed, keptBlocks, faceTone, faceSeesLamp, flowMesh, flowStep, lampSight, lampsOf, planFlow, shapeFlow, type BlockSource } from './blocks.ts'
 import { emptySkin } from './rig.ts'
 
 type Rgb = [number, number, number]
@@ -214,6 +214,30 @@ test('a source cut on a grid of its own makes cubes that size', () => {
   assert.deepEqual(b.pieces.map((p) => p.blocks), [1, 2])
   const xs = Array.from({ length: b.pieces[1].positions.length / 3 }, (_, i) => b.pieces[1].positions[i * 3])
   assert.ok(Math.abs(Math.min(...xs) + 0.025) < 1e-6 && Math.abs(Math.max(...xs) - 0.075) < 1e-6)
+})
+
+test('a hole leaves out every face of the cubes standing in it, and only those', () => {
+  const row = source([0, 1, 2, 3, 4].map((x) => blob(x * 0.1, 0, 0)))
+  const piece = buildBlocks([row], plain).pieces[0]
+  assert.equal(holed(piece), piece.indices)
+  // the middle cube's two faces left open (top, bottom, front, back) go, the cubes either side keep theirs
+  const cut = holed(piece, { min: [0.15, -1], max: [0.25, 1] })
+  assert.equal(cut.length, piece.indices.length - 4 * 6)
+  for (let f = 0; f < piece.indices.length / 6; f++) {
+    const inside = piece.faceCells[f * 4] === 2, kept = cut.some((_, t) => t % 6 === 0 && cut[t] === piece.indices[f * 6])
+    if (inside === kept) assert.fail(`face ${f} of the cube at ${piece.faceCells[f * 4]}`)
+  }
+  assert.equal(holed(piece, { min: [-1, -1], max: [1, 1] }).length, 0)
+})
+
+test('cubes kept with their blobs are made once, and again only for another look or grid', () => {
+  const ground = { ...source([blob(0, 0, 0), blob(0.1, 0, 0)]), keepCubes: true }
+  const first = keptBlocks(ground, plain)
+  assert.equal(keptBlocks({ ...ground, hole: { min: [0, 0], max: [0, 0] } }, { ...plain, ambient: [0.2, 0.2, 0.4] }), first, 'a hole or a night light makes no new cubes')
+  assert.notEqual(keptBlocks(ground, { ...plain, cell: 0.2 }), first)
+  assert.notEqual(keptBlocks({ ...ground, blockCell: 0.05 }, plain), first)
+  assert.notEqual(keptBlocks({ ...ground, keepCubes: false }, plain), first, 'a source that does not say so is made each time')
+  assert.deepEqual(first.pieces.map((p) => p.blocks), buildBlocks([ground], plain).pieces.map((p) => p.blocks))
 })
 
 test('a wide disc, as a scene cut broadly out of focus has, fills the cells it covers along its own plane', () => {

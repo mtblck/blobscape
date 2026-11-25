@@ -41,7 +41,8 @@ import { SplatMirror } from './mirror.ts'
 import type { MirrorImage, MirrorPlane } from './reflect.ts'
 import type { OpticsLook } from '../splat-core/optics.ts'
 import { BlockView } from './blockView.ts'
-import type { BlockLook } from './blocks.ts'
+import type { BlockHole, BlockLook } from './blocks.ts'
+import type { FarRule } from './lod.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 
 /** How many times a second a stage draws its mirror's picture again, at most (`Stage.setMirror`). */
@@ -71,6 +72,10 @@ export interface Actor {
   lies?: boolean
   /** The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`. */
   blockCell?: number
+  /** While the stage draws blocks, the square (x and z, rest units) whose cubes are not drawn, where a finer cut is laid in (blocks.ts `BlockSource.hole`). */
+  hole?: BlockHole
+  /** Its blobs never change in place, so while the stage draws blocks its cubes are made once and kept (blocks.ts `BlockSource.keepCubes`). */
+  keepCubes?: boolean
 }
 
 /** What the view shows: the blobs, the bones that move them, or both (bones on top). */
@@ -346,6 +351,7 @@ export class Stage {
     this.dress()
     this.world.cleanCuts = this.clean
     this.world.exactShapes = this.exact
+    this.world.farDetail = this.far
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
     if (this.painter) this.paintOver()
@@ -454,6 +460,18 @@ export class Stage {
 
   /** Which depth sort the world uses: the counting sort, or the exact radix sort (slower; ties always in one order). */
   get sortKind() { return this.sort }
+
+  private far: FarRule | false = false
+  /**
+   * Level of detail by distance (lod.ts `FarRule`), kept for every world from now on: past `from` fewer blobs are drawn
+   * the further off they are, each grown to cover for the rest, so a world as big as an island draws far ground with
+   * fewer, bigger blobs. Leave it out for every blob. The soft actors drawn among blocks keep every blob.
+   */
+  setFarDetail(rule?: FarRule) {
+    this.far = rule ?? false
+    if (this.world) this.world.farDetail = this.far
+    this.invalidate()
+  }
   /**
    * Changes how blobs are sorted by depth: 'bins' is quick, 'radix' settles every tie the same way each frame, which
    * pixel art with hard edges wants.

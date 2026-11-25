@@ -23,7 +23,7 @@ import { RadixSort } from './radix.ts'
 /** Either depth sort: the counting sort over bins, or the full radix sort. */
 type Sorter = DepthSort | RadixSort
 import { DISSOLVE_ASIDE, DISSOLVE_SOFT, DISSOLVE_TURN, DISSOLVE_WAY, dissolved } from './dissolve.ts'
-import { detailFor, lodRank, screenRadius, type DetailRule } from './lod.ts'
+import { FAR_BAND, FAR_SPREAD, detailFor, lodRank, screenRadius, type DetailRule, type FarRule } from './lod.ts'
 import { CLEAN_MARGIN, MAX_EDITS, blobReach, editAt, type ShapeEdit } from './edit.ts'
 import { applyMorphs, shares, type Morph } from './morph.ts'
 import { FLAT_FULL, FLAT_NONE, LAMP_MOST } from './light.ts'
@@ -414,7 +414,7 @@ export class SplatWorld extends Mesh {
       this.morph = { ...m, node: makeMorph(buf, m), deform: { quat: makeDeform(buf, 'quat', m), linear: makeDeform(buf, 'linear', m) }, weights: actors.map((a) => new Float32Array(a.morphs?.length ?? 0)), firstTarget: m.firstTarget }
       buf.attrs.push(m.dataAttr, m.centerAttr, m.cholAAttr, m.cholBAttr)
     }
-    this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)), clip: uniform(new Vector4(0, 0, 0, 1)), cull: uniform(1) }
+    this.cam = { view: uniform(new Matrix4()), proj: uniform(new Matrix4()), viewport: uniform(new Vector2(1, 1)), depthRange: uniform(new Vector2(0, 1)), clip: uniform(new Vector4(0, 0, 0, 1)), cull: uniform(1), far: uniform(new Vector2(0, 1)) }
     this.fog = { color: uniform(new Vector3(0, 0, 0)), range: uniform(new Vector2(0, 0)) }
     this.projectNode = makeProject(buf, sort, this.cam, bins)
     const sh = actors.some((a) => a.blobs.shDegree > 0)
@@ -704,6 +704,21 @@ export class SplatWorld extends Mesh {
    * On by default; for comparing. The radix sort (`sort: 'radix'`) always sorts and draws every blob.
    */
   get cull() { return this.cam.cull.value === 1 }
+
+  /**
+   * Level of detail for blobs too small to see, blob by blob (lod.ts `FarRule`): where blobs would come under about
+   * `pixels` on screen, fewer are drawn the smaller they get, each grown to cover for the rest, so a world as big as
+   * an island draws its far ground with fewer, bigger blobs. On both backends, worked out where blobs are projected,
+   * so it follows the camera with no deform; on WebGPU a blob left out is left out of the sort and the draw, on WebGL
+   * it is drawn with no size. Off (false) unless asked for. Exact shapes and clean cuts read a blob's own covariance
+   * and do not see it grow.
+   */
+  get farDetail(): FarRule | false { return this.farRule }
+  set farDetail(rule: FarRule | false) {
+    this.farRule = rule
+    this.lastSortKey = ''
+  }
+  private farRule: FarRule | false = false
   set cull(on: boolean) {
     this.cam.cull.value = on ? 1 : 0
     // the next frame sorts again
@@ -741,7 +756,7 @@ export class SplatWorld extends Mesh {
       // the WebGL vertex shader reads the grid of shadows as a texture, like the other buffers
       if (this.lighting) (this.lighting.grid as { setPBO: (b: boolean) => void }).setPBO(true)
       if (this.sh) (this.sh.data as { setPBO: (b: boolean) => void }).setPBO(true)
-      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, { mode: this.flat, base: this.depthBase, slope: this.depthSlope }, this.cam.clip, this.lighting, this.sh, this.clean || this.exactBuilt ? this.exact : undefined) as never
+      material.vertexNode = makeVertexWebGL(this.buf, this.sort, this.mode, this.fog, { mode: this.flat, base: this.depthBase, slope: this.depthSlope }, this.cam.clip, this.cam.far, this.lighting, this.sh, this.clean || this.exactBuilt ? this.exact : undefined) as never
     } else {
       material.vertexNode = makeVertexWebGPU(this.buf, this.sort, this.fog, { mode: this.flat, base: this.depthBase, slope: this.depthSlope }, this.lighting, this.clean || this.exactBuilt ? this.exact : undefined) as never
     }
@@ -810,10 +825,13 @@ export class SplatWorld extends Mesh {
     this.cam.proj.value.copy(camera.projectionMatrix)
     this.cam.viewport.value.copy(this.size)
     this.cam.depthRange.value.set(near, far)
+    // how small on screen blobs start to thin out (0 for every blob)
+    if (this.farRule) this.cam.far.value.set(Math.max(this.farRule.pixels, 1e-3), Math.min(1, Math.max(0.001, this.farRule.least)))
+    else this.cam.far.value.set(0, 1)
     if (this.sh) this.sh.eye.value.setFromMatrixPosition(camera.matrixWorld)
     if (this.lighting) this.lighting.eye.value.setFromMatrixPosition(camera.matrixWorld)
     const k = this.cam.clip.value
-    return `${e.join(',')}|${camera.projectionMatrix.elements.join(',')}|${this.size.x}x${this.size.y}|${k.x},${k.y},${k.z},${k.w}`
+    return `${e.join(',')}|${camera.projectionMatrix.elements.join(',')}|${this.size.x}x${this.size.y}|${k.x},${k.y},${k.z},${k.w}|${this.cam.far.value.x},${this.cam.far.value.y}`
   }
 
   private prepare(renderer: Renderer, camera: Camera) {
@@ -1180,7 +1198,7 @@ export class SplatWorld extends Mesh {
 
 interface CameraUniforms {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  view: any; proj: any; viewport: any; depthRange: any; clip: any; cull: any
+  view: any; proj: any; viewport: any; depthRange: any; clip: any; cull: any; far: any
 }
 
 /** Buffers waiting to go up whole this frame: a stretch marked after that (`SplatWorld.reshape`) must not narrow what is sent. */
@@ -1663,9 +1681,10 @@ function makeDeform(buf: ReturnType<typeof makeBuffers>, mode: SkinMode, M?: Mor
  * two axes in NDC (already scaled by their standard deviations), a factor for
  * the opacity (0 when the blob is off screen or behind the camera) and the
  * blob's distance in front of the camera. `clip` is a plane (normal, then
- * offset): a blob whose center is behind it gets opacity 0.
+ * offset): a blob whose center is behind it gets opacity 0. `far` is the level of detail for small blobs (`FarRule`:
+ * pixels, least; pixels 0 is off), which thins blob `idx` out by its size on screen and grows it (`farSize` in lod.ts).
  */
-function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N, clip: N) {
+function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N, clip: N, far: N, idx: N) {
   const viewCenter4 = view.mul(vec4(center, 1)).toVar()
   const viewCenter = viewCenter4.xyz.toVar()
   const centerClip = proj.mul(viewCenter4).toVar()
@@ -1694,6 +1713,14 @@ function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N
   const aBase = j00.mul(j00).mul(c00).add(j00.mul(j02).mul(c02).mul(2)).add(j02.mul(j02).mul(c22)).toVar()
   const b = j00.mul(j11).mul(c01).add(j00.mul(j12).mul(c02)).add(j02.mul(j11).mul(c12)).add(j02.mul(j12).mul(c22)).toVar()
   const cBase = j11.mul(j11).mul(c11).add(j11.mul(j12).mul(c12).mul(2)).add(j12.mul(j12).mul(c22)).toVar()
+  // level of detail for small blobs: by its largest standard deviation on screen squared (pixels²), left out (0) or
+  // grown to cover for those that are (`farSize`, the CPU twin). Everything on screen scales with the covariance.
+  If(far.x.greaterThan(0), () => {
+    const px2 = aBase.add(cBase).mul(0.5).add(sqrt(aBase.sub(cBase).mul(0.5).pow2().add(b.mul(b))))
+    const grow = farSizeNode(lodRankNode(idx), px2, far).toVar()
+    aBase.mulAssign(grow); b.mulAssign(grow); cBase.mulAssign(grow)
+    c00.mulAssign(grow); c11.mulAssign(grow); c22.mulAssign(grow); c02.mulAssign(grow); c12.mulAssign(grow)
+  })
   const a = aBase.add(KERNEL_2D).toVar()
   const c = cBase.add(KERNEL_2D).toVar()
   const detBase = aBase.mul(cBase).sub(b.mul(b)).toVar()
@@ -1734,12 +1761,20 @@ function projectSplat(center: N, covA: N, covB: N, view: N, proj: N, viewport: N
   return { ndc, axes: vec4(ax1, ax2), tilt, alphaScale, depth: viewCenter.z.negate() }
 }
 
+/** `farSize` (lod.ts) on the GPU: what a blob's covariance is multiplied by for its rank, `px2` its largest standard deviation on screen squared; `far` is (pixels, least). */
+function farSizeNode(rank: N, px2: N, far: N) {
+  const keep = min(float(1), max(far.y, px2.div(far.x.mul(far.x)))).toVar()
+  const s = rank.sub(float(1).sub(keep)).div(FAR_BAND).add(1).clamp(0, 1)
+  const spread = float(1).add(float(FAR_SPREAD - 1).mul(float(1).sub(keep)))
+  return select(keep.greaterThanEqual(1), float(1), s.mul(spread).div(keep.add(min(float(FAR_BAND), float(1).sub(keep)).mul(0.5))))
+}
+
 /** WebGPU: project every blob once (not once per corner), and write its sort key. */
 function makeProject(buf: ReturnType<typeof makeBuffers>, sort: Sorter, cam: CameraUniforms, bins: number) {
   const bins1 = bins - 1
   return Fn(() => {
     const i = instanceIndex
-    const p = projectSplat(buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport, cam.clip)
+    const p = projectSplat(buf.worldCenter.element(i).xyz, buf.covA.element(i), buf.covB.element(i), cam.view, cam.proj, cam.viewport, cam.clip, cam.far, i)
     buf.splatAW.element(i).assign(vec4(p.ndc, p.alphaScale))
     buf.splatBW.element(i).assign(p.axes)
     buf.splatCW.element(i).assign(vec4(p.tilt, 0))
@@ -2318,11 +2353,11 @@ function makeVertexWebGPU(buf: ReturnType<typeof makeBuffers>, sort: Sorter, fog
 }
 
 /** WebGL has no compute: each corner moves its blob through the bones and projects it, like a skinned mesh. */
-function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode: SkinMode, fog: Fog, flat: Flat, clip: N, L?: Lighting, S?: ViewSH, exact?: N) {
+function makeVertexWebGL(buf: ReturnType<typeof makeBuffers>, sort: Sorter, mode: SkinMode, fog: Fog, flat: Flat, clip: N, far: N, L?: Lighting, S?: ViewSH, exact?: N) {
   return Fn(() => {
     const idx = sort.orderRead.element(instanceIndex).toVar()
     const d = deformBlob(buf, idx, mode)
-    const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw, clip)
+    const p = projectSplat(d.world, d.covA, d.covB, cameraViewMatrix, cameraProjectionMatrix, cameraViewport.zw, clip, far, idx)
     const color = unpackUnorm4x8(buf.color.element(idx)).toVar()
     const own = S ? viewed(color.rgb, idx, d.world, buf, S) : color.rgb
     let rgb = own

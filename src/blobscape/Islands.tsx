@@ -5,6 +5,8 @@ import { pixelLookOf, pixelStart } from './styleSettings.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
 import { BLOCKS_DEF } from './styles/catalog.ts'
 import type { Built } from '../splat-engine/body.ts'
+import type { BlockHole } from '../splat-engine/blocks.ts'
+import { FAR } from '../splat-engine/lod.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
 import { LoadingMark } from '../shared/BlobLoader.tsx'
 import { Button, Chip, Field, Slider, Toggle } from '../shared/ui.tsx'
@@ -31,7 +33,7 @@ import { href } from './routes.ts'
 import { Stick } from './Stick.tsx'
 import { steer, type Input } from './pond/wade.ts'
 import { SCALE, keepAbove, type IslandWalk } from './islands/walk.ts'
-import { PATCH_LIFT, inHole, patchFor, patchOf, type Patch } from './islands/patch.ts'
+import { PATCH_LIFT, blockBase, inHole, patchFor, patchHole, patchOf, type Patch } from './islands/patch.ts'
 import { colorsOf } from './creator/cut.ts'
 import { joinPalettes } from '../splat-engine/project.ts'
 
@@ -46,8 +48,8 @@ const BEHIND = { distance: 1.8, elevation: 20 }
 /** How fast the view catches up with the elf, a second. */
 const FOLLOW = 5
 const DEG = 180 / Math.PI
-/** The smallest block size on the islands: the shared style's 1×, but 2× on a phone, which can't hold a whole island at 1× (Matt, 2026-11-25). */
-const islandBlockLeast = (coarse: boolean) => coarse ? 2 : BLOCK_START.size
+/** The block size the islands start at: the shared style's 1×, but 2× on a phone (Matt, 2026-11-25). */
+const islandBlockStart = (coarse: boolean) => coarse ? 2 : BLOCK_START.size
 /** Shift held, or the stick pushed this far, walks rather than runs: a share of a run's speed. */
 const WALKING = 0.38
 
@@ -89,9 +91,9 @@ export function Islands() {
   // how the island is drawn: built from blocks (Matt, 2026-11-20: the style to drive these islands), as pixel art, or as the blobs themselves
   const [style, setStyle] = useState<'blocks' | 'pixel' | 'blobs'>(() => { const s = params().get('style'); return s === 'pixel' || s === 'blobs' ? s : 'blocks' })
   const pixels = style === 'pixel', blocky = style === 'blocks'
-  // 2× at the smallest here: a whole island at 1× is some 800,000 cubes, which hung loading on Matt's phone (he chose this, 2026-11-21)
-  const blockLeast = islandBlockLeast(coarse)
-  const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= blockLeast && v <= BLOCK_SIZES.max ? v : blockLeast })
+  // 2× at first on a phone; 1× there is streamed, the patch round the elf at 1× and the rest at 2× (`blockBase`)
+  const blockStart = islandBlockStart(coarse)
+  const [blockSize, setBlockSize] = useState(() => { const v = Math.round(Number(params().get('block'))); return v >= BLOCK_SIZES.min && v <= BLOCK_SIZES.max ? v : blockStart })
   const [orbit, setOrbit] = useState<Orbit>({ target: [0, 0, 0], distance: 12.5, azimuth: 24, elevation: 20 })
   const [walking, setWalking] = useState(() => params().get('walk') === '1')
   const [count, setCount] = useState(() => (params().get('islands') === String(WORLD_ISLANDS) ? WORLD_ISLANDS : 1))
@@ -132,7 +134,7 @@ export function Islands() {
   // island is some 850,000 blobs and close to a minute's cut, and the whole world at it never arrived on a phone
   // in Blocks the block size alone says how fine the island is cut (Matt, 2026-11-21: Detail changed nothing there)
   const cutAt = blocky ? DETAIL[0].spacing * blockSize : DETAIL.find((d) => d.id === detail)!.spacing
-  const baseAt = DETAIL[0].spacing * (blocky ? blockSize : 1)
+  const baseAt = DETAIL[0].spacing * (blocky ? blockBase(blockSize, coarse) : 1)
   const [made, setMade] = useState<{ built: Built; pieces: Built[]; of: typeof scene; scenes: typeof scenes; world: typeof world; plain: boolean; spacing: number }>()
   const ready = made?.of === scene && made.plain === blocky && made.spacing === baseAt ? made : undefined
   // a worker an island (each takes seconds), the bridges with the first; kept between cuts while nothing is stopped
@@ -202,7 +204,8 @@ export function Islands() {
   // what is drawn: every island at Chunky (2× in blocks at the least), the one underfoot with a hole where its patch is,
   // and the patch, cut finer, in the hole; blocks a cut's own cells across
   const fine = ready && finer?.of === ready && finer.spacing === cutAt ? finer : undefined
-  const pieces = useMemo(() => {
+  // the island's blobs in the hole are made clear (for the grass, and for the styles drawn as blobs)
+  const holed = useMemo(() => {
     if (!ready) return []
     return ready.pieces.map((p, j): Built => {
       if (!fine || j !== fine.index) return p
@@ -211,7 +214,13 @@ export function Islands() {
       return { ...p, blobs }
     })
   }, [ready, fine])
-  const patchPiece = useMemo(() => (fine ? { ...fine.piece, blockCell: blocky ? fine.spacing : undefined } : undefined), [fine, blocky])
+  // drawn as blocks, an island's cubes are made once and kept (`keepCubes`) and the hole only leaves some of them out,
+  // so moving the patch makes the patch's cubes alone, not the whole island's again (over a second on a phone)
+  const pieces = useMemo((): (Built & { hole?: BlockHole; keepCubes?: boolean })[] => {
+    if (!blocky || !ready) return holed
+    return ready.pieces.map((p, j) => ({ ...p, keepCubes: true, hole: fine && j === fine.index ? patchHole(fine.patch, ready.spacing) : undefined }))
+  }, [blocky, ready, fine, holed])
+  const patchPiece = useMemo(() => (fine ? { ...fine.piece, blockCell: blocky ? fine.spacing : undefined, keepCubes: blocky } : undefined), [fine, blocky])
   const finerWaits = fineWanted && !(fine && fine.index === Math.min(near, ready!.world.islands.length - 1) && fine.patch.at.join() === focus.join())
 
   // the grass on each island's turf, grown from its cut: thick on the island underfoot, thinner on the others
@@ -219,13 +228,13 @@ export function Islands() {
     if (!ready || !blocky || !grass) return []
     const unit = (h: string) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)
     return ready.world.islands.map((isl, j) => {
-      const piece = pieces[j], b = biomeOf(isl.biome), ramp = material(b.ground.top).ramp.map(unit)
+      const piece = holed[j], b = biomeOf(isl.biome), ramp = material(b.ground.top).ramp.map(unit)
       const flowers = { kinds: b.wildflowers.map((id) => material(id).ramp.map(unit)), bunches: (coarse ? 220 : 340) * (j ? 0.4 : 1) }
       const grow = (from: Built & { blockCell?: number }, share: number) => ({ island: j, actor: grassActor(growGrass({ blobs: from.blobs, joints: from.skin.joints }, { cell: from.blockCell ?? ready.spacing, ramp, blades: (coarse ? 24000 : 40000) * share, seed: isl.seed, flowers: { ...flowers, bunches: flowers.bunches * share } })) })
       // the finer patch grows its own, as thick for its ground as the island's
       return [grow(piece, j ? 0.4 : 1), ...(patchPiece && fine?.index === j ? [grow(patchPiece, 0.25)] : [])]
     }).flat()
-  }, [ready, pieces, patchPiece, fine, blocky, grass, coarse])
+  }, [ready, holed, patchPiece, fine, blocky, grass, coarse])
 
   const nearNow = useRef(near)
   const focusNow = useRef(focus)
@@ -423,6 +432,15 @@ export function Islands() {
     stage.setBlocks(blocky && blockSpacing ? blockLook({ ...BLOCKS_DEF.start, size: 1 }, blockSpacing, blockAzimuth) : undefined)
   }, [stage, blocky, blockSpacing, blockAzimuth])
 
+  // drawn as blobs, the ground far off is drawn by fewer, bigger blobs (issue #464): an island is one actor, so its own
+  // size on screen says nothing, and each blob thins out where it would come under a pixel on screen (`?far=0` draws
+  // every blob, `?far=<pixels>` thins them where they would come under that many)
+  useEffect(() => {
+    if (!stage) return
+    const pixels = Number(params().get('far') ?? FAR.pixels)
+    stage.setFarDetail(style === 'blobs' && pixels > 0 ? { ...FAR, pixels } : undefined)
+  }, [stage, style])
+
   // the grass is the only thing the world draws while blocks are on, so marks there fall on it alone
   useEffect(() => { stage?.setMarks(blocky && grass && grassAs === 'gouache' ? { kind: 'gouache' } : undefined) }, [stage, blocky, grass, grassAs, ready])
 
@@ -430,7 +448,7 @@ export function Islands() {
   useEffect(() => {
     const url = new URL(location.href)
     const put = (k: string, v: string | undefined) => { if (v) url.searchParams.set(k, v); else url.searchParams.delete(k) }
-    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== blockLeast ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? undefined : String(WORLD_ISLANDS)); put('creatures', creatures ? undefined : '0')
+    put('biome', BIOMES.length > 1 ? biomeId : undefined); put('seed', String(seed)); put('style', blocky ? undefined : style); put('block', blocky && blockSize !== blockStart ? String(blockSize) : undefined); put('rock', rock ? undefined : '0'); put('grass', grass ? undefined : '0'); put('grassas', blocky && grass && grassAs !== 'blobs' ? grassAs : undefined); put('walk', walking ? '1' : undefined); put('islands', count === 1 ? undefined : String(WORLD_ISLANDS)); put('creatures', creatures ? undefined : '0')
     history.replaceState(history.state, '', url)
   }, [biomeId, seed, style, blocky, blockSize, rock, walking, count, grass, grassAs, creatures])
 
@@ -585,7 +603,7 @@ export function Islands() {
                     </div>
                   </Field>
                 )}
-                {blocky && <Slider label="Block size" value={blockSize} min={blockLeast} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint="How big a block is. The island is cut again at that size." />}
+                {blocky && <Slider label="Block size" value={blockSize} min={BLOCK_SIZES.min} max={BLOCK_SIZES.max} step={1} onChange={setBlockSize} format={(v) => `${v}×`} hint={blockBase(blockSize, coarse) > blockSize ? `How big a block is. On a phone only the ground near the elf, or in the middle of the view, is cut at ${blockSize}×; the rest of the island stays ${blockBase(blockSize, coarse)}×.` : 'How big a block is. The island is cut again at that size.'} />}
                 {!blocky && (
                   <Field label="Detail">
                     <div className="flex flex-wrap gap-1.5">
