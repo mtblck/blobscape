@@ -36,16 +36,17 @@ export const ROOM = 0.06
 export function fitGlobe(points: ArrayLike<number>, every = 1): Globe {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity
   const n = Math.floor(points.length / 3)
-  for (let i = 0; i < n; i += every) {
+  for (let i = 0; i < n; i++) {
     const x = points[i * 3], y = points[i * 3 + 1], z = points[i * 3 + 2]
     if (x < x0) x0 = x; if (x > x1) x1 = x
     if (y < y0) y0 = y; if (y > y1) y1 = y
     if (z < z0) z0 = z; if (z > z1) z1 = z
   }
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2
-  const reach = (cy: number) => {
+  // the search looks at every `every`th point; the radius found is then checked against them all
+  const reach = (cy: number, step = every) => {
     let most = 0
-    for (let i = 0; i < n; i += every) {
+    for (let i = 0; i < n; i += step) {
       const dx = points[i * 3] - cx, dy = points[i * 3 + 1] - cy, dz = points[i * 3 + 2] - cz
       const d = dx * dx + dy * dy + dz * dz
       if (d > most) most = d
@@ -60,7 +61,7 @@ export function fitGlobe(points: ArrayLike<number>, every = 1): Globe {
     if (reach(c) < reach(d)) b = d; else a = c
   }
   const cy = (a + b) / 2
-  const radius = reach(cy) * (1 + ROOM)
+  const radius = reach(cy, 1) * (1 + ROOM)
   const h = cy - y0
   return { center: [cx, cy, cz], radius, floor: y0, rim: Math.sqrt(Math.max(radius * radius - h * h, (radius * 0.5) ** 2)) }
 }
@@ -96,6 +97,7 @@ export class Snow {
   /** Seconds the water has been moving, for the stirring's pattern. */
   time = 0
   private readonly heights: Float32Array
+  private readonly least: number
   private readonly cells: number
   private readonly random: () => number
 
@@ -107,22 +109,24 @@ export class Snow {
   /** A flake's radius, which keeps it off the glass and the ground. */
   readonly size: number
 
-  constructor(globe: Globe, count: number, ground: (x: number, z: number) => number, size: number, seed = 1, cells = 40) {
+  /** `least` is the lowest snow lies (the top of the base's snow, where there is no ground under it). */
+  constructor(globe: Globe, count: number, ground: (x: number, z: number) => number, size: number, seed = 1, cells = 40, least = globe.floor) {
     this.globe = globe
     this.size = size
+    this.least = least
     this.count = count
     this.pos = new Float32Array(count * 3)
     this.vel = new Float32Array(count * 3)
     this.lying = new Uint8Array(count)
     this.fall = new Float32Array(count)
     this.random = rng(seed)
-    const { center, rim, floor } = globe
+    const { center, rim } = globe
     this.cells = cells
     this.heights = new Float32Array(cells * cells)
     for (let j = 0; j < cells; j++) for (let i = 0; i < cells; i++) {
       const x = center[0] + ((i + 0.5) / cells * 2 - 1) * rim, z = center[2] + ((j + 0.5) / cells * 2 - 1) * rim
       const g = ground(x, z)
-      this.heights[j * cells + i] = Number.isFinite(g) ? Math.max(floor, g) : floor
+      this.heights[j * cells + i] = Number.isFinite(g) ? Math.max(least, g) : least
     }
     for (let i = 0; i < count; i++) this.fall[i] = (FALL[0] + (FALL[1] - FALL[0]) * this.random() ** 1.5) * globe.radius
     this.lieDown()
@@ -130,9 +134,9 @@ export class Snow {
 
   /** Where snow lies under (x, z), bilinear between the grid's heights. */
   groundAt(x: number, z: number): number {
-    const { center, rim, floor } = this.globe, n = this.cells
+    const { center, rim } = this.globe, n = this.cells
     const u = ((x - center[0]) / rim * 0.5 + 0.5) * n - 0.5, v = ((z - center[2]) / rim * 0.5 + 0.5) * n - 0.5
-    if (u < -0.5 || v < -0.5 || u > n - 0.5 || v > n - 0.5) return floor
+    if (u < -0.5 || v < -0.5 || u > n - 0.5 || v > n - 0.5) return this.least
     const i = Math.max(0, Math.min(n - 2, Math.floor(u))), j = Math.max(0, Math.min(n - 2, Math.floor(v)))
     const fu = Math.max(0, Math.min(1, u - i)), fv = Math.max(0, Math.min(1, v - j))
     const h = this.heights
@@ -252,7 +256,13 @@ export class Snow {
   }
 
   /** Keeps every flake inside the glass. */
-  private keepIn() { for (let i = 0; i < this.count; i++) this.wall(i) }
+  private keepIn() { for (let i = 0; i < this.count; i++) { this.wall(i); this.onGround(i) } }
+
+  /** Lifts a flake the glass pushed into the ground back onto it. */
+  private onGround(i: number) {
+    const o = i * 3, g = this.groundAt(this.pos[o], this.pos[o + 2]) + this.size
+    if (this.pos[o + 1] < g) this.pos[o + 1] = g
+  }
 
   /** Puts a flake back inside the glass and takes away its speed into it. */
   private wall(i: number) {

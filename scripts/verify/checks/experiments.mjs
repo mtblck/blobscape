@@ -1830,4 +1830,39 @@ export default [
       else if (!bad) ok(`layout: all ${PAGES.length} experiments have their tabs beside a preview of the same size (${[...sizes][0]}), which stays in sight on a phone`)
     },
   },
+  {
+    name: 'snow-globe',
+    about: 'Snow Globe: the snow stays inside the glass, a shake lifts it off the ground and it settles again',
+    entries: ['src/blobscape/SnowGlobe.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/snow-globe/?offscreen=1&scene=snowman&detail=light', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__globe, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__globe) return null
+        const { stage, snow, globe, shake } = window.__globe
+        const inside = () => {
+          let worst = 0
+          for (let i = 0; i < snow.count; i++) {
+            const d = Math.hypot(snow.pos[i * 3] - globe.center[0], snow.pos[i * 3 + 1] - globe.center[1], snow.pos[i * 3 + 2] - globe.center[2])
+            worst = Math.max(worst, d / globe.radius)
+          }
+          return worst
+        }
+        let t = stage.time
+        // the snow is stepped on its own and the view drawn once a run: drawing every step took most of a quarter hour in software
+        const run = async (seconds) => { for (let k = 0; k < seconds * 10; k++) snow.step(0.1); t += seconds; await stage.frame(t) }
+        await run(30)
+        const rested = snow.settled / snow.count
+        shake(1)
+        await run(1.5)
+        const shaken = snow.settled / snow.count, worst = inside()
+        await run(40)
+        return { rested, shaken, settled: snow.settled / snow.count, worst }
+      })
+      if (!got) fails.push('snow globe: the page never started (no window.__globe)')
+      else if (!(got.worst <= 1 && got.shaken < got.rested * 0.5 && got.settled > 0.9)) fails.push(`snow globe: ${JSON.stringify(got)}`)
+      else ok(`snow globe: a shake lifts the snow (${Math.round(got.rested * 100)}% lying before, ${Math.round(got.shaken * 100)}% after) and it settles again (${Math.round(got.settled * 100)}%), never past the glass`)
+      await g.ctx.close()
+    },
+  },
 ]

@@ -63,7 +63,7 @@ export function SnowGlobe() {
   const offscreen = useMemo(() => params().get('offscreen') === '1', [])
   const coarse = useMemo(() => media('(pointer: coarse)'), [])
   const calm = useMemo(() => media('(prefers-reduced-motion: reduce)'), [])
-  const [playing, setPlaying] = useState(true)
+  const [playing, setPlaying] = useState(!calm)
   const [scene, setScene] = useState(() => SCENES.find((s) => s.id === params().get('scene'))?.id ?? SCENES[0].id)
   const [time, setTime] = useState<TimeId | undefined>(() => timeAsked(params().get('time')))
   const [detail, setDetail] = useState<Detail>(() => { const asked = detailAsked(DETAILS, labelNames); return asked ? (DETAILS.indexOf(asked) as Detail) : coarse ? 0 : 1 })
@@ -113,13 +113,15 @@ export function SnowGlobe() {
       for (let i = 0; i < cut.blobs.count; i++) if (!out.has(cut.skin.joints[i * 4]) && cut.blobs.opacity[i] > 0.2) fit.push(cut.blobs.center[i * 3], cut.blobs.center[i * 3 + 1], cut.blobs.center[i * 3 + 2])
       const globe = fitGlobe(fit, Math.max(1, Math.floor(fit.length / 3 / 20000)))
       const top = globe.center[1] + globe.radius
-      const snow = new Snow(globe, flakes, (x, z) => d.ground?.(x, z, top, globe.floor) ?? globe.floor, globe.radius * FLAKE, 11)
+      // where there is no ground, snow lies on the base's own snow, which stands a little over the cut
+      const least = globe.floor + spacing * 1.4 * 0.7
+      const snow = new Snow(globe, flakes, (x, z) => d.ground?.(x, z, top, globe.floor) ?? least, globe.radius * FLAKE, 11, 40, least)
       const flake = stillActor(flakeBlobs(snow), 'snow')
       const dome = stillActor(glassBlobs(globe, coarse ? 1800 : 2800), 'glass')
       const base = baseActor(globe, spacing * 1.4)
       const fire = d.fire?.()
       stage.setActor(cut, undefined, [base, flake, dome, ...(fire ? [fire.actor] : [])])
-      let last = stage.time
+      let last = stage.time, sent = false
       stage.setPoser((sk, now) => {
         d.pose(sk, now)
         for (const b of outside) sk.size[b] = 0
@@ -127,9 +129,10 @@ export function SnowGlobe() {
         // the snow moves on by the stage's own clock, so a frame drawn twice off screen is the same
         const dt = now - last
         last = now
+        // nothing is sent up while all the snow lies in still water
+        const before = snow.moving > 0 || snow.settled < snow.count
         if (dt > 0) snow.step(Math.min(dt, 0.1))
-        placeFlakes(snow, flake.blobs as Blobs)
-        stage.reshape(flake)
+        if (before || !sent) { placeFlakes(snow, flake.blobs as Blobs); stage.reshape(flake); sent = true }
         if (fire) { fire.show(now, eyeOf(stage.orbit)); stage.reshape(fire.actor) }
         const lit = d.lights(now, stage.backend === 'webgpu')
         stage.setLights(fire ? fire.shine(lit, now) : lit, d.ambientAt?.(now) ?? d.ambient ?? 1)
@@ -176,6 +179,7 @@ export function SnowGlobe() {
   // how much of the snow lies, said twice a second
   useEffect(() => {
     if (!built) return
+    setLying(built.snow.settled)
     const id = setInterval(() => setLying(built.snow.settled), 500)
     return () => clearInterval(id)
   }, [built])
@@ -183,9 +187,15 @@ export function SnowGlobe() {
   // a phone shaken in the hand shakes the globe, once the visitor has turned it on (iPhones ask first)
   useEffect(() => {
     if (motion !== 'on') return
-    let lastAt = 0
+    let lastAt = 0, grav: [number, number, number] | null = null
     const on = (e: DeviceMotionEvent) => {
-      const a = e.acceleration
+      // some browsers give only the acceleration with gravity in it: take gravity out with a slow average
+      const g = e.accelerationIncludingGravity
+      let a = e.acceleration as { x: number | null; y: number | null; z: number | null } | null
+      if ((!a || a.x == null) && g && g.x != null && g.y != null && g.z != null) {
+        grav = grav ? [grav[0] * 0.9 + g.x * 0.1, grav[1] * 0.9 + g.y * 0.1, grav[2] * 0.9 + g.z * 0.1] : [g.x, g.y, g.z]
+        a = { x: g.x - grav[0], y: g.y - grav[1], z: g.z - grav[2] }
+      }
       if (!a || a.x == null || a.y == null || a.z == null) return
       const m = Math.hypot(a.x, a.y, a.z), now = performance.now()
       if (m < MOTION_FROM || now - lastAt < 250) return
@@ -301,7 +311,7 @@ export function SnowGlobe() {
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">Each is a scene in Diorama too, made of props from Scene Creator's library. The glass is fitted round whatever is inside.</p>
                 </Field>
-                <TimeControls time={time} onPick={setTime} each="globe" prefix="globe" />
+                <TimeControls time={time} onPick={setTime} timed={!!DIORAMAS.find((d) => d.id === scene)?.timed} each="part of the globe" prefix="globe" />
                 <div>
                   <Toggle label="Glass" checked={glass} onChange={setGlass} />
                   <p className="mt-1.5 text-xs text-ink-faint">Thousands of nearly clear blobs on the dome, and two brighter streaks where it catches the light.</p>
