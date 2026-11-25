@@ -1896,9 +1896,13 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
         const rest = sw.kind === 'leaves' ? size * 0.3 : sw.kind === 'rain' ? 0 : size * 0.6
         // where nothing stands under it (past an island's edge), it comes down somewhere that has ground, so it never
         // lies on the open air at the box's floor; the floor is kept only when no try finds ground
+        // rain lies nowhere, so a drop past the edge falls on out of the box: brought onto the ground, every drop of a
+        // weather over a small round of sea came down on it, and in a wind the sky over its downwind side was left bare
+        // (Matt saw a gap in the storm octopus's rain, 2026-11-25)
+        const tries = sw.kind === 'rain' ? 0 : LAND_TRIES
         const groundAt = (x: number, z: number) => ground(x, z, hi[1], lo[1])
         let g = groundAt(at[0] + wind[0] + sx, at[2] + wind[1] + sz)
-        for (let t = 0; t < LAND_TRIES && g <= lo[1] + 1e-6; t++) {
+        for (let t = 0; t < tries && g <= lo[1] + 1e-6; t++) {
           const x = across(0, 40 + t * 2) - wind[0], z = across(2, 41 + t * 2) - wind[1], h = groundAt(x + wind[0] + sx, z + wind[1] + sz)
           if (h > lo[1] + 1e-6) { at[0] = x; at[2] = z; g = h }
         }
@@ -1907,7 +1911,7 @@ function planSpecks(air: AirDoc | undefined, loop: number, ground: (x: number, z
         if (sw.kind === 'rain') {
           p.falls = Array.from({ length: times }, (_, n) => {
             let x = at[0] + wind[0], z = at[2] + wind[1], floor = g
-            for (let t = 0; n && t <= LAND_TRIES; t++) {
+            for (let t = 0; n && t <= tries; t++) {
               x = lo[0] + (hi[0] - lo[0]) * hash(si + 1, j + 1, 20 + n * 2 + t * 977)
               z = lo[2] + (hi[2] - lo[2]) * hash(si + 1, j + 1, 21 + n * 2 + t * 977)
               floor = ground(x, z, hi[1], lo[1])
