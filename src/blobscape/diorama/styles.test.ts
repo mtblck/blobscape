@@ -10,6 +10,8 @@ import { GLASS, glassLook, GLASS_START } from '../glassLooks.ts'
 import { GLITCH, GLITCH_START, glitchLook } from '../glitchLooks.ts'
 import { HALFTONE } from '../halftoneLooks.ts'
 import { NEON, NEON_PACES, neonLook, NEON_START, periodIn } from '../neonLooks.ts'
+import { ANAGLYPH, ANAGLYPH_START, anaglyphLook } from '../anaglyphLooks.ts'
+import { ANAGLYPH_BACK } from '../../splat-core/anaglyph.ts'
 
 test('blocks come first and are the default, then pixel art and every look Brush and Ink offers, each once', () => {
   assert.equal(STYLES[0].id, 'blocks')
@@ -17,8 +19,8 @@ test('blocks come first and are the default, then pixel art and every look Brush
   assert.equal(STYLES[1].id, 'pixel')
   const ids = STYLES.map((s) => s.id)
   assert.equal(new Set(ids).size, ids.length)
-  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH, HALFTONE]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
-  assert.equal(ids.length, LOOKS.length + 9)
+  for (const l of [...LOOKS, GLITCH, CEL, BLOCKS, NEON, GLASS, WASH, ANAGLYPH, HALFTONE]) assert.ok(ids.includes(l.id), `${l.id} is offered`)
+  assert.equal(ids.length, LOOKS.length + 10)
   assert.equal(STYLES[2].id, 'glitch')
 })
 
@@ -31,6 +33,7 @@ test('an address picks a style, and anything else is the default, blocks', () =>
   assert.equal(styleAsked('pixel'), 'pixel')
   assert.equal(styleAsked('glass'), 'glass')
   assert.equal(styleAsked('watercolor'), 'watercolor')
+  assert.equal(styleAsked('anaglyph'), 'anaglyph')
   assert.equal(styleAsked('woodcut'), 'blocks')
   // Text is still `ascii` (and `text`); its old box sets are Box Art's now
   assert.equal(styleAsked('text'), 'ascii')
@@ -123,4 +126,10 @@ test('a time of day brings a sky, a light and a palette that holds the scene\'s 
   const has = (c: readonly number[]) => at.some((p) => Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]) + Math.abs(p[2] - c[2]) < 12)
   assert.ok(has(dim) && has([255, 220, 90]) && has([13, 18, 40]) && at.length <= 32)
   assert.ok(paletteAt(own, timeOf('afternoon')).length >= own.length)
+})
+
+test('3D glasses stand the subject’s own sky behind it, or the dark backdrop', () => {
+  assert.deepEqual(anaglyphLook(ANAGLYPH_START).back, ANAGLYPH_BACK)
+  assert.deepEqual(anaglyphLook(ANAGLYPH_START, [[255, 255, 255], [0, 0, 0]]).back, [[1, 1, 1], [0, 0, 0]])
+  assert.equal(anaglyphLook({ ...ANAGLYPH_START, mix: 'gray' }).mix, 'gray')
 })

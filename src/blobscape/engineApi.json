@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as a halftone print, knitted, as blocks or glitching, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as a halftone print, knitted, for 3D glasses, as blocks or glitching, and baking a creature into a sprite sheet."
   },
   {
    "id": "styles",
@@ -548,6 +548,15 @@
        "signatures": [
         {
          "code": "setKnit(look?: KnitLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setAnaglyph",
+       "doc": "3D glasses (splat-core/anaglyph.ts): the frame drawn from a left and a right eye either side of the camera and\nlaid over each other in red and cyan, so that through red and cyan glasses the scene stands in depth. What the\nview looks at sits at the screen (unless the look's `pop` pushes the screen back), the backdrop behind it. The\nblobs are drawn as they are (marks, lights), sorted once for each eye. Leave the look out to stop. Kept for the\nnext actor too. Not in pixel mode; the other looks come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setAnaglyph(look?: AnaglyphLook): void"
         }
        ]
       },
@@ -13856,6 +13865,185 @@
    ]
   },
   {
+   "id": "anaglyphPass",
+   "title": "3D glasses",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "AnaglyphPass",
+     "kind": "class",
+     "doc": "3D glasses (splat-core/anaglyph.ts): the frame drawn twice, from a left and a right eye a little either side of the\ncamera, each looking the same way with its picture slid so that the screen (`eyesFor`) lands in the same place for\nboth, then one pass lays them over each other in red and cyan (`mixEyes`, the CPU twin: change both). Each eye's\npicture sits over the look's backdrop, which is the same for both, so it stands at the screen.\n\nEach eye is its own view, so the blobs are sorted for each: two sorts and two draws a frame. Lines and points are\ndrawn in both pictures, as anything else is.",
+     "ctor": [
+      {
+       "code": "new AnaglyphPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "eyes",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>[]",
+       "doc": "The left eye's picture and the right's: linear color times cover, and cover."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look: how deep, where the screen stands, how the pictures are mixed and what is behind.",
+       "signatures": [
+        {
+         "code": "setLook(look: AnaglyphLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the eyes' pictures, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene for both eyes and lays them over each other into the renderer's current target, or onto the screen when it has none. `distance` is how far the camera is from what it looks at.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: PerspectiveCamera, distance: number): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its pictures.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "anaglyph",
+   "title": "3D glasses: the arithmetic",
+   "group": "pixels",
+   "doc": "3D glasses (Matt's idea, 2026-11-25): the scene drawn twice, from two eyes a little apart, and the two pictures laid\none over the other in red and cyan. Without glasses things stand doubled, a red ghost to one side and a cyan one to\nthe other; through red and cyan glasses each eye sees only its own picture and the scene comes together in depth.\n\nPure: the eyes' geometry and how the two pictures are mixed, which `AnaglyphPass` (splat-engine/anaglyphPass.ts)\nrepeats in its shader. Change both.",
+   "entries": [
+    {
+     "name": "AnaglyphMix",
+     "kind": "type",
+     "doc": "How the two pictures are mixed into one.",
+     "type": "\"optimized\" | \"color\" | \"half\" | \"gray\""
+    },
+    {
+     "name": "AnaglyphLook",
+     "kind": "interface",
+     "doc": "How the eyes are set and the pictures mixed. Glasses are red over the left eye and cyan over the right, the\nusual pair.",
+     "props": [
+      {
+       "name": "depth",
+       "optional": true,
+       "type": "number",
+       "doc": "How far apart the eyes are, as a share of the usual (`EYE_SHARE` of the distance to what the view looks at): 0 is flat, 1 the usual, 2 twice as deep."
+      },
+      {
+       "name": "pop",
+       "optional": true,
+       "type": "number",
+       "doc": "Where the screen stands, past what the view looks at, as a share of the distance to it: 0 puts that at the screen, 0.5 puts the screen half as far again behind it, so more comes out toward you."
+      },
+      {
+       "name": "mix",
+       "optional": true,
+       "type": "AnaglyphMix",
+       "doc": "How the two pictures are mixed."
+      },
+      {
+       "name": "back",
+       "optional": true,
+       "type": "readonly [Rgb3, Rgb3]",
+       "doc": "What is behind the scene, top and bottom (sRGB 0–1), the same in both eyes so it sits at the screen."
+      }
+     ]
+    },
+    {
+     "name": "EYE_SHARE",
+     "kind": "const",
+     "doc": "The usual eyes: a thirtieth of the distance to what the view looks at, a stereo photographer's rule of thumb.",
+     "type": "number"
+    },
+    {
+     "name": "ANAGLYPH_BACK",
+     "kind": "const",
+     "doc": "What is behind a scene with no sky of its own (sRGB): a dark gray, which shows the least ghosting through either lens.",
+     "type": "readonly [Rgb3, Rgb3]"
+    },
+    {
+     "name": "eyesFor",
+     "kind": "function",
+     "doc": "The two eyes for a view looking at something `distance` away: how far each stands to the side of the camera\n(`half`, the left eye at −half along the camera's right, the right at +half), and how far away the screen is\n(`screen`), where a thing is drawn in the same place for both eyes.",
+     "signatures": [
+      {
+       "code": "eyesFor(distance: number, look: AnaglyphLook): { half: number; screen: number }"
+      }
+     ]
+    },
+    {
+     "name": "eyeSlide",
+     "kind": "const",
+     "doc": "How far an eye's picture is slid across (in clip space, per unit of w) so that a point `screen` away, straight\nahead of the camera, lands in the middle of both: `side` is the eye's place along the camera's right, `p00` the\nprojection's x scale. Add it to the projection matrix's element 8 (x from z) negated, as `eyeProjection` does.",
+     "type": "(side: number, p00: number, screen: number) => number"
+    },
+    {
+     "name": "eyeProjection",
+     "kind": "function",
+     "doc": "An eye's projection matrix (column-major, as three.js keeps it): the camera's own with x slid by `eyeSlide`.",
+     "signatures": [
+      {
+       "code": "eyeProjection(p: ArrayLike<number>, side: number, screen: number): number[]"
+      }
+     ]
+    },
+    {
+     "name": "eyeX",
+     "kind": "function",
+     "doc": "Where a point in the camera's own frame (x right, y up, looking down −z) lands across the picture for an eye,\nin normalized device coordinates: that eye stands at `side` along x and uses `eyeProjection`. The CPU check of\nwhat the shader is given.",
+     "signatures": [
+      {
+       "code": "eyeX(p: ArrayLike<number>, side: number, screen: number, at: readonly [number, number, number]): number"
+      }
+     ]
+    },
+    {
+     "name": "EYE_MIX",
+     "kind": "const",
+     "doc": "Each mix as two 3×3 matrices, rows for red, green and blue of the result, columns for the left and right\npictures' red, green and blue (linear). `optimized` is Eric Dubois's least-squares red–cyan projection, which\nkeeps most color while each lens passes little of the other eye's picture; `color` hands the left eye's red and\nthe right eye's green and blue over as they are (bright, but reds ghost); `half` gives the left eye its gray and\nthe right its color; `gray` gives both their gray (no color, least ghosting).",
+     "type": "Record<AnaglyphMix, { left: readonly Rgb3[]; right: readonly Rgb3[] }>"
+    },
+    {
+     "name": "ANAGLYPH_MIXES",
+     "kind": "const",
+     "doc": "The mixes in the order the page offers them.",
+     "type": "readonly AnaglyphMix[]"
+    },
+    {
+     "name": "mixEyes",
+     "kind": "function",
+     "doc": "One pixel of the finished picture (linear, 0–1) from the two eyes' pixels there (linear, over the backdrop).",
+     "signatures": [
+      {
+       "code": "mixEyes(left: Rgb3, right: Rgb3, mix?: AnaglyphMix): [number, number, number]"
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "bakeSheet",
    "title": "Baking sprite sheets",
    "group": "pixels",
@@ -14149,7 +14337,7 @@
      "name": "Style",
      "kind": "type",
      "doc": "How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks.",
-     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
+     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
     },
     {
      "name": "STYLES",
@@ -14823,6 +15011,12 @@
      "type": "StyleDef<KnitChoice>"
     },
     {
+     "name": "ANAGLYPH_DEF",
+     "kind": "const",
+     "doc": "3D glasses' settings.",
+     "type": "StyleDef<AnaglyphChoice>"
+    },
+    {
      "name": "SceneSettings",
      "kind": "interface",
      "doc": "The scene's own settings, which every style respects: '' is the scene as it is written (its own weather, its own\ntime), and a detail of '' is the one its style starts at (`detailStart`). Weather and cloud cover are one choice on\nthe page (a weather brings its own clouds), kept as two so a cover can be told from a weather.",
@@ -14880,7 +15074,7 @@
      "name": "CATALOG",
      "kind": "const",
      "doc": "Every style's settings, by the name they are kept under.",
-     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; halftone: StyleDef<HalftoneChoice>; knit: StyleDef<KnitChoice> }"
+     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice>; anaglyph: StyleDef<AnaglyphChoice>; halftone: StyleDef<HalftoneChoice> }"
     },
     {
      "name": "StyleKey",
@@ -14952,6 +15146,11 @@
        "name": "knit",
        "type": "KnitChoice",
        "doc": "Knitting's."
+      },
+      {
+       "name": "anaglyph",
+       "type": "AnaglyphChoice",
+       "doc": "3D glasses'."
       }
      ]
     },
@@ -15853,6 +16052,75 @@
      "signatures": [
       {
        "code": "knitLook(c: KnitChoice, steady?: number): KnitLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-anaglyphLooks",
+   "title": "3D glasses, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "ANAGLYPH",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"anaglyph\"; label: string; note: string }"
+    },
+    {
+     "name": "ANAGLYPH_MIX_CHOICES",
+     "kind": "const",
+     "doc": "The mixes as the page offers them.",
+     "type": "{ id: AnaglyphMix; label: string; about: string }[]"
+    },
+    {
+     "name": "AnaglyphChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "depth",
+       "type": "number",
+       "doc": "How deep it looks, as a share of the usual eyes."
+      },
+      {
+       "name": "pop",
+       "type": "number",
+       "doc": "How far the screen stands behind what the view looks at, as a share of the distance to it."
+      },
+      {
+       "name": "mix",
+       "type": "AnaglyphMix",
+       "doc": "How the two pictures are mixed."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "ANAGLYPH_START",
+     "kind": "const",
+     "doc": "Where 3D glasses' settings start.",
+     "type": "AnaglyphChoice"
+    },
+    {
+     "name": "anaglyphGround",
+     "kind": "const",
+     "doc": "The color to put behind the canvas before the picture is drawn (the pass covers it): the subject's sky where it has one, else the dark backdrop.",
+     "type": "(sky?: readonly [readonly number[], readonly number[]]) => string"
+    },
+    {
+     "name": "anaglyphLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), which stands behind it at the screen.",
+     "signatures": [
+      {
+       "code": "anaglyphLook(c: AnaglyphChoice, sky?: readonly [readonly number[], readonly number[]]): AnaglyphLook"
       }
      ]
     }

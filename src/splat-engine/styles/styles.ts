@@ -8,14 +8,15 @@ import { WASH } from './washLooks.ts'
 import { HALFTONE } from './halftoneLooks.ts'
 import { KNIT } from './knitLooks.ts'
 import { GLITCH } from './glitchLooks.ts'
+import { ANAGLYPH } from './anaglyphLooks.ts'
 
 const PIXEL = { id: 'pixel' as const, label: 'Pixel art', note: 'Drawn small, snapped to a palette and scaled up in whole pixels.' }
 
 /** How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks. */
-export type Style = typeof PIXEL.id | typeof GLITCH.id | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof HALFTONE.id | typeof KNIT.id | (typeof LOOKS)[number]['id']
+export type Style = typeof PIXEL.id | typeof GLITCH.id | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof KNIT.id | typeof ANAGLYPH.id | typeof HALFTONE.id | (typeof LOOKS)[number]['id']
 
 /** Blocks first, then pixel art and tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last). */
-export const STYLES: { id: Style; label: string; note: string }[] = [BLOCKS, PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, NEON, GLASS, WASH, HALFTONE, KNIT, LOOKS[LOOKS.length - 1]]
+export const STYLES: { id: Style; label: string; note: string }[] = [BLOCKS, PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, NEON, GLASS, WASH, KNIT, ANAGLYPH, HALFTONE, LOOKS[LOOKS.length - 1]]
 
 /** The style a page starts in, and the one a plain address means: blocks. Every other style is named in the address (`?style=pixel`). */
 export const DEFAULT_STYLE: Style = BLOCKS.id
@@ -40,6 +41,7 @@ export function styleWords(style: Style): string {
   if (style === 'ascii') return 'as text'
   if (style === 'boxart') return 'as box art'
   if (style === 'knit') return 'as knitting'
+  if (style === 'anaglyph') return 'in red and cyan 3D'
   if (style === 'halftone') return 'as a halftone print'
   return `in ${STYLES.find((s) => s.id === style)!.label.toLowerCase()}`
 }

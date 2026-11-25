@@ -1,0 +1,2 @@
+- Diorama and Scene Creator have a 3D glasses style: the scene is drawn from two eyes a little apart and laid over itself in red and cyan, so it stands in depth through red and cyan glasses, with settings for depth, how much comes out of the screen and how the colors are mixed.
+- Engine: `Stage.setAnaglyph` draws a stage for red and cyan 3D glasses (`AnaglyphPass`, with `mixEyes` and `eyesFor` as its CPU twin).
