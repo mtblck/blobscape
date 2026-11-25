@@ -268,7 +268,7 @@ export function StyleMorph() {
                   <div className="flex flex-wrap gap-1.5" data-testid="morph-styles">
                     {ALL_LOOKS.map((l) => <Chip key={l.id} active={order.includes(l.id)} onClick={() => toggle(l.id)}>{l.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">At least two. Tap the one on show to jump to it: {order.map((id) => <button key={id} type="button" onClick={() => go(id)} className={`mr-1 underline decoration-rule underline-offset-2 hover:text-accent ${id === look ? 'text-ink' : ''}`}>{named(id)}</button>)}</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">At least two. Tap one to jump to it: {order.map((id) => <button key={id} type="button" aria-pressed={id === look} onClick={() => go(id)} className={`mr-1 underline decoration-rule underline-offset-2 hover:text-accent ${id === look ? 'text-ink' : ''}`}>{named(id)}</button>)}</p>
                 </Field>
                 <Field label="How one gives way to the next">
                   <div className="flex flex-wrap gap-1.5" data-testid="morph-wipes">
