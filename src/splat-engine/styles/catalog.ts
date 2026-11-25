@@ -583,7 +583,7 @@ export function settingsFrom<V>(def: StyleDef<V>, start: V, kept: unknown): V {
 
 /** What a page tells the start about itself. */
 export interface StartFor {
-  /** A phone or tablet: blocks start a size up, for fewer cubes, and knitting two pixels a stitch finer, so its bands fit a small view. */
+  /** A phone or tablet: knitting starts two pixels a stitch finer, so its bands fit a small view. */
   coarse?: boolean
 }
 
@@ -594,7 +594,7 @@ export function drawnStart(q: URLSearchParams = new URLSearchParams(), on: Start
     ascii: fromAddress(ASCII, ASCII.start, q),
     boxart: fromAddress(BOX_ART, BOX_ART.start, q),
     cel: fromAddress(CEL_DEF, CEL_DEF.start, q),
-    blocks: fromAddress(BLOCKS_DEF, { ...BLOCKS_DEF.start, size: BLOCKS_DEF.start.size + (on.coarse ? 1 : 0) }, q),
+    blocks: fromAddress(BLOCKS_DEF, BLOCKS_DEF.start, q),
     neon: fromAddress(NEON_DEF, NEON_DEF.start, q),
     glass: fromAddress(GLASS_DEF, GLASS_DEF.start, q),
     watercolor: fromAddress(WASH_DEF, WASH_DEF.start, q),

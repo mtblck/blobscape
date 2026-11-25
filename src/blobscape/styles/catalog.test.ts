@@ -57,10 +57,10 @@ test('the address sets what it names and nothing unsound', () => {
   assert.equal(fromAddress(PIXEL, PIXEL.start, q('px=5')).size, 2)
 })
 
-test('a phone starts blocks a size up, unless the address says', () => {
+test('blocks start at 1× on every device, unless the address says', () => {
   assert.equal(drawnStart().blocks.size, 1, 'blocks start at the grid the scene was cut on')
-  assert.equal(drawnStart(undefined, { coarse: true }).blocks.size, BLOCKS_DEF.start.size + 1)
-  assert.equal(drawnStart(new URLSearchParams('block=1'), { coarse: true }).blocks.size, 1)
+  assert.equal(drawnStart(undefined, { coarse: true }).blocks.size, 1, 'a phone starts at 1× too')
+  assert.equal(drawnStart(new URLSearchParams('block=3'), { coarse: true }).blocks.size, 3)
 })
 
 test('kept settings come back whole, and anything unsound in them is left as it starts', () => {
