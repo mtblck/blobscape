@@ -68,7 +68,7 @@ test('a scene out in space or inside a room (its land tagged space or indoor) ke
 test('the storm octopus, the garden crocodile and the heron hut stand in real water: no painted waves or rings, and what floats or swims is the water\'s', () => {
   for (const id of ['octopus', 'croc', 'hut']) {
     const d = DIORAMAS.find((s) => s.id === id)!
-    const c = compileScene(d.doc)
+    const c = compileScene(d.doc!)
     assert.ok(c.water, `${id} has no water`)
     // every float and body found its bone, and the water stands round them
     for (const f of [...c.water.floats, ...c.water.bodies]) assert.ok(f.bone >= 0, `${id}: a float or body lost its bone`)
