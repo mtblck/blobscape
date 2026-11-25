@@ -68,6 +68,8 @@ test('stained glass takes a scene\'s own sky for the window round it', () => {
 test('watercolor is laid on a light paper, with a scene\'s own sky behind or a pale one', () => {
   for (const p of WASH_PAPERS) assert.ok(Math.min(...p.paper) > 0.8, p.id)
   assert.deepEqual(washLook(WASH_START).sky, WASH_SKY)
+  assert.equal(washLook(WASH_START).border, true, 'the paper border is there unless turned off')
+  assert.equal(washLook({ ...WASH_START, border: false }).border, false)
   assert.deepEqual(washLook(WASH_START, [[255, 255, 255], [0, 0, 0]]).sky, [[1, 1, 1], [0, 0, 0]])
   assert.equal(styleWords('watercolor'), 'in watercolor')
 })
