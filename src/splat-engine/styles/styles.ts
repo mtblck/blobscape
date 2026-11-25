@@ -19,6 +19,15 @@ export type Style = typeof PIXEL.id | typeof GLITCH.id | typeof CEL.id | typeof 
 /** Blocks first, then pixel art and tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last). */
 export const STYLES: { id: Style; label: string; note: string }[] = [BLOCKS, PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, NEON, GLASS, WASH, KNIT, ANAGLYPH, HALFTONE, ...FILTERS, LOOKS[LOOKS.length - 1]]
 
+/** Styles kept in the code, the address and kept scenes but offered in no picker (Matt, 2026-11-25: claymation is not ready yet). */
+export const HIDDEN_STYLES: readonly Style[] = ['clay']
+
+/** Whether a style is offered in a picker. */
+export const offered = (style: string): boolean => !HIDDEN_STYLES.includes(style as Style)
+
+/** The styles a picker offers: `STYLES` without the hidden ones. */
+export const PICKED_STYLES = STYLES.filter((s) => offered(s.id))
+
 /** The style a page starts in, and the one a plain address means: blocks. Every other style is named in the address (`?style=pixel`). */
 export const DEFAULT_STYLE: Style = BLOCKS.id
 

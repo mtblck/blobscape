@@ -16,6 +16,7 @@ import { DIORAMAS } from './diorama/scenes.ts'
 import { TransitionOverlay } from './diorama/transitionOverlay.ts'
 import { ALL_LOOKS, useDrawnLook, useHeld, wantsPlain, type Look } from './drawnLook.tsx'
 import { morphOrder, nextLook } from './morph/order.ts'
+import { offered } from './diorama/styles.ts'
 import { href } from './routes.ts'
 
 declare global {
@@ -280,7 +281,7 @@ export function StyleMorph() {
               <div className={TAB_SECTIONS}>
                 <Field label="The styles it goes round">
                   <div className="flex flex-wrap gap-1.5" data-testid="morph-styles">
-                    {ALL_LOOKS.map((l) => <Chip key={l.id} active={order.includes(l.id)} onClick={() => toggle(l.id)}>{l.label}</Chip>)}
+                    {ALL_LOOKS.filter((l) => offered(l.id)).map((l) => <Chip key={l.id} active={order.includes(l.id)} onClick={() => toggle(l.id)}>{l.label}</Chip>)}
                   </div>
                   <p className="mt-1.5 text-xs text-ink-faint">At least two. Tap one to jump to it: {order.map((id) => <button key={id} type="button" aria-pressed={id === look} onClick={() => go(id)} className={`mr-1 underline decoration-rule underline-offset-2 hover:text-accent ${id === look ? 'text-ink' : ''}`}>{named(id)}</button>)}</p>
                 </Field>

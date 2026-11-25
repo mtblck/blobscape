@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_STYLE, STYLES, styleAsked, styleWords } from './styles.ts'
+import { DEFAULT_STYLE, PICKED_STYLES, STYLES, offered, styleAsked, styleWords } from './styles.ts'
 import { LOOKS } from '../brushLooks.ts'
 import { CEL } from '../celLooks.ts'
 import { BLOCKS, BLOCK_GROUNDS, BLOCK_SPAN, BLOCK_START, blockBack, blockLook, gridOf } from '../blockLooks.ts'
@@ -136,4 +136,13 @@ test('3D glasses stand the subject’s own sky behind it, or the dark backdrop',
   assert.deepEqual(anaglyphLook(ANAGLYPH_START).back, ANAGLYPH_BACK)
   assert.deepEqual(anaglyphLook(ANAGLYPH_START, [[255, 255, 255], [0, 0, 0]]).back, [[1, 1, 1], [0, 0, 0]])
   assert.equal(anaglyphLook({ ...ANAGLYPH_START, mix: 'gray' }).mix, 'gray')
+})
+
+test('claymation is hidden from the pickers but still opens by address', () => {
+  assert.ok(STYLES.some((s) => s.id === 'clay'))
+  assert.ok(!PICKED_STYLES.some((s) => s.id === 'clay'))
+  assert.equal(PICKED_STYLES.length, STYLES.length - 1)
+  assert.equal(offered('clay'), false)
+  assert.equal(offered('blocks'), true)
+  assert.equal(styleAsked('clay'), 'clay')
 })

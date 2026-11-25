@@ -15729,6 +15729,24 @@
      "type": "{ id: Style; label: string; note: string }[]"
     },
     {
+     "name": "HIDDEN_STYLES",
+     "kind": "const",
+     "doc": "Styles kept in the code, the address and kept scenes but offered in no picker (Matt, 2026-11-25: claymation is not ready yet).",
+     "type": "readonly Style[]"
+    },
+    {
+     "name": "offered",
+     "kind": "const",
+     "doc": "Whether a style is offered in a picker.",
+     "type": "(style: string) => boolean"
+    },
+    {
+     "name": "PICKED_STYLES",
+     "kind": "const",
+     "doc": "The styles a picker offers: `STYLES` without the hidden ones.",
+     "type": "{ id: Style; label: string; note: string }[]"
+    },
+    {
      "name": "DEFAULT_STYLE",
      "kind": "const",
      "doc": "The style a page starts in, and the one a plain address means: blocks. Every other style is named in the address (`?style=pixel`).",
