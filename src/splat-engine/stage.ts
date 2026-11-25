@@ -36,6 +36,7 @@ import type { WashLook } from '../splat-core/wash.ts'
 import { GlyphPass } from './glyphPass.ts'
 import { glyphScale, glyphText, type GlyphLook } from '../splat-core/glyphs.ts'
 import { SplatLens } from './lens.ts'
+import { SplatPeel } from './peel.ts'
 import { SplatMirror } from './mirror.ts'
 import type { MirrorImage, MirrorPlane } from './reflect.ts'
 import type { OpticsLook } from '../splat-core/optics.ts'
@@ -104,6 +105,26 @@ export interface StageOptions {
   webgl?: boolean
   /** Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on). */
   cleanCuts?: boolean
+  /** Builds each world to draw blobs in their true shape on screen (`EngineOptions.exactShapes`; `setExactShapes` turns it off and on). */
+  exactShapes?: boolean
+  /** Builds each world so see-through blobs can be put in order where they cross (`setPeel`; `EngineOptions.peel`). */
+  peel?: boolean
+  /**
+   * Asks the GPU to time its own work, so `gpuTimes` can say how long a frame takes on the GPU alone. Where the
+   * browser offers no timer (WebGL without `EXT_disjoint_timer_query_webgl2`, WebGPU without `timestamp-query`) it
+   * does nothing. Off by default: each pass then writes two timestamps.
+   */
+  timer?: boolean
+}
+
+/** How long the GPU spent on one frame, in milliseconds (`Stage.gpuTimes`). */
+export interface GpuTimes {
+  /** Compute passes: posing, projecting, sorting, lighting. WebGL has none, so 0 there. */
+  compute: number
+  /** Render passes: drawing the blobs and every pass after them (pixel art, outlines, the lens). */
+  render: number
+  /** The CPU's share: posing and handing the frame to the GPU (on WebGL, sorting too). The two overlap, so a frame takes about the larger of this and the GPU's. */
+  cpu: number
 }
 
 /**
@@ -245,7 +266,7 @@ export class Stage {
   /** Starts a stage on a canvas: makes the renderer (WebGPU, or WebGL 2 where there is none) and begins drawing. */
   static async start(display: HTMLCanvasElement, opts: StageOptions = {}) {
     const canvas = opts.offscreen ? document.createElement('canvas') : display
-    const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl }, (r) => {
+    const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: !!opts.webgl, trackTimestamp: !!opts.timer }, (r) => {
       r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
       r.setClearColor(0x000000, 0)
     })
@@ -318,12 +339,13 @@ export class Stage {
   }
 
   private build(actor: Actor) {
-    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, shadowDensity: this.opts.shadowDensity })
+    this.world = new SplatWorld([actor, ...this.extras], { mode: this.mode, lights: this.opts.lights, sort: this.sort, cleanCuts: this.opts.cleanCuts, exactShapes: this.opts.exactShapes, peel: this.opts.peel, shadowDensity: this.opts.shadowDensity })
     this.world.glowGain = this.emits
     this.world.lightEase = this.lightEase
     this.world.setFog(...this.fog)
     this.dress()
     this.world.cleanCuts = this.clean
+    this.world.exactShapes = this.exact
     if (this.edits.length) this.world.setEdits(this.edits)
     this.scene.add(this.world)
     if (this.painter) this.paintOver()
@@ -387,7 +409,7 @@ export class Stage {
       // soft actors are a small world of their own, drawn among the cubes, so the scene's own world is not drawn at all
       const soft = all.filter((a) => a.soft || (a.flows && this.blockLook!.flow !== 'blocks') || (a.weather && this.blockLook!.weather !== 'blocks'))
       if (soft.length) {
-        this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort })
+        this.soft = new SplatWorld(soft, { mode: this.mode, lights: this.opts.lights, sort: this.sort, peel: this.opts.peel })
         this.soft.setFog(...this.fog)
         this.soft.setMarks(this.marks)
         if (this.opts.lights) this.soft.setLights(this.lit.lights, this.lit.ambient)
@@ -628,6 +650,14 @@ export class Stage {
     this.invalidate()
   }
 
+  private exact = true
+  /** On a stage made with `exactShapes`: whether blobs are drawn in their true shape (the default) or flattened from their middles. */
+  setExactShapes(on: boolean) {
+    this.exact = on
+    if (this.world) this.world.exactShapes = on
+    this.invalidate()
+  }
+
   /** On a stage made with `cleanCuts`: whether cuts have the clean edge (the default) or drop whole blobs. */
   setCleanCuts(on: boolean) {
     this.clean = on
@@ -847,6 +877,19 @@ export class Stage {
     this.invalidate()
   }
 
+  private peel?: SplatPeel
+  /**
+   * On a stage made with `peel`: takes the nearest `layers` blobs (1 to `MAX_PEEL`) off the front of each pixel one at
+   * a time (peel.ts), so see-through blobs that cross are each in front on their own side; 0 stops. Everything that is
+   * not blobs is drawn under them all. Costs a draw of the blobs a layer and one more. Not in pixel mode, and any
+   * other look comes first.
+   */
+  setPeel(layers: number) {
+    if (!layers || !this.opts.peel) { this.peel?.dispose(); this.peel = undefined }
+    else (this.peel ??= new SplatPeel(layers)).setLayers(layers)
+    this.invalidate()
+  }
+
   private marks?: MarkLook
   /**
    * Draws every blob as a brush mark or an ink stroke, or as soft dots again when left out; kept for the next actor
@@ -1031,6 +1074,12 @@ export class Stage {
       this.lens.setSize(x, y)
       this.lens.setLook(this.lensLook, this.camera.fov)
       this.lens.render(this.renderer, this.scene, this.camera)
+      return
+    }
+    if (!this.pixel && this.peel) {
+      const { x, y } = this.target ? { x: this.target.width, y: this.target.height } : this.renderer.getDrawingBufferSize(this.buffer)
+      this.peel.setSize(x, y)
+      this.peel.render(this.renderer, this.scene, this.camera)
       return
     }
     if (!this.pixel) { this.renderer.render(this.scene, this.camera); return }
@@ -1225,6 +1274,33 @@ export class Stage {
     return (performance.now() - t0) / frames
   }
 
+  /** Whether `gpuTimes` can answer: the stage was started with `timer` and the browser lets the GPU time its work. */
+  get timesGpu(): boolean {
+    const b = this.renderer.backend as unknown as { trackTimestamp?: boolean; disjoint?: unknown; isWebGPUBackend?: boolean }
+    return !!b.trackTimestamp && (!!b.isWebGPUBackend || !!b.disjoint)
+  }
+
+  /**
+   * Poses and draws the frame as it stands `frames` times over and asks the GPU how long it spent: per frame, in
+   * milliseconds. Unlike `timed`, the GPU's own clock, so the browser's late and wandering report of work done does
+   * not come into it, and the time is split between compute and drawing. Null where the stage can't time the GPU
+   * (`timesGpu`): start it with `timer` and use `timed` as the fallback.
+   */
+  async gpuTimes(frames = 8): Promise<GpuTimes | null> {
+    if (!this.timesGpu) return null
+    // what the live loop drew before now is not this measure
+    await Promise.all([this.renderer.resolveTimestampsAsync('compute'), this.renderer.resolveTimestampsAsync('render')])
+    const t0 = performance.now()
+    for (let k = 0; k < frames; k++) {
+      this.pose()
+      this.resize()
+      this.draw()
+    }
+    const cpu = (performance.now() - t0) / frames
+    const [compute, render] = await Promise.all([this.renderer.resolveTimestampsAsync('compute'), this.renderer.resolveTimestampsAsync('render')])
+    return { compute: (compute ?? 0) / frames, render: (render ?? 0) / frames, cpu }
+  }
+
   /** Offscreen only: draws the frame `t` seconds into the clip and copies it to the page. */
   async frame(t: number) {
     this.t = t
@@ -1314,6 +1390,7 @@ export class Stage {
     this.halftone?.dispose()
     this.glyphs?.dispose()
     this.lens?.dispose()
+    this.peel?.dispose()
     this.cel?.dispose()
     this.mirror?.dispose()
     this.target?.dispose()

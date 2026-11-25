@@ -7,6 +7,7 @@ import { SplatWorld } from '../splat-engine/engine.ts'
 import { startRenderer } from '../splat-engine/startRenderer.ts'
 import { DETAIL } from '../splat-engine/lod.ts'
 import { SplatDepth } from '../splat-engine/depth.ts'
+import { SplatPeel } from '../splat-engine/peel.ts'
 import type { ShapeEdit } from '../splat-engine/edit.ts'
 import { makeCreature, poseWalk, type Creature } from '../splat-engine/creature.ts'
 import { Skeleton, emptySkin, type SkinMode } from '../splat-engine/rig.ts'
@@ -53,6 +54,13 @@ export interface LabOptions {
   sh?: boolean
   /** The full radix sort (ours only) in place of the counting sort over depth bins. */
   radix?: boolean
+  /** Draw blobs in their true shape on screen (`?shape=exact`, `EngineOptions.exactShapes`). */
+  exact?: boolean
+  /**
+   * See-through blobs that cross (ours only, `?peel=N`): in place of the foxes, big see-through discs set through one
+   * another, drawn with `SplatPeel` taking N layers off the front of each pixel, or sorted by their middles at 0.
+   */
+  peel?: number
   /**
    * Draw into an off-screen target and copy each frame to the page with the
    * CPU. Only for headless test browsers, whose software WebGPU can render but
@@ -80,6 +88,24 @@ export function cutCard(): Creature {
   }
   for (let x = -1.4; x <= 1.401; x += 0.25) for (let y = 0.15; y <= 1.5; y += 0.25, n++) {
     b.push({ center: [x + (rnd(n, 1) - 0.5) * 0.2, y, -1.5], scale: [0.14, 0.14, 0.14], quat: [0, 0, 0, 1], color: [0.85, 0.45 + rnd(n, 3) * 0.3, 0.3], opacity: 1 })
+  }
+  const skin = emptySkin(b.count)
+  for (let i = 0; i < b.count; i++) skin.weights[i * 4] = 1
+  return { blobs: b, skin, skeleton: new Skeleton([{ name: 'card', parent: -1, head: [0, 0, 0] }]) }
+}
+
+/** Big see-through discs set through one another at a slant, and a ring of smaller ones through them, on one still bone. */
+export function crossCard(): Creature {
+  const b = new Blobs()
+  const turn = (deg: number): [number, number, number, number] => { const h = deg * Math.PI / 360; return [0, Math.sin(h), 0, Math.cos(h)] }
+  // two big discs crossing in an X seen from above, both upright
+  b.push({ center: [0, 0.8, 0], scale: [0.7, 0.7, 0.004], quat: turn(35), color: [0.95, 0.25, 0.2], opacity: 0.7 })
+  b.push({ center: [0, 0.8, 0.02], scale: [0.7, 0.7, 0.004], quat: turn(-35), color: [0.2, 0.45, 0.95], opacity: 0.7 })
+  // a lying disc through both
+  b.push({ center: [0, 0.75, 0], scale: [0.55, 0.004, 0.55], quat: [0, 0, 0, 1], color: [0.95, 0.85, 0.25], opacity: 0.6 })
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2
+    b.push({ center: [Math.cos(a) * 0.45, 0.8 + Math.sin(a * 2) * 0.1, Math.sin(a) * 0.45], scale: [0.18, 0.18, 0.004], quat: turn(k * 40), color: [0.3 + k * 0.08, 0.9, 0.5], opacity: 0.5 })
   }
   const skin = emptySkin(b.count)
   for (let i = 0; i < b.count; i++) skin.weights[i * 4] = 1
@@ -151,12 +177,14 @@ export interface StepTimes {
   /** CPU (WebGL): moving centers for the sort, and sorting. */
   cpuSkin: number
   cpuSort: number
+  /** Whether the GPU steps were read off the GPU's own clock (timestamp queries); else wall time, each step waited for. */
+  gpuClock: boolean
 }
 
 export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promise<Lab> {
   if (o.which === 'spark') return (await import('./sparkLab.ts')).startSparkLab(display, o)
   const canvas = o.offscreen ? document.createElement('canvas') : display
-  const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: o.webgl }, (r) => {
+  const renderer = await startRenderer({ canvas, antialias: false, alpha: true, forceWebGL: o.webgl, trackTimestamp: true }, (r) => {
     r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
     r.setClearColor(0x000000, 0)
   })
@@ -166,11 +194,14 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100)
   const floor = new THREE.GridHelper(8, 16, 0x777777, 0x444444)
   floor.renderOrder = -1
-  if (!o.cut) scene.add(floor)
+  if (!o.cut && o.peel === undefined) scene.add(floor)
 
   let orbit: Orbit = { target: [0, 0.75, 0], distance: o.herd > 1 ? 7 : 4, azimuth: 35, elevation: 14 }
   const foxes: Creature[] = []
-  if (o.cut) {
+  if (o.peel !== undefined) {
+    foxes.push(crossCard())
+    orbit = { target: [0, 0.8, 0], distance: 2.6, azimuth: 0, elevation: 20 }
+  } else if (o.cut) {
     foxes.push(cutCard())
     orbit = { target: [0, 0.5, 0], distance: 5, azimuth: 0, elevation: 28 }
   } else for (let k = 0; k < Math.max(1, o.herd); k++) {
@@ -187,7 +218,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   let mode = o.mode
   if (o.which === 'engine') {
     if (o.sh) for (const f of foxes) giveSheen(f.blobs)
-    world = new SplatWorld(foxes, { mode, paint: o.edits, sort: o.radix ? 'radix' : 'bins', cleanCuts: !!o.cut })
+    world = new SplatWorld(foxes, { mode, paint: o.edits, sort: o.radix ? 'radix' : 'bins', cleanCuts: !!o.cut, exactShapes: !!o.exact, peel: o.peel !== undefined })
     if (o.lod) world.autoDetail = DETAIL
     if (o.edits) world.setEdits(DEMO_EDITS)
     if (o.cut) { world.cleanCuts = o.cut === 'clean'; world.setEdits(HALF_CUT) }
@@ -210,6 +241,13 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     }
   }
   const depthMap = new SplatDepth()
+  const peel = o.peel ? new SplatPeel(o.peel) : undefined
+  const draw = () => {
+    if (!peel) { renderer.render(scene, camera); return }
+    const size = renderer.getRenderTarget() ?? renderer.getDrawingBufferSize(new THREE.Vector2())
+    peel.setSize('x' in size ? size.x : size.width, 'y' in size ? size.y : size.height)
+    peel.render(renderer, scene, camera)
+  }
   const blobs = foxes.reduce((s, f) => s + f.blobs.count, 0)
 
   let target: THREE.RenderTarget | undefined
@@ -245,7 +283,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     if (!world) return
     for (const f of foxes) {
       // each fox a little out of step with its neighbors
-      if (walk && !o.cut) poseWalk(f.skeleton, t + f.skeleton.place[0])
+      if (walk && !o.cut && o.peel === undefined) poseWalk(f.skeleton, t + f.skeleton.place[0])
       else { f.skeleton.reset(); f.skeleton.update() }
     }
     world.markPosed()
@@ -254,7 +292,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
   const frame = async (t: number) => {
     resize()
     pose(t)
-    renderer.render(scene, camera)
+    draw()
     await settle(renderer)
   }
   const show = async (t: number) => { await frame(t); await present() }
@@ -271,14 +309,14 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     } else if (!busy) {
       resize()
       if (walk) pose((performance.now() - t0) / 1000)
-      renderer.render(scene, camera)
+      draw()
     }
     raf = requestAnimationFrame(tick)
   }
   raf = requestAnimationFrame(tick)
 
   return {
-    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}${o.sh ? ' · color by angle' : ''}${o.radix ? ' · radix sort' : ''}`,
+    info: `${o.which === 'three' ? 'three.js (standing still: it has no bones)' : 'ours'} · ${backend} · ${blobs.toLocaleString()} blobs${world?.autoDetail ? ' · fewer when small' : ''}${o.edits ? ' · cut and painted' : ''}${o.sh ? ' · color by angle' : ''}${o.radix ? ' · radix sort' : ''}${o.exact ? ' · exact shapes' : ''}${o.peel !== undefined ? ` · ${o.peel ? `${o.peel} layers peeled` : 'sorted by middles'}` : ''}`,
     world,
     renderer,
     get orbit() { return orbit },
@@ -349,6 +387,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
     },
     async profile(frames) {
       const rows: number[][] = []
+      const gpuClock = backend === 'webgpu' && !!(renderer.backend as unknown as { trackTimestamp?: boolean }).trackTimestamp
       busy++
       try {
         for (let i = 0; i < frames + 2; i++) {
@@ -357,14 +396,18 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
           const t: number[] = [performance.now()]
           const mark = async () => { await settle(renderer); t.push(performance.now()) }
           if (world && backend === 'webgpu') {
+            // with the GPU's own clock, each step is what its passes took there; else the wall time to wait for it
+            const g: number[] = []
+            const clock = async (type: 'compute' | 'render') => { await mark(); if (gpuClock) g.push((await renderer.resolveTimestampsAsync(type)) ?? 0) }
+            if (gpuClock) await Promise.all([renderer.resolveTimestampsAsync('compute'), renderer.resolveTimestampsAsync('render')])
             const st = world.stages(renderer as never, camera)
-            st.deform(); await mark()
-            st.project(); await mark()
-            st.order(); await mark()
+            st.deform(); await clock('compute')
+            st.project(); await clock('compute')
+            st.order(); await clock('compute')
             world.hold = true
-            try { renderer.render(scene, camera); await mark() } finally { world.hold = false }
+            try { renderer.render(scene, camera); await clock('render') } finally { world.hold = false }
             world.markPosed() // the held frame skipped the bookkeeping; redo it next frame
-            if (i >= 2) rows.push([t[1] - t[0], t[2] - t[1], t[3] - t[2], t[4] - t[3], 0, 0])
+            if (i >= 2) rows.push(gpuClock ? [g[0], g[1], g[2], g[3], 0, 0] : [t[1] - t[0], t[2] - t[1], t[3] - t[2], t[4] - t[3], 0, 0])
           } else {
             renderer.render(scene, camera); await mark()
             const cs = world?.cpuSkinMs ?? 0, co = world?.cpuSortMs ?? 0
@@ -375,7 +418,7 @@ export async function startLab(display: HTMLCanvasElement, o: LabOptions): Promi
         busy--
       }
       const med = (k: number) => [...rows.map((r) => r[k])].sort((a, b) => a - b)[Math.floor(rows.length / 2)] ?? 0
-      return { which: o.which, backend, blobs, deform: med(0), project: med(1), order: med(2), draw: med(3), cpuSkin: med(4), cpuSort: med(5) }
+      return { which: o.which, backend, blobs, deform: med(0), project: med(1), order: med(2), draw: med(3), cpuSkin: med(4), cpuSort: med(5), gpuClock }
     },
     dispose() {
       stopped = true

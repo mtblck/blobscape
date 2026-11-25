@@ -38,7 +38,7 @@
   {
    "id": "extras",
    "title": "Picking, detail and edits",
-   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, a lens with glow and focus blur, and solid shapes to stand on."
+   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, a lens with glow and focus blur, see-through blobs put in order where they cross, and solid shapes to stand on."
   },
   {
    "id": "files",
@@ -191,6 +191,46 @@
        "optional": true,
        "type": "boolean",
        "doc": "Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on)."
+      },
+      {
+       "name": "exactShapes",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Builds each world to draw blobs in their true shape on screen (`EngineOptions.exactShapes`; `setExactShapes` turns it off and on)."
+      },
+      {
+       "name": "peel",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Builds each world so see-through blobs can be put in order where they cross (`setPeel`; `EngineOptions.peel`)."
+      },
+      {
+       "name": "timer",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Asks the GPU to time its own work, so `gpuTimes` can say how long a frame takes on the GPU alone. Where the\nbrowser offers no timer (WebGL without `EXT_disjoint_timer_query_webgl2`, WebGPU without `timestamp-query`) it\ndoes nothing. Off by default: each pass then writes two timestamps."
+      }
+     ]
+    },
+    {
+     "name": "GpuTimes",
+     "kind": "interface",
+     "doc": "How long the GPU spent on one frame, in milliseconds (`Stage.gpuTimes`).",
+     "props": [
+      {
+       "name": "compute",
+       "type": "number",
+       "doc": "Compute passes: posing, projecting, sorting, lighting. WebGL has none, so 0 there."
+      },
+      {
+       "name": "render",
+       "type": "number",
+       "doc": "Render passes: drawing the blobs and every pass after them (pixel art, outlines, the lens)."
+      },
+      {
+       "name": "cpu",
+       "type": "number",
+       "doc": "The CPU's share: posing and handing the frame to the GPU (on WebGL, sorting too). The two overlap, so a frame takes about the larger of this and the GPU's."
       }
      ]
     },
@@ -277,6 +317,12 @@
        "readonly": true,
        "type": "{ width: number; height: number } | undefined",
        "doc": "Pixel mode's art size in pixels, once a frame has been drawn."
+      },
+      {
+       "name": "timesGpu",
+       "readonly": true,
+       "type": "boolean",
+       "doc": "Whether `gpuTimes` can answer: the stage was started with `timer` and the browser lets the GPU time its work."
       }
      ],
      "methods": [
@@ -489,6 +535,15 @@
        ]
       },
       {
+       "name": "setExactShapes",
+       "doc": "On a stage made with `exactShapes`: whether blobs are drawn in their true shape (the default) or flattened from their middles.",
+       "signatures": [
+        {
+         "code": "setExactShapes(on: boolean): void"
+        }
+       ]
+      },
+      {
        "name": "setCleanCuts",
        "doc": "On a stage made with `cleanCuts`: whether cuts have the clean edge (the default) or drop whole blobs.",
        "signatures": [
@@ -593,6 +648,15 @@
        "signatures": [
         {
          "code": "setLens(look?: OpticsLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setPeel",
+       "doc": "On a stage made with `peel`: takes the nearest `layers` blobs (1 to `MAX_PEEL`) off the front of each pixel one at\na time (peel.ts), so see-through blobs that cross are each in front on their own side; 0 stops. Everything that is\nnot blobs is drawn under them all. Costs a draw of the blobs a layer and one more. Not in pixel mode, and any\nother look comes first.",
+       "signatures": [
+        {
+         "code": "setPeel(layers: number): void"
         }
        ]
       },
@@ -728,6 +792,15 @@
        "signatures": [
         {
          "code": "invalidate(frames?: number): void"
+        }
+       ]
+      },
+      {
+       "name": "gpuTimes",
+       "doc": "Poses and draws the frame as it stands `frames` times over and asks the GPU how long it spent: per frame, in\nmilliseconds. Unlike `timed`, the GPU's own clock, so the browser's late and wandering report of work done does\nnot come into it, and the time is split between compute and drawing. Null where the stage can't time the GPU\n(`timesGpu`): start it with `timer` and use `timed` as the fallback.",
+       "signatures": [
+        {
+         "code": "gpuTimes(frames?: number): Promise<GpuTimes | null>"
         }
        ]
       },
@@ -902,6 +975,18 @@
        "optional": true,
        "type": "boolean",
        "doc": "Cuts with a clean edge: a blob a cut passes through is kept and each of its pixels is tested against the cut,\nso the edge is the shape's own line and not a row of whole blobs. Costs the draw a test per pixel while there are\nedits; `cleanCuts` on the world turns it off and on again."
+      },
+      {
+       "name": "exactShapes",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Draws each blob in its true shape on screen (`exactShapes` on the world turns it off and on): each pixel is\nshaded by the most of the blob along its own line of sight, where otherwise a blob is flattened onto the screen\nas seen from its middle, which bends blobs close to the camera, large ones and ones seen at a slant out of shape.\nCosts the draw a little per pixel, the quads of close blobs some size, and on WebGPU the same two buffers clean\ncuts bind."
+      },
+      {
+       "name": "peel",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lets `SplatPeel` (peel.ts) take the nearest blobs off the front of each pixel one at a time, so see-through blobs\nthat cross are each in front on their own side. Costs nothing until a peel draws; the world binds one more texture."
       }
      ]
     },
@@ -1137,6 +1222,21 @@
        "doc": "How dark what stands in a casting light's way makes it (`EngineOptions.shadowDensity`): a world made without lights has none."
       },
       {
+       "name": "peelMode",
+       "type": "number",
+       "doc": "Set by `SplatPeel` while it draws (0 when not): 1 keeps only each pixel's nearest blob behind the last layer, 2 lays all that lies behind it as usual. Needs a world made with `peel`."
+      },
+      {
+       "name": "peelFirst",
+       "type": "boolean",
+       "doc": "Set by `SplatPeel`: whether the layer being drawn is the first, with nothing in front of it."
+      },
+      {
+       "name": "exactShapes",
+       "type": "boolean",
+       "doc": "Whether blobs are drawn in their true shape now (`EngineOptions.exactShapes`). Only a world made with `exactShapes` can."
+      },
+      {
        "name": "cleanCuts",
        "type": "boolean",
        "doc": "Whether cuts have a clean edge now. Only a world made with `cleanCuts` can; setting it there switches between the clean edge and whole blobs."
@@ -1146,6 +1246,11 @@
        "readonly": true,
        "type": "number[]",
        "doc": "The share of each actor's blobs being drawn."
+      },
+      {
+       "name": "cull",
+       "type": "boolean",
+       "doc": "Whether blobs with nothing to draw (off screen, behind the camera or the clip plane, and on WebGPU also cut away\nor dropped by the level of detail) are left out of the sort and the draw, which leaves the picture as it was.\nOn by default; for comparing. The radix sort (`sort: 'radix'`) always sorts and draws every blob."
       },
       {
        "name": "clip",
@@ -1199,6 +1304,24 @@
        "signatures": [
         {
          "code": "setEdits(edits: readonly ShapeEdit[]): void"
+        }
+       ]
+      },
+      {
+       "name": "buildFor",
+       "doc": "Builds the draw's shaders for the renderer's backend now, rather than as the world is first drawn: for a pass that draws it with a material of its own made from them (`SplatPeel`).",
+       "signatures": [
+        {
+         "code": "buildFor(renderer: Renderer): void"
+        }
+       ]
+      },
+      {
+       "name": "peelBehind",
+       "doc": "Set by `SplatPeel`: the depth of the layer before, which this layer lies behind.",
+       "signatures": [
+        {
+         "code": "peelBehind(depth: DepthTexture): void"
         }
        ]
       },
@@ -1315,7 +1438,7 @@
        "doc": "Reads the sorted order back from the GPU and counts what is wrong with it: blobs missing, out of order, or in\nbins left unsettled. For tests.",
        "signatures": [
         {
-         "code": "checkSort(renderer: Renderer): Promise<{ missing: number; outOfOrder: number; unsettled: number; biggest: number }>"
+         "code": "checkSort(renderer: Renderer): Promise<{ missing: number; outOfOrder: number; unsettled: number; biggest: number; culled: number }>"
         }
        ]
       },
@@ -1329,6 +1452,12 @@
        ]
       }
      ]
+    },
+    {
+     "name": "PEEL_GAP",
+     "kind": "const",
+     "doc": "How far behind the last layer's depth (in the depth buffer's 0 to 1) a pixel must be to be in the next: past the same blob, and past rounding.",
+     "type": "1e-7"
     }
    ]
   },
@@ -18572,6 +18701,16 @@
        "code": "bakeEdits(b: Blobs, edits: readonly ShapeEdit[]): Blobs"
       }
      ]
+    },
+    {
+     "name": "exactFalloff",
+     "kind": "function",
+     "doc": "Exact shapes (`EngineOptions.exactShapes`): how much of a blob the line of sight from `from` along `dir` meets, as\nthe Gaussian's falloff at the densest point along it, 1 through the middle. `cov` is the world covariance (xx, xy,\nxz, yy, yz, zz) and `widen` is added to its diagonal first (the draw adds a pixel's `KERNEL_2D` at the blob's depth,\nwhich gives a flat disc a thickness). Measured from the densest point, not as the center's distance less the part\nalong the ray, which a small blob far away loses to rounding. CPU twin of the draw's `exactFalloff`; change both.",
+     "signatures": [
+      {
+       "code": "exactFalloff(from: ArrayLike<number>, dir: ArrayLike<number>, center: ArrayLike<number>, cov: ArrayLike<number>, widen?: number): number"
+      }
+     ]
     }
    ]
   },
@@ -18971,6 +19110,115 @@
      "signatures": [
       {
        "code": "rolledOff(brightest: number, start: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "peel",
+   "title": "See-through blobs that cross",
+   "group": "extras",
+   "doc": "",
+   "entries": [
+    {
+     "name": "MAX_PEEL",
+     "kind": "const",
+     "doc": "The most layers `SplatPeel` takes from the front of each pixel.",
+     "type": "6"
+    },
+    {
+     "name": "Peelable",
+     "kind": "interface",
+     "doc": "What a world hands a peel (a `SplatWorld` made with `peel`): its draw's material, and the switches its fragment reads.",
+     "props": [
+      {
+       "name": "material",
+       "type": "Material",
+       "doc": "The material it draws with; the peel swaps in its own for the layers and puts this back."
+      },
+      {
+       "name": "hold",
+       "type": "boolean",
+       "doc": "While true it draws the last frame's blobs without moving or sorting them again: the layers after the first."
+      },
+      {
+       "name": "peelMode",
+       "type": "number",
+       "doc": "0 off; 1 a layer (only the nearest blob still in front of `prev` is kept); 2 the rest (only what lies behind `prev`)."
+      },
+      {
+       "name": "peelFirst",
+       "type": "boolean",
+       "doc": "Whether this layer is the first, with nothing in front of it to be behind."
+      }
+     ],
+     "methods": [
+      {
+       "name": "peelBehind",
+       "doc": "The depth of the layer before, read where each pixel is.",
+       "signatures": [
+        {
+         "code": "peelBehind(depth: DepthTexture): void"
+        }
+       ]
+      },
+      {
+       "name": "buildFor",
+       "doc": "Builds its draw's shaders for the backend, so the peel can draw with them.",
+       "signatures": [
+        {
+         "code": "buildFor(renderer: WebGPURenderer): void"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "SplatPeel",
+     "kind": "class",
+     "doc": "See-through blobs in the right order where they cross (after Silicon Jungle's Ink Studio's surface order, by\nagreement; our own method). The engine sorts blobs by their middles and lays them back to front, which is right\nuntil two see-through blobs cross: then one is wholly in front of the other where they overlap, and as the view\nturns past where their middles change places, that flips all at once. Here each pixel's nearest `layers` blobs are\ntaken off the front one at a time (depth peeling), each at its own depth on its own plane (`placeQuad` slopes a\nblob's corners), so where two cross each is in front on its own side; whatever lies behind the last layer is laid as\nbefore, and the layers go over it front to back. Costs a draw of the blobs per layer and one more.\n\nEverything else in the scene (a floor, meshes) is drawn first, under all the blobs: it suits a creature or a\njellyfish over a floor or a sky, not blobs among solid things.",
+     "ctor": [
+      {
+       "code": "new SplatPeel(layers?: number)"
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLayers",
+       "doc": "How many blobs to take off the front of each pixel, 1 to `MAX_PEEL`.",
+       "signatures": [
+        {
+         "code": "setLayers(layers: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the targets, in pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws `scene` from `camera` into the renderer's current target, with every world in it peeled.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets and materials.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
       }
      ]
     }

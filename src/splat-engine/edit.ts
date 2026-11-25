@@ -120,3 +120,21 @@ export function bakeEdits(b: Blobs, edits: readonly ShapeEdit[]): Blobs {
   out.filter((i) => kept[i] === 1)
   return out
 }
+
+/**
+ * Exact shapes (`EngineOptions.exactShapes`): how much of a blob the line of sight from `from` along `dir` meets, as
+ * the Gaussian's falloff at the densest point along it, 1 through the middle. `cov` is the world covariance (xx, xy,
+ * xz, yy, yz, zz) and `widen` is added to its diagonal first (the draw adds a pixel's `KERNEL_2D` at the blob's depth,
+ * which gives a flat disc a thickness). Measured from the densest point, not as the center's distance less the part
+ * along the ray, which a small blob far away loses to rounding. CPU twin of the draw's `exactFalloff`; change both.
+ */
+export function exactFalloff(from: ArrayLike<number>, dir: ArrayLike<number>, center: ArrayLike<number>, cov: ArrayLike<number>, widen = 0): number {
+  const a = cov[0] + widen, b = cov[1], c = cov[2], d = cov[3] + widen, e = cov[4], f = cov[5] + widen
+  const t = densestAlong(from, dir, center, [a, b, c, d, e, f])
+  const w = [center[0] - from[0] - dir[0] * t, center[1] - from[1] - dir[1] * t, center[2] - from[2] - dir[2] * t]
+  const A = [d * f - e * e, c * e - b * f, b * e - c * d, a * f - c * c, b * c - a * e, a * d - b * b]
+  const det = a * A[0] + b * A[1] + c * A[2]
+  const Aw = [A[0] * w[0] + A[1] * w[1] + A[2] * w[2], A[1] * w[0] + A[3] * w[1] + A[4] * w[2], A[2] * w[0] + A[4] * w[1] + A[5] * w[2]]
+  const q = (w[0] * Aw[0] + w[1] * Aw[1] + w[2] * Aw[2]) / Math.max(det, 1e-300)
+  return Math.exp(-0.5 * q)
+}
