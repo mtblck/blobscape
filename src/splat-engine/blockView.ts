@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Group, Mesh, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { buildBlocks, flowMesh, lampSight, lampsOf, planFlow, shapeFlow, type BlockLook, type BlockPiece, type BlockSource, type FlowMesh, type FlowPlan, type SolidCells } from './blocks.ts'
+import { flowMesh, holed, keptBlocks, lampSight, lampsOf, planFlow, shapeFlow, type BlockLook, type BlockPiece, type BlockSource, type FlowMesh, type FlowPlan, type SolidCells } from './blocks.ts'
 import type { Light } from './engine.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
@@ -65,12 +65,18 @@ export class BlockView extends Group {
     this.out.depthWrite = false
     this.quad = new QuadMesh(this.out)
     this.edge.value = look.edge ?? 0.3
-    const built = buildBlocks(actors, look)
+    // each source alone (none shades or joins another), so one whose cubes are kept (`keepCubes`) is not made again
+    const built = actors.map((a) => keptBlocks(a, look))
     this.casts = look.shadows === false ? [false, false, false, false] : lampsOf(actors[0]?.seen)
-    this.solid = built.solids[0]
-    this.blocks = built.blocks
-    this.faces = built.faces
-    for (const p of built.pieces) {
+    this.solid = built[0]?.solids[0]
+    this.blocks = 0
+    this.faces = 0
+    for (const b of built) this.blocks += b.blocks
+    for (const [actor, b] of built.entries()) for (const one of b.pieces) {
+      const p = { ...one, actor }, indices = holed(p, actors[actor].hole)
+      // a bone whose cubes all stand in the hole draws nothing
+      if (!indices.length) continue
+      this.faces += indices.length / 6
       const g = new BufferGeometry()
       g.setAttribute('position', new BufferAttribute(p.positions, 3))
       g.setAttribute('normal', new BufferAttribute(p.normals, 3))
@@ -78,7 +84,7 @@ export class BlockView extends Group {
       g.setAttribute('blockLight', new BufferAttribute(p.light, 3))
       g.setAttribute('lampSeen', new BufferAttribute(new Float32Array((p.positions.length / 3) * 4).fill(1), 4))
       g.setAttribute('uv', new BufferAttribute(p.uvs, 2))
-      g.setIndex(new BufferAttribute(p.indices, 1))
+      g.setIndex(new BufferAttribute(indices, 1))
       const mesh = new Mesh(g, this.material)
       mesh.matrixAutoUpdate = false
       // a bone can carry its cubes anywhere, so the rest pose's bounds say nothing

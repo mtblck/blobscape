@@ -87,7 +87,22 @@ export interface BlockSource {
   flows?: boolean
   /** The side of this source's blocks, where it was cut on a grid of its own (a finer cut of the place underfoot); left out, the look's `cell`. */
   blockCell?: number
+  /**
+   * Cubes whose middles stand in this square (x and z, in the source's rest units) are not drawn: where a finer cut of
+   * the same ground is laid in their place (a patch round the place looked at). The cubes are still made, and nothing
+   * else changes, so moving the square only picks other faces to draw (`holed`).
+   */
+  hole?: BlockHole
+  /**
+   * Its blobs never change in place, so its cubes are kept with them and made once (`keptBlocks`): a stage that makes
+   * its cubes again for a new actor beside it (a patch moved underfoot) takes these as they were, not over a second's
+   * work again. A source whose colors are changed in place (weather shaded under the sky) must leave it out.
+   */
+  keepCubes?: boolean
 }
+
+/** A square of ground, x and z, in a source's rest units. */
+export interface BlockHole { min: readonly [number, number]; max: readonly [number, number] }
 
 /** The cubes on one bone of one actor, as a mesh: four corners a face, two triangles. */
 export interface BlockPiece {
@@ -435,6 +450,41 @@ export function buildBlocks(sources: readonly BlockSource[], look: BlockLook): {
     pieces.push({ actor: p.actor, bone: p.bone, blocks: p.cells.length, positions, normals, colors, light, uvs, indices, faceCells, side: sources[p.actor].blockCell ?? look.cell })
   }
   return { pieces, blocks: count, faces, solids }
+}
+
+/** A piece's triangles, leaving out every face of a cube whose middle stands in `hole`: all of them when there is none. */
+export function holed(piece: BlockPiece, hole?: BlockHole): Uint32Array {
+  if (!hole) return piece.indices
+  const faces = piece.indices.length / 6, keep = new Uint32Array(piece.indices.length)
+  let t = 0
+  for (let f = 0; f < faces; f++) {
+    const x = piece.faceCells[f * 4] * piece.side, z = piece.faceCells[f * 4 + 2] * piece.side
+    if (x >= hole.min[0] && x <= hole.max[0] && z >= hole.min[1] && z <= hole.max[1]) continue
+    keep.set(piece.indices.subarray(f * 6, f * 6 + 6), t)
+    t += 6
+  }
+  return keep.slice(0, t)
+}
+
+type Built = ReturnType<typeof buildBlocks>
+const kept = new WeakMap<Blobs, { source: BlockSource; key: string; built: Built }[]>()
+
+/**
+ * One source's cubes (`buildBlocks` of it alone, which gives the same cubes as among others, since no source shades or
+ * joins another), kept with its blobs when it says they never change (`keepCubes`) and asked for again with the same
+ * look (its ambient aside), the same grid and the same skin, glow and lamps.
+ */
+export function keptBlocks(source: BlockSource, look: BlockLook): Built {
+  if (!source.keepCubes) return buildBlocks([source], look)
+  const key = JSON.stringify({ ...look, ambient: undefined, cell: source.blockCell ?? look.cell })
+  const list = kept.get(source.blobs) ?? []
+  const same = (s: BlockSource) => s.skin === source.skin && s.glow === source.glow && s.laid === source.laid && s.seen === source.seen && s.skeleton.bones === source.skeleton.bones
+  const hit = list.find((e) => e.key === key && same(e.source))
+  if (hit) return hit.built
+  const built = buildBlocks([source], look)
+  // a few looks a set of blobs (block sizes, lights), the newest first
+  kept.set(source.blobs, [{ source, key, built }, ...list].slice(0, 3))
+  return built
 }
 
 /** Which of the first four lights are lamps that stay put, by a source's `seen`: those some blob of it sees less than all of. */

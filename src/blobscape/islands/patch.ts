@@ -53,3 +53,26 @@ export function inHole(p: Patch, coarse: number, x: number, z: number): boolean 
   const i = Math.round(x / coarse), k = Math.round(z / coarse)
   return i >= p.cells.x[0] && i <= p.cells.x[1] && k >= p.cells.z[0] && k <= p.cells.z[1]
 }
+
+/**
+ * The patch's hole as the square a drawing of blocks leaves out (blocks.ts `BlockHole`): the middles of the coarse cells
+ * in it but its edge ring. Those cubes were made beside the ones in the hole, with the faces between left out, so
+ * hiding the ring too would open slits into them where the fine ground stands lower; drawn, they lie under the
+ * patch's own cubes, which overlap them.
+ */
+export function patchHole(p: Patch, coarse: number): { min: [number, number]; max: [number, number] } {
+  return { min: [(p.cells.x[0] + 0.5) * coarse, (p.cells.z[0] + 0.5) * coarse], max: [(p.cells.x[1] - 0.5) * coarse, (p.cells.z[1] - 0.5) * coarse] }
+}
+
+/** On a phone a whole island is never cut in blocks under this many times the grid: smaller blocks are the patch's alone. */
+export const PHONE_BLOCK_BASE = 2
+
+/**
+ * The block size a whole island is cut at, for the block size asked for. On a phone never under `PHONE_BLOCK_BASE`,
+ * since a whole island at 1× is some 700,000 cubes and hung loading on Matt's phone (2026-11-21): smaller blocks are
+ * streamed there, the patch round the elf (or the middle of the view) cut at the size asked for and the rest of the
+ * island left coarser, so the blocks far off are fewer and bigger (issue #464).
+ */
+export function blockBase(size: number, phone: boolean): number {
+  return phone ? Math.max(size, PHONE_BLOCK_BASE) : size
+}

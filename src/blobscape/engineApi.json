@@ -126,6 +126,18 @@
        "optional": true,
        "type": "number",
        "doc": "The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`."
+      },
+      {
+       "name": "hole",
+       "optional": true,
+       "type": "BlockHole",
+       "doc": "While the stage draws blocks, the square (x and z, rest units) whose cubes are not drawn, where a finer cut is laid in (blocks.ts `BlockSource.hole`)."
+      },
+      {
+       "name": "keepCubes",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Its blobs never change in place, so while the stage draws blocks its cubes are made once and kept (blocks.ts `BlockSource.keepCubes`)."
       }
      ]
     },
@@ -378,6 +390,15 @@
        "signatures": [
         {
          "code": "tint(paint?: (color: readonly [number, number, number], blob: number) => readonly number[]): void"
+        }
+       ]
+      },
+      {
+       "name": "setFarDetail",
+       "doc": "Level of detail by distance (lod.ts `FarRule`), kept for every world from now on: past `from` fewer blobs are drawn\nthe further off they are, each grown to cover for the rest, so a world as big as an island draws far ground with\nfewer, bigger blobs. Leave it out for every blob. The soft actors drawn among blocks keep every blob.",
+       "signatures": [
+        {
+         "code": "setFarDetail(rule?: FarRule): void"
         }
        ]
       },
@@ -1251,6 +1272,11 @@
        "name": "cull",
        "type": "boolean",
        "doc": "Whether blobs with nothing to draw (off screen, behind the camera or the clip plane, and on WebGPU also cut away\nor dropped by the level of detail) are left out of the sort and the draw, which leaves the picture as it was.\nOn by default; for comparing. The radix sort (`sort: 'radix'`) always sorts and draws every blob."
+      },
+      {
+       "name": "farDetail",
+       "type": "false | FarRule",
+       "doc": "Level of detail for blobs too small to see, blob by blob (lod.ts `FarRule`): where blobs would come under about\n`pixels` on screen, fewer are drawn the smaller they get, each grown to cover for the rest, so a world as big as\nan island draws its far ground with fewer, bigger blobs. On both backends, worked out where blobs are projected,\nso it follows the camera with no deform; on WebGPU a blob left out is left out of the sort and the draw, on WebGL\nit is drawn with no size. Off (false) unless asked for. Exact shapes and clean cuts read a blob's own covariance\nand do not see it grow."
       },
       {
        "name": "clip",
@@ -12613,6 +12639,35 @@
        "optional": true,
        "type": "number",
        "doc": "The side of this source's blocks, where it was cut on a grid of its own (a finer cut of the place underfoot); left out, the look's `cell`."
+      },
+      {
+       "name": "hole",
+       "optional": true,
+       "type": "BlockHole",
+       "doc": "Cubes whose middles stand in this square (x and z, in the source's rest units) are not drawn: where a finer cut of\nthe same ground is laid in their place (a patch round the place looked at). The cubes are still made, and nothing\nelse changes, so moving the square only picks other faces to draw (`holed`)."
+      },
+      {
+       "name": "keepCubes",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Its blobs never change in place, so its cubes are kept with them and made once (`keptBlocks`): a stage that makes\nits cubes again for a new actor beside it (a patch moved underfoot) takes these as they were, not over a second's\nwork again. A source whose colors are changed in place (weather shaded under the sky) must leave it out."
+      }
+     ]
+    },
+    {
+     "name": "BlockHole",
+     "kind": "interface",
+     "doc": "A square of ground, x and z, in a source's rest units.",
+     "props": [
+      {
+       "name": "min",
+       "type": "readonly [number, number]",
+       "doc": ""
+      },
+      {
+       "name": "max",
+       "type": "readonly [number, number]",
+       "doc": ""
       }
      ]
     },
@@ -12731,6 +12786,26 @@
      "signatures": [
       {
        "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] }"
+      }
+     ]
+    },
+    {
+     "name": "holed",
+     "kind": "function",
+     "doc": "A piece's triangles, leaving out every face of a cube whose middle stands in `hole`: all of them when there is none.",
+     "signatures": [
+      {
+       "code": "holed(piece: BlockPiece, hole?: BlockHole): Uint32Array"
+      }
+     ]
+    },
+    {
+     "name": "keptBlocks",
+     "kind": "function",
+     "doc": "One source's cubes (`buildBlocks` of it alone, which gives the same cubes as among others, since no source shades or\njoins another), kept with its blobs when it says they never change (`keepCubes`) and asked for again with the same\nlook (its ambient aside), the same grid and the same skin, glow and lamps.",
+     "signatures": [
+      {
+       "code": "keptBlocks(source: BlockSource, look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] }"
       }
      ]
     },
@@ -18578,6 +18653,61 @@
      "signatures": [
       {
        "code": "screenRadius(radius: number, depth: number, p11: number, height: number): number"
+      }
+     ]
+    },
+    {
+     "name": "FarRule",
+     "kind": "interface",
+     "doc": "Level of detail for blobs too small to see, blob by blob: for one actor as big as a world (an island a hundred and\nfifty meters across, the camera standing on it), where the actor's own size on screen says nothing. A blob that\nwould come under `pixels` on screen (its largest standard deviation, far off or just small) is kept by the share of\nthat it would fill, so fewer are drawn the smaller they get, each grown to cover for those left out: far ground is\ndrawn by about as many blobs as the pixels it covers, which also stops far fine detail shimmering, while a big soft\ncloud at the same distance keeps every blob. Which go is `lodRank` again, so the same blobs go each time.",
+     "props": [
+      {
+       "name": "pixels",
+       "type": "number",
+       "doc": "The least a blob's size may come to on screen (its largest standard deviation, in pixels of the picture) before blobs thin out."
+      },
+      {
+       "name": "least",
+       "type": "number",
+       "doc": "Never fewer than this share of the blobs, however small."
+      }
+     ]
+    },
+    {
+     "name": "FAR",
+     "kind": "const",
+     "doc": "Blobs thin out where they would come under about a pixel, and never under 5% of them.",
+     "type": "FarRule"
+    },
+    {
+     "name": "FAR_BAND",
+     "kind": "const",
+     "doc": "How far before it goes a blob starts to shrink, as a share of the ranks: a blob shrinks away rather than blinks out.",
+     "type": "0.1"
+    },
+    {
+     "name": "FAR_SPREAD",
+     "kind": "const",
+     "doc": "How much more than the area left out the blobs kept grow to cover, when few are kept: blobs thinned at random\nleave chance gaps between them, which a surface of opaque discs showed as specks of what lies behind (clouds of\nsmall blobs came out grainy). Eased in from nothing as blobs start to thin out, so nothing jumps.",
+     "type": "2"
+    },
+    {
+     "name": "farKeep",
+     "kind": "function",
+     "doc": "The share of blobs kept where a blob's largest standard deviation on screen squared is `px2` (pixels²).",
+     "signatures": [
+      {
+       "code": "farKeep(px2: number, options: FarRule): number"
+      }
+     ]
+    },
+    {
+     "name": "farSize",
+     "kind": "function",
+     "doc": "What a blob's covariance is multiplied by, by its `rank` (`lodRank`), where its largest standard deviation on screen\nsquared is `px2`: 0 left out, else grown by one over the area kept (and `FAR_SPREAD`), and shrinking toward 0 over `FAR_BAND` as it\nnears its turn to go. `farSizeNode` in engine.ts is its twin (in `projectSplat`); change both.",
+     "signatures": [
+      {
+       "code": "farSize(rank: number, px2: number, rule: FarRule): number"
       }
      ]
     }
