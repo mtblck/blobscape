@@ -67,6 +67,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   shift: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner and travels to it.',
   jelly: 'A see-through jellyfish of Gaussian splats drifting in space: you see the stars through its bell, and light pulses run down its tentacles.',
   globe: "Shake a snow globe holding a little scene of Gaussian splats: the snow swirls up in water you can't see and settles on roofs, hats and the ground.",
+  morph: 'One little Gaussian splat scene going from style to style, paint, cel shading, characters, cubes, neon, each change wiped across the picture.',
   sweater: 'A Christmas tree, an ornament and a pile of presents knitted into an ugly Christmas sweater, stitch by stitch, from Gaussian splats you can turn.',
   islands: 'A floating island grown from a biome recipe and a number, out of Gaussian splats: hills, a path, trees and stones, each made of materials from one library.',
   bouquet: 'A florist that never makes the same bouquet twice: pick a season and it grows every flower petal by petal out of Gaussian splats and stands them in a vase.',
@@ -117,6 +118,8 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
       return { path, title: `Glass Jellyfish · ${SITE.name}`, description: 'A jellyfish made of Gaussian splats, nearly all of them almost clear, drifting through space so you can see the stars through its bell. Each beat of the bell sends light down its canals and along its tentacles, drawn as blobs that give their own light and glow through the lens. An experiment in what opacity alone can draw.' }
     case 'globe':
       return { path, title: `Snow Globe · ${SITE.name}`, description: "A little scene made of Gaussian splats, sealed under a glass dome full of water and snow. Shake it, by tapping it or shaking your phone, and the snow swirls up and drifts back down over a quarter of a minute, settling on whatever is inside: the snowman's hat, the cabin's roof, the presents. Pick the scene, the time of day and how much snow." }
+    case 'morph':
+      return { path, title: `Style Morph · ${SITE.name}`, description: 'One little scene made of Gaussian splats going from style to style: soft blobs, gouache, cel shading, characters, cubes, neon, halftone dots and stained glass, each change wiped across the picture by an iris, a clock hand, blinds or a dither. The blobs never change, only how they are drawn. Pick the styles, the wipe and how long each holds.' }
     case 'sweater':
       return { path, title: `Ugly Sweater · ${SITE.name}`, description: 'Christmas scenes made of Gaussian splats and knitted into an ugly Christmas sweater: a grid of yarn stitches fixed on the screen, the picture in a few yarn colors, and bands of stars, zigzags, little trees and reindeer knitted in above and below it. Pick the sweater and the pattern, and turn the scene while the stitches stay put.' }
     case 'islands':
