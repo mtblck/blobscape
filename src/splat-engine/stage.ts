@@ -1092,7 +1092,8 @@ export class Stage {
       // the subject alone (not the sky's sun, moon and stars): what thumbprints are sized by and dimension lines go round
       const box = this.world.posedBox(true)
       this.filter.setSize(x, y)
-      this.filter.setLook(this.filterLook, this.renderer.getPixelRatio(), Math.hypot(box.hi[0] - box.lo[0], box.hi[1] - box.lo[1], box.hi[2] - box.lo[2]), this.time)
+      const size = Math.hypot(box.hi[0] - box.lo[0], box.hi[1] - box.lo[1], box.hi[2] - box.lo[2])
+      this.filter.setLook(this.filterLook, this.renderer.getPixelRatio(), Number.isFinite(size) && size > 0 ? size : 1, this.time)
       this.filter.render(this.renderer, this.scene, this.camera, box)
       return
     }
