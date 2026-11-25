@@ -28,7 +28,7 @@ export const SUNNY_POND: PropDoc = {
     skyReach: 0.8,
     look: { dither: 0.5, glow: 1, outline: true, edges: true },
     camera: { target: [0, 0.4, 0], distance: 4.7, azimuth: 24, elevation: 16, swing: 16 },
-    air: { haze: { color: '#98d0ec', from: 2, to: 14 }, specks: [{ kind: 'dust', count: 25, from: [-1.5, 0.3, -0.8], to: [1.5, 1.6, 1], colors: ['#fff4e0', '#ffd044'] }, { kind: 'fireflies', lit: 'night', count: 20, from: [-1.6, 0.1, -1.2], to: [1.6, 0.9, 1.5], colors: ['#ffd044', '#e4d898'] }] },
+    air: { haze: { color: '#98d0ec', from: 2, to: 14 }, specks: [{ kind: 'dust', count: 25, from: [-1.5, 0.3, -0.8], to: [1.5, 1.6, 1], colors: ['#fff4e0', '#ffd044'] }, { kind: 'fireflies', lit: 'night', count: 24, from: [-1.6, 0.1, -1.2], to: [1.6, 0.9, 1.5], colors: ['#ffd044', '#e4d898'], size: 0.03 }] },
     // real water (sceneWater.ts): the lily pads float on it and rock, and fish rising leave the rings
     water: { level: 0, from: [-1.75, -1.75], to: [1.75, 1.75], color: '#2c7494', clear: 0.45, cell: 0.022, speed: 0.3, damping: 0.5, ripple: 6, deep: 0.05, bodies: [{ bone: 'fish0', at: [0.95, -0.045, 1.2], r: 0.035 }, { bone: 'fish1', at: [-0.9, -0.045, 1.15], r: 0.035 }, { bone: 'fish2', at: [0.3, -0.045, -1.2], r: 0.035 }, { bone: 'fish3', at: [-1.45, -0.045, -0.5], r: 0.035 }], floats: [{ bone: 'pad0', at: [1.346, 0, 0.95], size: 0.1 }, { bone: 'pad1', at: [0.539, 0, 1.386], size: 0.1 }, { bone: 'pad2', at: [-0.446, 0, 1.304], size: 0.1 }, { bone: 'pad3', at: [-1.11, 0, 0.95], size: 0.1 }, { bone: 'pad4', at: [-1.28, 0, -0.95], size: 0.1 }, { bone: 'pad5', at: [-0.52, 0, -1.189], size: 0.1 }, { bone: 'pad6', at: [0.435, 0, -1.472], size: 0.1 }, { bone: 'pad7', at: [1.242, 0, -0.95], size: 0.1 }] },
     bones: [
