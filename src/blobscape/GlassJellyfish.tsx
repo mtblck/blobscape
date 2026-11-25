@@ -19,7 +19,7 @@ const VIEWS: { id: string; label: string; orbit: Orbit }[] = [
   { id: 'above', label: 'Through the top', orbit: { target: [0, -0.1, 0], distance: 2.6, azimuth: 10, elevation: 62 } },
   { id: 'bell', label: 'The bell', orbit: { target: [0, 0.05, 0], distance: 1.9, azimuth: 35, elevation: 12 } },
 ]
-const COLORS: { id: LightColor | 'off'; label: string }[] = [{ id: 'cyan', label: 'Cyan' }, { id: 'violet', label: 'Violet' }, { id: 'amber', label: 'Amber' }, { id: 'off', label: 'Off' }]
+const COLORS: { id: LightColor | 'off'; label: string }[] = [{ id: 'cyan', label: 'Cyan' }, { id: 'rainbow', label: 'Rainbow' }, { id: 'violet', label: 'Violet' }, { id: 'amber', label: 'Amber' }, { id: 'off', label: 'Off' }]
 /** How many times its own color a light blob is drawn under the lens, so the pulses are the one thing over white. */
 const LIGHT_GAIN = 6
 /** The faint light of space on the body, and a cold light from above. */
@@ -47,7 +47,7 @@ export function GlassJellyfish() {
   const coarse = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, [])
   const [playing, setPlaying] = useState(!calm)
   const [count, setCount] = useState(() => detailAsked(DETAIL, countNames) ?? (coarse ? DETAIL[0] : DETAIL[1]))
-  const [color, setColor] = useState<LightColor | 'off'>(() => { const c = params().get('lights'); return c && (c === 'off' || c in LIGHT_COLORS) ? (c as LightColor | 'off') : 'cyan' })
+  const [color, setColor] = useState<LightColor | 'off'>(() => { const c = params().get('lights'); return c && (c === 'off' || c === 'rainbow' || c in LIGHT_COLORS) ? (c as LightColor | 'off') : 'cyan' })
   const [clear, setClear] = useState(() => { const v = Number(params().get('clear')); return v > 0 && v <= 3 ? v : 1 })
   const [glow, setGlow] = useState(params().get('glow') !== '0')
   const [focus, setFocus] = useState(params().get('focus') !== '0')
@@ -92,7 +92,8 @@ export function GlassJellyfish() {
       shineLights(jelly, t, now.current.color)
       stage.recolor(jelly.lights)
       const g = now.current.color === 'off' ? 0 : innerGlowAt(t)
-      const c = now.current.color === 'off' ? LIGHT_COLORS.cyan.front : LIGHT_COLORS[now.current.color].front
+      const lc = now.current.color
+      const c = lc === 'off' || lc === 'rainbow' ? [0.85, 0.85, 1] : LIGHT_COLORS[lc].front
       const h = sk.posedHead
       stage.setLights([
         { position: [h[0], h[1] + 0.12, h[2]], color: [c[0] * (0.15 + 1.4 * g), c[1] * (0.15 + 1.4 * g), c[2] * (0.15 + 1.4 * g)], range: 0.7 },

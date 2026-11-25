@@ -23,8 +23,8 @@ export const BEATS = 6
 export const BEAT = LOOP / BEATS
 
 /** The bell's radius at the margin, and the height of its dome over the margin. */
-export const BELL_R = 0.55
-export const BELL_H = 0.42
+export const BELL_R = 0.74
+export const BELL_H = 0.44
 /** How far round from the top the bell's skin runs (radians): a little past the margin, so it curls in. */
 const BELL_A = 1.64
 /** Bones round the margin that squeeze the bell in. */
@@ -135,6 +135,8 @@ export interface LightPath {
   on: Int16Array
   /** Each light blob's own color at full strength. */
   base: Float32Array
+  /** Each light blob's hue for the rainbow, 0 to 1: its tentacle's, or its canal's place round the bell. */
+  hue: Float32Array
 }
 
 /** A jellyfish's two actors and what the lights need. */
@@ -241,13 +243,14 @@ export function makeJelly(count: number, seed = 5): Jelly {
     for (let i = 0; i < n; i++) {
       const k = i % 4
       const az0 = TAU * k / 4 + Math.PI / 4
-      const cx = Math.cos(az0) * 0.15, cz = Math.sin(az0) * 0.15
-      const top = BELL_H * Math.cos(Math.asin(0.15 / BELL_R)) - 0.11
+      const off = BELL_R * 0.28
+      const cx = Math.cos(az0) * off, cz = Math.sin(az0) * off
+      const top = BELL_H * Math.cos(Math.asin(off / BELL_R)) - 0.11
       // the horseshoe opens toward the bell's middle line between it and the next
       const th = az0 + Math.PI + 0.55 + rand() * (TAU - 1.1)
-      const tube = 0.022 * Math.sqrt(rand())
+      const tube = 0.026 * Math.sqrt(rand())
       const ph = TAU * rand()
-      const ring = 0.085
+      const ring = BELL_R * 0.16
       const p: Vec3 = [cx + Math.cos(th) * (ring + tube * Math.cos(ph)), top + tube * Math.sin(ph) - 0.012 * Math.cos(th - az0), cz + Math.sin(th) * (ring + tube * Math.cos(ph))]
       const speck = rand() < 0.12
       const r = speck ? 0.0055 : 0.011
@@ -320,31 +323,31 @@ export function makeJelly(count: number, seed = 5): Jelly {
   // the lights: down the canals, round the margin, down every tentacle
   const lb = new Blobs(4096)
   const lw: [number, number][][] = []
-  const at: number[] = [], on: number[] = [], base: number[] = []
-  const light = (p: Vec3, r: number, w: [number, number][], d: number, tentacle: number, color: Vec3) => {
+  const at: number[] = [], on: number[] = [], base: number[] = [], hue: number[] = []
+  const light = (p: Vec3, r: number, w: [number, number][], d: number, tentacle: number, color: Vec3, h: number) => {
     lb.push({ center: p, scale: [r, r, r], quat: [0, 0, 0, 1], color, opacity: 0 })
-    lw.push(w); at.push(d); on.push(tentacle); base.push(...color)
+    lw.push(w); at.push(d); on.push(tentacle); base.push(...color); hue.push(h)
   }
   for (let c = 0; c < CANALS; c++) {
     const az = (TAU * c) / CANALS
     const steps = 46
     for (let i = 0; i < steps; i++) {
       const v = (i + 0.5) / steps, a = 0.08 + v * (BELL_A - 0.13)
-      light(bellAt(a, az, thickness(a) + 0.004).p, 0.011, bellWeights(a, az), v * CANAL_LONG, -1, [0.55, 0.85, 1])
+      light(bellAt(a, az, thickness(a) + 0.004).p, 0.011, bellWeights(a, az), v * CANAL_LONG, -1, [0.55, 0.85, 1], az / TAU)
     }
   }
   for (let i = 0; i < 160; i++) {
     const az = (TAU * i) / 160
-    light(bellAt(BELL_A - 0.05, az, 0.006).p, 0.009, bellWeights(BELL_A - 0.05, az), CANAL_LONG + 0.02, -1, [0.6, 0.8, 1])
+    light(bellAt(BELL_A - 0.05, az, 0.006).p, 0.009, bellWeights(BELL_A - 0.05, az), CANAL_LONG + 0.02, -1, [0.6, 0.8, 1], az / TAU)
   }
   for (let j = 0; j < TENTACLES; j++) {
     const az = tentAz(j), len = tentacleLength(j)
-    for (let s = 0.02; s < len; s += 0.018) light(tentacleAt(az, s), 0.012 * (1 - 0.45 * s / len), tentacleWeights(j, s), CANAL_LONG + s, j, [0.4, 1, 0.95])
+    for (let s = 0.02; s < len; s += 0.018) light(tentacleAt(az, s), 0.012 * (1 - 0.45 * s / len), tentacleWeights(j, s), CANAL_LONG + s, j, [0.4, 1, 0.95], tentAz(j) / TAU)
   }
   const lskin = emptySkin(lb.count)
   lw.forEach((w, i) => setWeights(lskin, i, w))
   const lights = { blobs: lb, skin: lskin, skeleton, glow: new Uint8Array(lb.count).fill(255) }
-  return { skeleton, body, lights, path: { at: Float32Array.from(at), on: Int16Array.from(on), base: Float32Array.from(base) }, opacity: blobs.opacity.slice(0, blobs.count) }
+  return { skeleton, body, lights, path: { at: Float32Array.from(at), on: Int16Array.from(on), base: Float32Array.from(base), hue: Float32Array.from(hue) }, opacity: blobs.opacity.slice(0, blobs.count) }
 }
 
 /** How contracted the bell is at `t` (0 open to 1 squeezed): a quick squeeze, then a slow opening. */
@@ -372,9 +375,9 @@ export function poseJelly(sk: Skeleton, t: number, turn = true) {
   for (let i = 0; i < RIM_BONES; i++) {
     const az = (TAU * i) / RIM_BONES
     const b = 1 + i
-    sk.offset[b * 3] = -Math.cos(az) * 0.11 * s
+    sk.offset[b * 3] = -Math.cos(az) * 0.2 * BELL_R * s
     sk.offset[b * 3 + 1] = 0.045 * s
-    sk.offset[b * 3 + 2] = -Math.sin(az) * 0.11 * s
+    sk.offset[b * 3 + 2] = -Math.sin(az) * 0.2 * BELL_R * s
     sk.setRotation(b, axisAngle([-Math.sin(az), 0, Math.cos(az)], 0.35 * s))
   }
   const beat = (TAU * t) / BEAT
@@ -407,7 +410,18 @@ export const LIGHT_COLORS = {
   violet: { front: [0.85, 0.6, 1] as Vec3, tail: [0.45, 0.25, 1] as Vec3 },
   amber: { front: [1, 0.85, 0.45] as Vec3, tail: [1, 0.4, 0.25] as Vec3 },
 }
-export type LightColor = keyof typeof LIGHT_COLORS
+export type LightColor = keyof typeof LIGHT_COLORS | 'rainbow'
+
+/**
+ * A strand's color in the rainbow: its own hue at full strength in the tail, paler toward a pulse's front, so each
+ * tentacle keeps its color and the front still reads as the brightest part.
+ */
+export function rainbowAt(hue: number, front: number): Vec3 {
+  const h = frac(hue) * 6
+  const k = (n: number) => { const x = (n + h) % 6; return 1 - Math.max(0, Math.min(1, Math.min(x, 4 - x))) }
+  const c: Vec3 = [k(5), k(3), k(1)]
+  return mix3(c, [0.5 + c[0] * 0.5, 0.5 + c[1] * 0.5, 0.5 + c[2] * 0.5], front * 0.6)
+}
 
 /** How fast a pulse runs along its path, and how long the light it leaves behind lasts (as a distance). */
 export const PULSE_SPEED = 1.05
@@ -446,12 +460,12 @@ export function pulseAt(d: number, j: number, t: number): { power: number; front
 export function shineLights(jelly: Jelly, t: number, color: LightColor | 'off') {
   const { blobs } = jelly.lights
   const { at, on } = jelly.path
-  const pal = color === 'off' ? undefined : LIGHT_COLORS[color]
+  const pal = color === 'off' || color === 'rainbow' ? undefined : LIGHT_COLORS[color]
   for (let i = 0; i < blobs.count; i++) {
-    if (!pal) { blobs.opacity[i] = 0; continue }
+    if (color === 'off') { blobs.opacity[i] = 0; continue }
     const { power, front } = pulseAt(at[i], on[i], t)
     const p = IDLE + power
-    const c = mix3(pal.tail, pal.front, front)
+    const c = pal ? mix3(pal.tail, pal.front, front) : rainbowAt(jelly.path.hue[i], front)
     const k = Math.min(1, p)
     blobs.color[i * 3] = c[0] * k
     blobs.color[i * 3 + 1] = c[1] * k

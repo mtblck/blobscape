@@ -77,6 +77,13 @@ test('the lights take their color from the pulse, and go out when off', () => {
   shineLights(jelly, 0.3, 'cyan')
   const o = jelly.lights.blobs.opacity
   assert.ok(Math.max(...o.subarray(0, jelly.lights.blobs.count)) > 0.8)
+  shineLights(jelly, 0.3, 'rainbow')
+  // in the rainbow, two tentacles a third of the way round apart glow in different colors
+  const { on } = jelly.path
+  const first = (j: number) => Array.from(on).indexOf(j)
+  const c = jelly.lights.blobs.color, a = first(0) * 3, b = first(TENTACLES / 3) * 3
+  shineLights(jelly, 0.3, 'rainbow')
+  assert.ok(Math.abs(c[a] - c[b]) + Math.abs(c[a + 1] - c[b + 1]) + Math.abs(c[a + 2] - c[b + 2]) > 0.05 || jelly.lights.blobs.opacity[a / 3] < 0.2)
   shineLights(jelly, 0.3, 'off')
   assert.equal(Math.max(...o.subarray(0, jelly.lights.blobs.count)), 0)
 })
