@@ -65,7 +65,7 @@ export const WIZARD_FLOOR: PropDoc = {
   },
 }
 
-/** A cauldron of glowing pink potion over a log fire, stirring itself with a ladle, bubbling and throwing sparks. */
+/** A cauldron of glowing pink potion over a log fire, stirring itself with a ladle, its brew swirling, bubbling and popping, and throwing sparks. */
 export const CAULDRON: PropDoc = {
   name: 'Cauldron',
   foot: [0.607, -0.06, 0.294],
@@ -81,12 +81,6 @@ export const CAULDRON: PropDoc = {
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
     bones: [
-      { name: 'potion', at: [0.62, 0.84, 0.3] },
-      { name: 'flame0', at: [0.92, 0.06, 0.3] },
-      { name: 'flame1', at: [0.713, 0.06, 0.585] },
-      { name: 'flame2', at: [0.377, 0.06, 0.476] },
-      { name: 'flame3', at: [0.377, 0.06, 0.124] },
-      { name: 'flame4', at: [0.713, 0.06, 0.015] },
       { name: 'ladle', at: [0.62, 0.84, 0.3] },
       { name: 'bub0', at: [0.657, 0.88, 0.197] },
       { name: 'bub1', at: [0.559, 0.88, 0.429] },
@@ -108,23 +102,18 @@ export const CAULDRON: PropDoc = {
       { name: 'spark7', at: [0.62, 1.785, 0.3] },
     ],
     parts: [
-      { shape: { kind: 'cut', shape: { kind: 'sphere', at: [0.62, 0.62, 0.3], r: 0.52 }, hole: { kind: 'box', at: [0.62, 1.2, 0.3], half: [0.7, 0.34, 0.7] } }, paint: { kind: 'bands', axis: 'y', size: 0.09, colors: ['#1a1a2a', '#2c2c40', '#1a1a2a', '#0a0a14'] } },
+      // the pot is hollowed under its rim, so the potion has a bowl to lie in
+      { shape: { kind: 'cut', shape: { kind: 'cut', shape: { kind: 'sphere', at: [0.62, 0.62, 0.3], r: 0.52 }, hole: { kind: 'box', at: [0.62, 1.2, 0.3], half: [0.7, 0.34, 0.7] } }, hole: { kind: 'ball', at: [0.62, 0.86, 0.3], r: [0.42, 0.13, 0.42] } }, paint: { kind: 'bands', axis: 'y', size: 0.09, colors: ['#1a1a2a', '#2c2c40', '#1a1a2a', '#0a0a14'] } },
       { shape: { kind: 'ring', at: [0.62, 0.86, 0.3], r: 0.44, tube: 0.06 }, paint: '#4a4a60' },
       { shape: { kind: 'cone', from: [0.936, 0.28, 0.473], to: [1.059, 0, 0.54], r: 0.06, rTo: 0.045 }, paint: '#1a1a2a', noShadow: true },
       { shape: { kind: 'cone', from: [0.313, 0.28, 0.487], to: [0.193, 0, 0.56], r: 0.06, rTo: 0.045 }, paint: '#1a1a2a', noShadow: true },
       { shape: { kind: 'cone', from: [0.612, 0.28, -0.06], to: [0.608, 0, -0.2], r: 0.06, rTo: 0.045 }, paint: '#1a1a2a', noShadow: true },
       { shape: { kind: 'ring', at: [0.12, 0.72, 0.3], r: 0.09, tube: 0.025 }, paint: '#4a4a60', noShadow: true },
       { shape: { kind: 'ring', at: [1.12, 0.72, 0.3], r: 0.09, tube: 0.025 }, paint: '#4a4a60', noShadow: true },
-      { shape: { kind: 'cylinder', at: [0.62, 0.8, 0.3], height: 0.06, r: 0.41 }, paint: { kind: 'patches', size: 0.12, colors: ['#ff5ac0', '#c0208a', '#ff5ac0', '#ffb0e0'] }, bone: 'potion', glow: true, noShadow: true },
       { shape: { kind: 'cone', from: [1.159, 0.05, 0.409], to: [0.424, 0.07, 0.26], r: 0.06, rTo: 0.05 }, paint: { kind: 'bands', axis: 'x', size: 0.06, colors: ['#4a2e1c', '#2a1a12', '#7a4a28'] }, noShadow: true },
       { shape: { kind: 'cone', from: [0.511, 0.05, 0.839], to: [0.66, 0.07, 0.104], r: 0.06, rTo: 0.05 }, paint: { kind: 'bands', axis: 'x', size: 0.06, colors: ['#4a2e1c', '#2a1a12', '#7a4a28'] }, noShadow: true },
       { shape: { kind: 'cone', from: [0.081, 0.05, 0.191], to: [0.816, 0.07, 0.34], r: 0.06, rTo: 0.05 }, paint: { kind: 'bands', axis: 'x', size: 0.06, colors: ['#4a2e1c', '#2a1a12', '#7a4a28'] }, noShadow: true },
       { shape: { kind: 'cone', from: [0.729, 0.05, -0.239], to: [0.58, 0.07, 0.496], r: 0.06, rTo: 0.05 }, paint: { kind: 'bands', axis: 'x', size: 0.06, colors: ['#4a2e1c', '#2a1a12', '#7a4a28'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [0.92, 0.06, 0.3], to: [1.02, 0.36, 0.3], r: 0.085, rTo: 0.02 }, paint: '#ff8a2a', bone: 'flame0', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
-      { shape: { kind: 'cone', from: [0.713, 0.06, 0.585], to: [0.744, 0.36, 0.68], r: 0.085, rTo: 0.02 }, paint: '#ffd24a', bone: 'flame1', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
-      { shape: { kind: 'cone', from: [0.377, 0.06, 0.476], to: [0.296, 0.36, 0.535], r: 0.085, rTo: 0.02 }, paint: '#c8401c', bone: 'flame2', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
-      { shape: { kind: 'cone', from: [0.377, 0.06, 0.124], to: [0.296, 0.36, 0.065], r: 0.085, rTo: 0.02 }, paint: '#ff8a2a', bone: 'flame3', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
-      { shape: { kind: 'cone', from: [0.713, 0.06, 0.015], to: [0.744, 0.36, -0.08], r: 0.085, rTo: 0.02 }, paint: '#ffd24a', bone: 'flame4', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
       { shape: { kind: 'cone', from: [0.82, 0.8, 0.3], to: [0.96, 1.55, 0.35], r: 0.03, rTo: 0.025 }, paint: { kind: 'bands', axis: 'y', size: 0.1, colors: ['#b07a40', '#7a4a28'] }, bone: 'ladle', noShadow: true },
       { shape: { kind: 'sphere', at: [0.96, 1.58, 0.35], r: 0.05 }, paint: '#e0b878', bone: 'ladle', noShadow: true },
       { shape: { kind: 'sphere', at: [0.657, 0.88, 0.197], r: 0.052 }, paint: '#ffb0e0', bone: 'bub0', glow: true, noShadow: true },
@@ -147,17 +136,6 @@ export const CAULDRON: PropDoc = {
       { shape: { kind: 'sphere', at: [1.279, 1.785, -0.237], r: 0.022 }, paint: '#ffd24a', bone: 'spark7', glow: true, noShadow: true },
     ],
     moves: [
-      { kind: 'pulse', bone: 'potion', size: [0.97, 1.02], times: 6 },
-      { kind: 'pulse', bone: 'flame0', size: [0.6, 1.2], times: 7, phase: 0 },
-      { kind: 'sway', bone: 'flame0', axis: 'x', degrees: 10, times: 5, phase: 0 },
-      { kind: 'pulse', bone: 'flame1', size: [0.6, 1.2], times: 8, phase: 0.21 },
-      { kind: 'sway', bone: 'flame1', axis: 'x', degrees: 10, times: 5, phase: 0.3 },
-      { kind: 'pulse', bone: 'flame2', size: [0.6, 1.2], times: 9, phase: 0.42 },
-      { kind: 'sway', bone: 'flame2', axis: 'x', degrees: 10, times: 5, phase: 0.6 },
-      { kind: 'pulse', bone: 'flame3', size: [0.6, 1.2], times: 10, phase: 0.63 },
-      { kind: 'sway', bone: 'flame3', axis: 'x', degrees: 10, times: 5, phase: 0.9 },
-      { kind: 'pulse', bone: 'flame4', size: [0.6, 1.2], times: 11, phase: 0.84 },
-      { kind: 'sway', bone: 'flame4', axis: 'x', degrees: 10, times: 5, phase: 0.2 },
       { kind: 'spin', bone: 'ladle', axis: 'y', times: 3 },
       { kind: 'drift', bone: 'bub0', by: [-0.11, 1.103, 0.1], times: 2, grow: [0.4, 1.5], phase: 0.278 },
       { kind: 'drift', bone: 'bub1', by: [-0.052, 1.584, -0.028], times: 3, grow: [0.4, 1.5], phase: 0.597 },
@@ -186,9 +164,19 @@ export const CAULDRON: PropDoc = {
       { kind: 'spin', bone: 'spark7', axis: 'y', times: 2, phase: 0.91 },
       { kind: 'bob', bone: 'spark7', by: [0, 0.15, 0], times: 3, phase: 0.4 },
     ],
+    // the brew itself: stirred round as the ladle goes, marbled in two pinks, bubbling and popping (potion.ts)
+    potion: { at: [0.62, 0.3], r: 0.38, level: 0.82, colors: ['#3a0830', '#8a1468', '#e05ab8', '#ffd8f0'], stir: 2, bubbles: 26, pop: 0.075, dome: 0.7, froth: 1.6 },
+    // the log fire under the pot is the shared fire recipe (fire.ts): five small beds round it, licking up its sides
+    fires: [
+      { at: [0.92, 0.07, 0.3], r: 0.07, height: 0.3, sparks: 1, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 5 },
+      { at: [0.713, 0.07, 0.585], r: 0.07, height: 0.3, sparks: 1, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 6 },
+      { at: [0.377, 0.07, 0.476], r: 0.07, height: 0.3, sparks: 1, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 7 },
+      { at: [0.377, 0.07, 0.124], r: 0.07, height: 0.3, sparks: 1, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 8 },
+      { at: [0.713, 0.07, 0.015], r: 0.07, height: 0.3, sparks: 1, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 9 },
+    ],
     lights: [
       { at: [0.62, 1.1, 0.3], color: '#ff5ac0', strength: 2.4, range: 2.2, lit: 'always', flicker: { by: 0.2, times: 6 } },
-      { at: [0.62, 0.15, 0.4], color: '#ff8a2a', strength: 1.8, range: 1.6, lit: 'dark', flicker: { by: 0.35, times: 9 } },
+      { at: [0.62, 0.15, 0.4], color: '#ff8a2a', strength: 1.8, range: 1.6, lit: 'dark', flicker: { by: 0.35, times: 9 }, fire: 0 },
     ],
   },
 }
@@ -271,18 +259,13 @@ export const LIT_CANDLE: PropDoc = {
     ],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
-    bones: [
-      { name: 'candle0', at: [-0.9, 0.3, 0.95] },
-    ],
     parts: [
       { shape: { kind: 'cylinder', at: [-0.9, 0, 0.95], height: 0.3, r: 0.05 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#f4e4c0', '#e0b878'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [-0.9, 0.33, 0.95], to: [-0.9, 0.44, 0.95], r: 0.035, rTo: 0.01 }, paint: '#ffd24a', bone: 'candle0', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     ],
-    moves: [
-      { kind: 'pulse', bone: 'candle0', size: [0.7, 1.15], times: 9, phase: 0 },
-    ],
+    // its flame is the shared fire recipe (fire.ts), a small bed at the wick
+    fires: [{ at: [-0.9, 0.312, 0.95], r: 0.022, height: 0.15, sparks: 0, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 1 }],
     lights: [
-      { at: [-0.9, 0.5, 0.95], color: '#ffd24a', strength: 1, range: 1.2, lit: 'dark', flicker: { by: 0.3, times: 11 } },
+      { at: [-0.9, 0.42, 0.95], color: '#ffd24a', strength: 1, range: 1.2, lit: 'dark', flicker: { by: 0.3, times: 11 }, fire: 0 },
     ],
   },
 }
@@ -302,16 +285,11 @@ export const SHORT_CANDLE: PropDoc = {
     ],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
-    bones: [
-      { name: 'candle1', at: [1.25, 0.22, 0.95] },
-    ],
     parts: [
       { shape: { kind: 'cylinder', at: [1.25, 0, 0.95], height: 0.22, r: 0.05 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#f4e4c0', '#e0b878'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [1.25, 0.25, 0.95], to: [1.25, 0.36, 0.95], r: 0.035, rTo: 0.01 }, paint: '#ffd24a', bone: 'candle1', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     ],
-    moves: [
-      { kind: 'pulse', bone: 'candle1', size: [0.7, 1.15], times: 10, phase: 0.27 },
-    ],
+    // its flame is the shared fire recipe (fire.ts), a small bed at the wick
+    fires: [{ at: [1.25, 0.232, 0.95], r: 0.022, height: 0.15, sparks: 0, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 2 }],
   },
 }
 
@@ -330,16 +308,11 @@ export const TALL_CANDLE: PropDoc = {
     ],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
-    bones: [
-      { name: 'candle2', at: [0.1, 0.36, -1.25] },
-    ],
     parts: [
       { shape: { kind: 'cylinder', at: [0.1, 0, -1.25], height: 0.36, r: 0.05 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#f4e4c0', '#e0b878'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [0.1, 0.39, -1.25], to: [0.1, 0.5, -1.25], r: 0.035, rTo: 0.01 }, paint: '#ffd24a', bone: 'candle2', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     ],
-    moves: [
-      { kind: 'pulse', bone: 'candle2', size: [0.7, 1.15], times: 11, phase: 0.54 },
-    ],
+    // its flame is the shared fire recipe (fire.ts), a small bed at the wick
+    fires: [{ at: [0.1, 0.372, -1.25], r: 0.022, height: 0.15, sparks: 0, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 3 }],
   },
 }
 
@@ -358,26 +331,21 @@ export const BOOKS_AND_CANDLE: PropDoc = {
     ],
     look: { dither: 0.5, glow: 1.2, outline: true, edges: true },
     camera: { target: [0, 1.2, 0], distance: 5.6, azimuth: 14, elevation: 9, swing: 16 },
-    bones: [
-      { name: 'candle3', at: [-1.05, 0.45, -0.72] },
-    ],
     parts: [
       { shape: { kind: 'box', at: [-1.05, 0.045, -0.75], half: [0.24, 0.04, 0.16] }, paint: { kind: 'faces', top: '#3a4ab0', side: { kind: 'bands', axis: 'y', size: 0.03, colors: ['#3a4ab0', '#f4e4c0'] } }, noShadow: true },
       { shape: { kind: 'box', at: [-1.05, 0.135, -0.75], half: [0.21, 0.04, 0.16] }, paint: { kind: 'faces', top: '#6a1050', side: { kind: 'bands', axis: 'y', size: 0.03, colors: ['#6a1050', '#f4e4c0'] } }, noShadow: true },
       { shape: { kind: 'box', at: [-1.05, 0.225, -0.75], half: [0.19, 0.04, 0.16] }, paint: { kind: 'faces', top: '#7a4a28', side: { kind: 'bands', axis: 'y', size: 0.03, colors: ['#7a4a28', '#f4e4c0'] } }, noShadow: true },
       { shape: { kind: 'cylinder', at: [-1.05, 0.27, -0.72], height: 0.18, r: 0.05 }, paint: { kind: 'bands', axis: 'y', size: 0.08, colors: ['#f4e4c0', '#e0b878'] }, noShadow: true },
-      { shape: { kind: 'cone', from: [-1.05, 0.48, -0.72], to: [-1.05, 0.59, -0.72], r: 0.035, rTo: 0.01 }, paint: '#ffd24a', bone: 'candle3', glow: true, lit: 'dark', unlit: 'gone', noShadow: true },
     ],
-    moves: [
-      { kind: 'pulse', bone: 'candle3', size: [0.7, 1.15], times: 12, phase: 0.81 },
-    ],
+    // its flame is the shared fire recipe (fire.ts), a small bed at the wick
+    fires: [{ at: [-1.05, 0.462, -0.72], r: 0.022, height: 0.15, sparks: 0, colors: ['#c8401c', '#ff8a2a', '#ffd24a', '#f4e4c0'], lit: 'dark', seed: 4 }],
   },
 }
 
 /** The pieces above as the library lists them. */
 export const OWL_MADE: MadeProp[] = [
   { id: 'wizard-floor', tags: ['rocky', 'night'], kind: 'land', about: 'A round of mossy stone floor with potion bottles, toadstools and stones', prop: WIZARD_FLOOR },
-  { id: 'cauldron', tags: ['magic', 'lamp'], kind: 'prop', group: 'buildings', about: 'A cauldron of glowing pink potion over a log fire, stirring itself with a ladle, bubbling and throwing sparks', prop: CAULDRON },
+  { id: 'cauldron', tags: ['magic', 'lamp'], kind: 'prop', group: 'buildings', about: 'A cauldron of glowing pink potion over a log fire, stirring itself with a ladle, its brew swirling, bubbling and popping, and throwing sparks', prop: CAULDRON },
   { id: 'wizard-owl', tags: ['animal', 'magic'], kind: 'prop', group: 'living', about: 'A great owl in a starry wizard hat on a stump, blinking and stretching its wings', prop: WIZARD_OWL },
   { id: 'lit-candle', tags: ['lamp', 'thing'], kind: 'prop', about: 'A candle whose flame flickers and lights what is round it when it is dark', prop: LIT_CANDLE },
   { id: 'short-candle', tags: ['thing'], kind: 'prop', about: 'A short candle with a flickering flame when it is dark', prop: SHORT_CANDLE },
