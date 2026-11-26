@@ -81,6 +81,7 @@ export function VeggieSlayer() {
   const [said, setSaid] = useState('')
   const [share, setShare] = useState<string>()
   const [ready, setReady] = useState(false)
+  const again = useRef<HTMLButtonElement>(null)
 
   const game = useRef(new Game(1))
   const show = useRef<Show>(null)
@@ -209,6 +210,8 @@ export function VeggieSlayer() {
   }, [stage])
 
   useEffect(() => { if (stage) stage.playing = phase !== 'paused' }, [stage, phase])
+  // at the end, Play again is where focus goes, so a keyboard can start the next game at once
+  useEffect(() => { if (phase === 'over' && document.activeElement === canvas.current) again.current?.focus({ preventScroll: true }) }, [phase])
   // a game left in the background waits
   useEffect(() => {
     const away = () => { if (document.hidden && phaseNow.current === 'playing') setPhase('paused') }
@@ -392,7 +395,7 @@ export function VeggieSlayer() {
                 </div>
                 {counted.length ? tallyList(result) : <p className="text-center text-sm text-ink-muted">Not a single veggie burst. They're still out there, looking grumpy.</p>}
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button primary onClick={() => start()} data-testid="veggie-again">Play again</Button>
+                  <Button ref={again} primary onClick={() => start()} data-testid="veggie-again">Play again</Button>
                   <Button onClick={() => setShare(shareLink())} data-testid="veggie-share">Share</Button>
                 </div>
               </div>
