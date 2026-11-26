@@ -180,7 +180,7 @@ export const CORNUCOPIA: PropDoc = made('Cornucopia', [-0.5, 0, -0.12], 1.1, [
   { shape: { kind: 'sweep', path: loopAt(add(hornAt(4), [0, 0, 0]), 0.3, 12), r: 0.024 }, paint: '#7a4f24', noShadow: true },
   // wheat and corn standing up out of the top of the mouth
   {
-    shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'cone', from: [-0.02, 0.5, -0.12], to: [x, y, z], r: 0.012, rTo: 0.008 })) },
+    shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'cone', from: [-0.02, 0.5, -0.12], to: [x, y, z], r: 0.026, rTo: 0.02 })) },
     paint: '#e0b430', noShadow: true,
   },
   {
@@ -311,6 +311,51 @@ export const CORN_SHOCK: PropDoc = (() => {
     moves: [{ kind: 'sway', bone: 'shock', axis: 'z', degrees: 0.8, times: 3, wind: 4 }],
   })
 })()
+
+// --- single cornstalks ---------------------------------------------------------------------------------------------
+
+/** How one cornstalk grows: its height, which way and how far it leans, its colors, its ears and how its tassel hangs. */
+interface Stalk { at: Vec3; tall: number; lean: [number, number]; green: [string, string]; ears: number; seed: number }
+
+/** A single standing cornstalk: a jointed stem, long arching leaves on alternate sides, ears in their husks and a tassel. */
+function cornstalk(name: string, k: Stalk): PropDoc {
+  const [x0, , z0] = k.at
+  const up = (t: number): Vec3 => [x0 + k.lean[0] * t * t, k.tall * t, z0 + k.lean[1] * t * t]
+  const leaves: { kind: 'sweep'; path: Vec3[]; r: number; rTo: number }[] = []
+  for (let i = 0; i < 7; i++) {
+    const t = 0.16 + i * 0.1, a = k.seed + i * 0.45 + (i % 2) * Math.PI, c = Math.cos(a), s = Math.sin(a)
+    const from = up(t), reach = 0.44 - i * 0.035
+    leaves.push({ kind: 'sweep', path: [from, [from[0] + c * reach * 0.45, from[1] + 0.14, from[2] + s * reach * 0.45], [from[0] + c * reach, from[1] - 0.04, from[2] + s * reach]], r: 0.03, rTo: 0.008 })
+  }
+  const ears: PartDoc[] = []
+  for (let e = 0; e < k.ears; e++) {
+    const t = 0.45 + e * 0.13, a = k.seed + 1.3 + e * 2.4, c = Math.cos(a), s = Math.sin(a), from = up(t)
+    const to: Vec3 = [from[0] + c * 0.09, from[1] + 0.17, from[2] + s * 0.09]
+    ears.push({ shape: { kind: 'cone', from: [from[0] + c * 0.03, from[1], from[2] + s * 0.03], to, r: 0.045, rTo: 0.025 }, paint: { kind: 'faces', top: k.green[1], side: '#9cb050', under: '#46602a' }, bone: 'stalk', noShadow: true })
+    ears.push({ shape: { kind: 'cone', from: to, to: [to[0] + c * 0.05, to[1] + 0.04, to[2] + s * 0.05], r: 0.014, rTo: 0.005 }, paint: '#a8723a', bone: 'stalk', noShadow: true })
+  }
+  const top = up(1)
+  const tassel = [0, 1, 2, 3, 4].map((i) => {
+    const a = k.seed + i * 1.26
+    return { kind: 'cone' as const, from: top, to: [top[0] + Math.cos(a) * 0.09, top[1] + 0.06 - (i % 2) * 0.06, top[2] + Math.sin(a) * 0.09] as Vec3, r: 0.016, rTo: 0.006 }
+  })
+  return made(name, k.at, k.tall + 0.1, [
+    { shape: { kind: 'sweep', path: [0, 0.25, 0.5, 0.75, 1].map(up), r: 0.034, rTo: 0.02 }, paint: { kind: 'bands', axis: 'y', size: 0.12, colors: [k.green[0], k.green[0], k.green[1]] }, bone: 'stalk' },
+    { shape: { kind: 'join', shapes: leaves }, paint: { kind: 'speckle', size: 0.04, colors: [k.green[0], k.green[1], k.green[0]] }, bone: 'stalk', noShadow: true },
+    ...ears,
+    { shape: { kind: 'join', shapes: [...tassel, { kind: 'cone', from: top, to: [top[0], top[1] + 0.12, top[2]], r: 0.016, rTo: 0.006 }] }, paint: { kind: 'speckle', size: 0.02, colors: ['#e0b430', '#cf9a52', '#f6dc6a'] }, bone: 'stalk', noShadow: true },
+  ], {
+    bones: [{ name: 'stalk', at: k.at }],
+    moves: [{ kind: 'sway', bone: 'stalk', axis: 'z', degrees: 1.2, times: 3, phase: (k.seed % 1), wind: 6 }],
+  })
+}
+
+/** A tall green stalk with one ear. */
+export const CORNSTALK_TALL = cornstalk('Tall cornstalk', { at: [-1.2, 0, -0.72], tall: 1.25, lean: [0.04, 0.02], green: ['#46602a', '#6e8a3a'], ears: 1, seed: 0.4 })
+/** A shorter stalk turning gold, with two ears. */
+export const CORNSTALK_GOLD = cornstalk('Golden cornstalk', { at: [0.72, 0, -1.58], tall: 1.05, lean: [-0.05, 0.03], green: ['#b8861c', '#e0b430'], ears: 2, seed: 2.1 })
+/** A stalk leaning over, half green and half dry. */
+export const CORNSTALK_LEANING = cornstalk('Leaning cornstalk', { at: [-0.02, 0, -1.22], tall: 1.15, lean: [0.18, 0.06], green: ['#6e8a3a', '#cf9a52'], ears: 1, seed: 4.3 })
 
 // --- the visitors --------------------------------------------------------------------------------------------------
 
@@ -492,6 +537,9 @@ export const CORNUCOPIA_MADE: MadeProp[] = [
   { id: 'autumn-green', tags: ['grassy', 'farm'], kind: 'land', about: 'A round of autumn grass on a golden afternoon, with fallen leaves, acorns and stones', prop: AUTUMN_GREEN },
   { id: 'cornucopia', tags: ['farm', 'thing'], kind: 'prop', about: 'A giant woven horn of plenty lying on its side, with wheat and corn standing out of its mouth', prop: CORNUCOPIA },
   { id: 'corn-shock', tags: ['farm', 'plant'], kind: 'prop', about: 'Dry cornstalks bundled upright and tied round the middle', prop: CORN_SHOCK },
+  { id: 'cornstalk-tall', tags: ['farm', 'plant'], kind: 'prop', about: 'A tall green cornstalk with one ear and its tassel', prop: CORNSTALK_TALL },
+  { id: 'cornstalk-gold', tags: ['farm', 'plant'], kind: 'prop', about: 'A cornstalk turning gold, with two ears', prop: CORNSTALK_GOLD },
+  { id: 'cornstalk-leaning', tags: ['farm', 'plant'], kind: 'prop', about: 'A cornstalk leaning over, half green and half dry', prop: CORNSTALK_LEANING },
   { id: 'harvest-spill', tags: ['farm', 'thing'], kind: 'prop', about: 'Pumpkins, squash, gourds, apples, pears and grapes spilling out over the grass', prop: HARVEST_SPILL },
   { id: 'visiting-squirrel', tags: ['animal'], kind: 'prop', group: 'living', about: 'A red squirrel that scurries in, sits up to nibble an acorn, and scurries off again', prop: VISITING_SQUIRREL },
   { id: 'visiting-cardinal', tags: ['animal'], kind: 'prop', group: 'living', about: 'A red cardinal that flutters down, pecks at grapes and flies off again', prop: VISITING_CARDINAL },
@@ -513,6 +561,9 @@ export const CORNUCOPIA_PROJECT: SceneProject = {
     { prop: 'autumn-maple', at: [-1.25, 0, -1.3], turn: 0, size: 0.9 },
     here('corn-shock', SHOCK_AT),
     { prop: 'corn-shock', at: [0.98, 0, -1.18], turn: 140, size: 0.85 },
+    here('cornstalk-tall', CORNSTALK_TALL.foot),
+    here('cornstalk-gold', CORNSTALK_GOLD.foot),
+    here('cornstalk-leaning', CORNSTALK_LEANING.foot),
     { ...here('visiting-squirrel', VISITING_SQUIRREL.foot), size: SQUIRREL_SIZE },
     { ...here('visiting-cardinal', VISITING_CARDINAL.foot), size: BIRD_SIZE },
     { ...here('visiting-fox', VISITING_FOX.foot), size: FOX_SIZE },
