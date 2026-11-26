@@ -131,8 +131,8 @@ export function LavaLamp() {
     const l = { ...stillActor(liquidBlobs(color.liquid, det.liquid), 'liquid'), soft: true } as Actor
     const wb = waxBlobs(discsFor(det.cell))
     const w = { ...stillActor(wb, 'wax'), soft: true, glow: new Uint8Array(wb.count).fill(WAX_GLOW) } as Actor
-    return { glass: g, liquid: l, wax: w, key: `${colorId}|${detail}|${pixels}` }
-  }, [colorId, detail, pixels]) // eslint-disable-line react-hooks/exhaustive-deps
+    return { glass: g, liquid: l, wax: w, key: `${detail}|${pixels}` }
+  }, [detail, pixels]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // what the poser and the worker's frames read, without setting the stage again
   const now = useRef({ color, base, knobs, on, playing })
@@ -182,9 +182,19 @@ export function LavaLamp() {
   const worker = useRef<Worker | undefined>(undefined)
   useEffect(() => { worker.current?.postMessage({ type: 'set', knobs } satisfies ToWax); if (local.current) local.current.wax.knobs = { ...knobs } }, [knobs])
   useEffect(() => { worker.current?.postMessage({ type: 'play', playing } satisfies ToWax); if (stage) stage.playing = playing }, [stage, playing])
-  // a new color recolors the wax as it stands
+  // a new color repaints the liquid, the glass and the wax as they stand, never building the stage again
+  const painted = useRef(soft.key + colorId)
   useEffect(() => {
-    if (!stage || !shown || !latest.current) return
+    if (!stage || !shown) return
+    if (painted.current !== shown.key + colorId) {
+      painted.current = shown.key + colorId
+      shown.liquid.blobs.color.set(liquidBlobs(color.liquid, det.liquid).color.subarray(0, shown.liquid.blobs.count * 3))
+      stage.reshape(shown.liquid)
+      const fresh = glassBlobs(color.liquid, det.spacing, pixels ? GLASS.pixels : GLASS.opacity)
+      shown.glass.blobs.color.set(fresh.color.subarray(0, shown.glass.blobs.count * 3))
+      stage.reshape(shown.glass)
+    }
+    if (!latest.current) return
     placeWax(latest.current, DETAILS[detail].cell, color, shown.wax.blobs)
     stage.reshape(shown.wax)
   }, [stage, shown, color]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -193,7 +203,7 @@ export function LavaLamp() {
     if (!stage || !shown) return
     const b = shown.glass.blobs
     if (!glass) b.opacity.fill(0); else { const fresh = glassBlobs(color.liquid, det.spacing, pixels ? GLASS.pixels : GLASS.opacity); b.opacity.set(fresh.opacity.subarray(0, b.count)) }
-    stage.recolor(shown.glass)
+    stage.reshape(shown.glass)
   }, [stage, shown, glass]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (stage) { stage.orbit = orbit; stage.invalidate() } }, [stage, orbit])
   useEffect(() => { stage?.invalidate() }, [stage, on, knobs])
