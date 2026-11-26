@@ -1986,4 +1986,33 @@ export default [
       await g.ctx.close()
     },
   },
+  {
+    name: 'lava-lamp',
+    about: 'Lava Lamp: the wax buds, rises and is cut into discs every frame; picking colors and a base one after another keeps the page answering',
+    entries: ['src/blobscape/LavaLamp.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/lava-lamp/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__lava, null, { timeout: 120000 }).catch(() => {})
+      const step = (t) => g.page.evaluate(async (t) => { await window.__lava.frame(t); const f = window.__lava.wax(); return f && { count: f.count, blobs: f.blobs, ...f.events } }, t)
+      const early = await g.page.evaluate(() => !!window.__lava) ? await step(2) : null
+      const later = early ? await step(30) : null
+      // a color picked again and again repaints in place (each pick once rebuilt the stage and froze the page)
+      const chips = g.page.getByTestId('lava-colors').getByRole('button')
+      const picked = []
+      for (let k = 1; k <= 4 && later; k++) {
+        const t0 = Date.now()
+        await chips.nth(k).click({ timeout: 20000 })
+        await step(30 + k)
+        picked.push(Date.now() - t0)
+      }
+      await g.page.getByTestId('lava-bases').getByRole('button', { name: 'Coffee cup' }).click({ timeout: 20000 }).catch(() => {})
+      await g.page.waitForTimeout(3000)
+      const after = later ? await step(40) : null
+      if (!early || !later || !after) fails.push(`lava lamp: the page never drew (${JSON.stringify({ early, later, after })})`)
+      else if (!(later.count > 500 && later.buds > early.buds && after.count > 500 && picked.length === 4 && picked.every((ms) => ms < 15000))) fails.push(`lava lamp: ${JSON.stringify({ early, later, after, picked })}`)
+      else ok(`lava lamp: ${later.count.toLocaleString()} discs of wax, ${later.buds} buds risen and ${later.merges} run together by 30 s, four colors and a base picked in ${Math.max(...picked)} ms at most each`)
+      await g.page.screenshot({ path: 'verify-shots/lava-lamp.png' }).catch(() => {})
+      await g.ctx.close()
+    },
+  },
 ]

@@ -28,6 +28,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'lava',
+    title: 'Lava Lamp',
+    url: '/experiments/lava-lamp/',
+    cover: '/covers/lava-lamp.webp',
+    tags: ['watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-26',
+    updated: '2026-11-26',
+    body: 'A lava lamp whose wax is simulated: buds swell off the warm pool, rise, press together and run into each other, then cool at the top and sink back. Eight wax colors, and a pulp rocket, a light bulb, a volcano and a coffee cup to stand it in.',
+  },
+  {
     id: 'veggies',
     title: 'Veggie Slayer',
     url: '/experiments/veggie-slayer/',
