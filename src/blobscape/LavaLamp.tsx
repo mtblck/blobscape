@@ -66,7 +66,7 @@ const media = (q: string) => typeof window !== 'undefined' && window.matchMedia(
 const hex = (c: readonly number[]) => `#${c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('')}`
 
 /**
- * Lava Lamp: wax that warms on the bottom of the glass, swells up out of its pool, rises, stretches, splits, runs
+ * Lava Lamp: wax that warms on the bottom of the glass, swells up out of its pool, rises, presses against others, runs
  * together and sinks back as it cools (lavalamp/wax.ts), its surface cut into blobs every frame (surface.ts), in a
  * glass of tinted liquid on one of several bases (lamp.ts), drawn in any of the shared styles.
  */
@@ -255,7 +255,7 @@ export function LavaLamp() {
     const id = setInterval(() => {
       const f = latest.current
       if (!f) return
-      setLine(`${f.blobs === 0 ? 'All the wax lies in the pool' : f.blobs === 1 ? 'One blob is up' : `${f.blobs} blobs are up`}; ${f.events.buds} risen, ${f.events.splits} split, ${f.events.merges} run together so far.`)
+      setLine(`${f.blobs === 0 ? 'All the wax lies in the pool' : f.blobs === 1 ? 'One blob is up' : `${f.blobs} blobs are up`}; ${f.events.buds} risen, ${f.events.merges} run together, ${f.events.landed} sunk back so far.`)
     }, 1000)
     return () => clearInterval(id)
   }, [])
@@ -376,14 +376,17 @@ export function LavaLamp() {
         <div className="mt-8 max-w-[36em] space-y-4 text-lg leading-relaxed text-ink-muted lg:col-span-7 lg:mt-0 lg:text-xl">
           <p>
             The wax is a pool on the bottom and a handful of blobs, each with a size, a temperature and a speed. The bulb
-            warms the pool until a bud of it swells up, still tied to the pool by a stretch of wax. Warm wax weighs a little
-            less than the liquid and rises; the liquid takes its heat as it goes, faster near the cool top and faster from
-            small blobs, until it weighs more and sinks back.
+            warms the pool until a bud of it swells up, fed by the pool and still tied to it by a neck of wax. Warm wax
+            weighs a little less than the liquid and rises. Only the liquid just over the bulb is warm, so a blob loses its
+            heat through its skin all the way up, faster the smaller it is, and turns over and sinks back. A big one keeps
+            its heat longest and lingers at the top.
           </p>
           <p>
-            A fast blob draws out into a teardrop, a long one splits in two, two that meet run together, and the tie to the
-            pool thins as the bud pulls away until it snaps. The pool, the blobs and the ties are one smooth surface, so a
-            bud keeps a neck until it lets go and two blobs reach for each other before they meet.
+            The neck thins as the bud pulls away until it pinches off, as a thread of honey does, leaving a tail on the bud
+            and a spike on the pool that draw back in. Blobs never pass through each other: two that meet press together
+            and flatten while the film of liquid between them drains, and often part again. Once it has drained a bridge of
+            wax opens between them and widens, and the smaller runs into the larger over a second or two. A blob that sinks
+            onto the pool melts back into it the same way.
           </p>
           <p>
             Thirty times a second that surface is cut into a few thousand flat blobs a grid cell apart, each lying along the
