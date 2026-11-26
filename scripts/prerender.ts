@@ -96,7 +96,7 @@ function structured(route: Route): object[] {
     case 'shift':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Shape Shifter', href(route)]])]
     case 'lava':
-      return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Lava Lamp', href(route)]])]
+      return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Lava Lamp', href(route)]])]
     case 'jelly':
       return [breadcrumbs([home, ['Experiments', '/experiments/'], ['Glass Jellyfish', href(route)]])]
     case 'veggies':
@@ -214,7 +214,7 @@ function write(path: string, html: string) {
 const NO_SCRIPT = '<noscript><p class="px-4 py-2 text-center text-sm text-ink-muted">This page draws live blobs in your browser, so it needs JavaScript.</p></noscript>'
 // The app, loaded the way Vite would for a server, to draw every page. These are the ones the browser hydrates.
 /** Pages built and served but kept out of search, the sitemap and llms.txt until they are ready (Biome Islands while it is one island to look at; Scene Creator was until it took the sandbox's place, #341). */
-const UNLISTED = new Set<Route['page']>(['islands', 'text', 'sweater', 'jelly', 'lava', 'morph', 'crumble', 'timelapse'])
+const UNLISTED = new Set<Route['page']>(['islands', 'text', 'sweater', 'jelly', 'morph', 'crumble', 'timelapse'])
 const HYDRATED = new Set<Route['page']>(['home', 'lessons', 'experiments', 'contact', 'engine', 'spec', 'api', 'news', 'post', 'notfound'])
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { renderPage } = (await vite.ssrLoadModule('/src/blobscape/ssr.tsx')) as typeof import('../src/blobscape/ssr.tsx')
