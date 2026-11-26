@@ -28,6 +28,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'veggies',
+    title: 'Veggie Slayer',
+    url: '/experiments/veggie-slayer/',
+    cover: '/covers/veggie-slayer.webp',
+    tags: ['game'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-26',
+    updated: '2026-11-26',
+    body: 'A mini game for everyone who was ever told to finish their vegetables. Grumpy carrots, pumpkins and broccoli made of blocks fly up faster and faster: tap or swipe to burst them into showers of cubes, and leave the treats alone.',
+  },
+  {
     id: 'globe',
     title: 'Snow Globe',
     url: '/experiments/snow-globe/',

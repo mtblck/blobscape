@@ -1951,4 +1951,39 @@ export default [
       await g.ctx.close()
     },
   },
+  {
+    name: 'veggie-slayer',
+    about: 'Veggie Slayer: veggies thrown up as blocks, a tap bursts one into cubes and scores, the ones left fall and cost hearts until the end shows the tally',
+    entries: ['src/blobscape/VeggieSlayer.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/veggie-slayer/?offscreen=1&sound=0', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__veggies, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__veggies) return null
+        const v = window.__veggies, s = v.stage
+        let t = s.time + 0.5
+        await s.frame(t)
+        const cubes = s.blockCount?.blocks ?? 0
+        v.start(3)
+        // the stage's clock drives the game, so stepping it plays the same game every run
+        const run = async (seconds) => { for (let k = 0; k < seconds * 10 && v.game().state === 'playing'; k++) { t += 0.1; await s.frame(t) } }
+        await run(4)
+        const flying = v.game().flying.length
+        const hit = []
+        for (const f of [...v.game().flying]) hit.push(...v.slash(f.x, f.y).map((e) => e.type))
+        t += 0.2
+        await s.frame(t)
+        const thrown = v.show.busy.cubes, score = v.game().score
+        await run(120)
+        return { cubes, flying, hit, thrown, score, state: v.game().state, hearts: v.game().hearts }
+      })
+      await g.page.waitForTimeout(200)
+      const tally = await g.page.getByTestId('veggie-tally').count()
+      if (!got) fails.push('veggie slayer: the page never started (no window.__veggies)')
+      else if (!(got.cubes > 5000 && got.flying > 0 && got.hit.includes('burst') && got.thrown > 0 && got.score > 0 && got.state === 'over' && got.hearts === 0 && tally > 0)) fails.push(`veggie slayer: ${JSON.stringify({ ...got, tally })}`)
+      else ok(`veggie slayer: ${got.cubes.toLocaleString()} cubes, a tap burst ${got.hit.filter((h) => h === 'burst').length} into ${got.thrown} flying cubes for ${got.score} points, and the end shows the tally`)
+      await g.page.screenshot({ path: 'verify-shots/veggie-slayer.png' }).catch(() => {})
+      await g.ctx.close()
+    },
+  },
 ]

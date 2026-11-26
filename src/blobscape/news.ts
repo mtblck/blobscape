@@ -30,6 +30,22 @@ const CHANGES = 'https://github.com/mtblck/blobscape/blob/main/CHANGELOG.md'
 
 export const POSTS: Post[] = [
   {
+    id: 'veggie-slayer',
+    date: '2026-11-26',
+    title: 'Burst the veggies, spare the treats',
+    summary: 'Veggie Slayer is a new mini game: grumpy vegetables made of blocks fly up from the bottom of the screen, faster and faster, and every tap or swipe bursts one into a shower of cubes. Let one fall back down, or hit a cookie, and you lose a heart.',
+    search: 'Veggie Slayer is a new mini game: tap or swipe grumpy block vegetables to burst them into cubes, keep your five hearts, and leave the treats alone.',
+    image: { src: '/covers/veggie-slayer.webp', alt: 'Grumpy vegetables made of blocks fly across a bright sky: a pumpkin, a carrot, broccoli, an eggplant, a yellow pepper, a mushroom and a golden Brussels sprout, beside a burst tomato and the word YUCK! in pink blocks.' },
+    body: [
+      '[Veggie Slayer](/experiments/veggie-slayer/) is a game for everyone who was ever told to finish their vegetables. Carrots, tomatoes, onions, cucumbers, broccoli, heads of lettuce, bell peppers, mushrooms, eggplants and pumpkins come flying up from the bottom of the screen, each with a frown, and you burst them before they fall back down.',
+      '## How it plays',
+      'Tap a veggie, or click it, and it bursts into a shower of cubes with a YUCK! or an EW! Swipe through two or more in one stroke for a combo bonus. They come faster as the game goes on, and in bigger bunches. Common veggies are worth a point, broccoli, lettuce, peppers and mushrooms three, eggplants five, and a pumpkin five once you have hit it three times. Now and then a golden Brussels sprout goes by, worth 25.',
+      'You have five hearts. Each veggie that falls back off the screen takes one, and so does hitting a cookie, a cupcake, an ice cream or a donut, which start turning up after the first few seconds. When the hearts are gone you see how many of each veggie you burst, and your best score stays on your device. Share sends a friend a link with the score to beat.',
+      '## Made of blocks',
+      'Every veggie, every flying cube and every word is drawn in the Blocks style that [Diorama](/experiments/diorama/) starts in, on the same engine as the rest of the site. Space or Enter bursts the veggie about to fall, so it plays from a keyboard too, and the Settings tab turns off the sound, the shaking and the treats.',
+    ],
+  },
+  {
     id: 'snow-globe',
     date: '2026-11-25',
     title: 'A snow globe to shake',

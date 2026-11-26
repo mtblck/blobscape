@@ -7,7 +7,7 @@ import { SHARE_SITES } from './shareLink.ts'
  * Facebook, X or Reddit. A native modal dialog, as Scene details is, so focus stays inside, Escape closes it and focus
  * goes back to the button that opened it. Each site's own sharing page opens in a new tab; nothing is sent from here.
  */
-export function ShareDialog({ link, title, note, onClose }: { link: string | undefined; title: string; note?: string; onClose: () => void }) {
+export function ShareDialog({ link, title, note, onClose, heading = 'Share this scene', about = 'The link opens the scene with your settings: style, time, weather, finish and view.' }: { link: string | undefined; title: string; note?: string; onClose: () => void; heading?: string; about?: string }) {
   const ref = useRef<HTMLDialogElement>(null)
   const field = useRef<HTMLInputElement>(null)
   const [copied, setCopied] = useState('')
@@ -40,8 +40,8 @@ export function ShareDialog({ link, title, note, onClose }: { link: string | und
       <div className="grid gap-4 p-4 sm:p-6">
         <header className="flex items-start justify-between gap-3">
           <div>
-            <h2 id="share-title" className="font-display text-2xl leading-tight">Share this scene</h2>
-            <p className="mt-1 text-sm text-ink-muted">The link opens the scene with your settings: style, time, weather, finish and view.</p>
+            <h2 id="share-title" className="font-display text-2xl leading-tight">{heading}</h2>
+            <p className="mt-1 text-sm text-ink-muted">{about}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close sharing" className="grid size-9 flex-none cursor-pointer place-items-center rounded-full border border-rule text-ink hover:bg-paper-sunk">
             <svg aria-hidden viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
