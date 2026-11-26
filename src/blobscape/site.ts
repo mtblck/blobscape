@@ -28,6 +28,17 @@ export const EXPERIMENTS_INTRO = "Small tools built from the same blobs as the l
  */
 export const EXPERIMENTS = [
   {
+    id: 'jelly',
+    title: 'Glass Jellyfish',
+    url: '/experiments/glass-jellyfish/',
+    cover: '/covers/glass-jellyfish.webp',
+    tags: ['creatures', 'watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-26',
+    updated: '2026-11-26',
+    body: 'A moon jelly made of blobs that are nearly all clear, drifting through space so you see the stars through its bell. Each beat sends light down its canals and out along its tentacles, in one color or a rainbow, a hue to each.',
+  },
+  {
     id: 'veggies',
     title: 'Veggie Slayer',
     url: '/experiments/veggie-slayer/',
