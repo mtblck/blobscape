@@ -180,15 +180,15 @@ export const CORNUCOPIA: PropDoc = made('Cornucopia', [-0.5, 0, -0.12], 1.1, [
   { shape: { kind: 'sweep', path: loopAt(add(hornAt(4), [0, 0, 0]), 0.3, 12), r: 0.024 }, paint: '#7a4f24', noShadow: true },
   // wheat and corn standing up out of the top of the mouth
   {
-    shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'cone', from: [-0.02, 0.5, -0.12], to: [x, y, z], r: 0.026, rTo: 0.02 })) },
+    shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'cone', from: [-0.02, 0.5, -0.12], to: [x, y, z], r: 0.036, rTo: 0.03 })) },
     paint: '#e0b430', noShadow: true,
   },
   {
-    shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'ball', at: [x + 0.03, y + 0.05, z], r: [0.04, 0.07, 0.035] })) },
+    shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'ball', at: [x + 0.02, y + 0.05, z], r: [0.05, 0.08, 0.045] })) },
     paint: { kind: 'speckle', size: 0.02, colors: ['#e0b430', '#f6dc6a', '#b8861c'] }, noShadow: true,
   },
   { shape: { kind: 'cone', from: [0.08, 0.42, 0.08], to: [0.55, 0.9, 0.22], r: 0.055, rTo: 0.045 }, paint: { kind: 'speckle', size: 0.025, colors: ['#e0b430', '#f6dc6a', '#b8861c'] }, noShadow: true },
-  { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0.5, 0.86, 0.2], to: [0.72, 0.84, 0.36], r: 0.03, rTo: 0.008 }, { kind: 'cone', from: [0.5, 0.88, 0.21], to: [0.7, 1.02, 0.25], r: 0.03, rTo: 0.008 }] }, paint: '#9cb050', noShadow: true },
+  { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0.5, 0.86, 0.2], to: [0.72, 0.84, 0.36], r: 0.035, rTo: 0.022 }, { kind: 'cone', from: [0.5, 0.88, 0.21], to: [0.7, 1.02, 0.25], r: 0.035, rTo: 0.022 }] }, paint: '#9cb050', noShadow: true },
 ])
 
 // --- the harvest spilling out --------------------------------------------------------------------------------------
@@ -295,10 +295,10 @@ export const CORN_SHOCK: PropDoc = (() => {
     const c = Math.cos(a), s = Math.sin(a)
     const foot = 0.16 + (k % 3) * 0.025, tip = 0.1 + ((k * 5) % 4) * 0.03, up = top - ((k * 7) % 5) * 0.04
     const at = (r: number, y: number): Vec3 => [SHOCK_AT[0] + c * r, y, SHOCK_AT[2] + s * r]
-    stalks.push({ kind: 'sweep', path: [at(foot, 0), at(0.06, tie), at(tip, up)], r: 0.028, rTo: 0.016 })
+    stalks.push({ kind: 'sweep', path: [at(foot, 0), at(0.06, tie), at(tip, up)], r: 0.032, rTo: 0.024 })
     {
       const y = tie + 0.14 + (k % 4) * 0.06
-      leaves.push({ kind: 'cone', from: at(0.07, y), to: [SHOCK_AT[0] + Math.cos(a + 0.5) * 0.28, y - 0.12, SHOCK_AT[2] + Math.sin(a + 0.5) * 0.28], r: 0.026, rTo: 0.004 })
+      leaves.push({ kind: 'cone', from: at(0.07, y), to: [SHOCK_AT[0] + Math.cos(a + 0.5) * 0.28, y - 0.12, SHOCK_AT[2] + Math.sin(a + 0.5) * 0.28], r: 0.036, rTo: 0.022 })
     }
   }
   const tied = Array.from({ length: 15 }, (_, k): Vec3 => [SHOCK_AT[0] + Math.cos((k / 14) * 2 * Math.PI) * 0.07, tie, SHOCK_AT[2] + Math.sin((k / 14) * 2 * Math.PI) * 0.07])
@@ -325,25 +325,25 @@ function cornstalk(name: string, k: Stalk): PropDoc {
   for (let i = 0; i < 7; i++) {
     const t = 0.16 + i * 0.1, a = k.seed + i * 0.45 + (i % 2) * Math.PI, c = Math.cos(a), s = Math.sin(a)
     const from = up(t), reach = 0.44 - i * 0.035
-    leaves.push({ kind: 'sweep', path: [from, [from[0] + c * reach * 0.45, from[1] + 0.14, from[2] + s * reach * 0.45], [from[0] + c * reach, from[1] - 0.04, from[2] + s * reach]], r: 0.03, rTo: 0.008 })
+    leaves.push({ kind: 'sweep', path: [from, [from[0] + c * reach * 0.45, from[1] + 0.14, from[2] + s * reach * 0.45], [from[0] + c * reach, from[1] - 0.04, from[2] + s * reach]], r: 0.04, rTo: 0.022 })
   }
   const ears: PartDoc[] = []
   for (let e = 0; e < k.ears; e++) {
     const t = 0.45 + e * 0.13, a = k.seed + 1.3 + e * 2.4, c = Math.cos(a), s = Math.sin(a), from = up(t)
     const to: Vec3 = [from[0] + c * 0.09, from[1] + 0.17, from[2] + s * 0.09]
     ears.push({ shape: { kind: 'cone', from: [from[0] + c * 0.03, from[1], from[2] + s * 0.03], to, r: 0.045, rTo: 0.025 }, paint: { kind: 'faces', top: k.green[1], side: '#9cb050', under: '#46602a' }, bone: 'stalk', noShadow: true })
-    ears.push({ shape: { kind: 'cone', from: to, to: [to[0] + c * 0.05, to[1] + 0.04, to[2] + s * 0.05], r: 0.014, rTo: 0.005 }, paint: '#a8723a', bone: 'stalk', noShadow: true })
+    ears.push({ shape: { kind: 'cone', from: to, to: [to[0] + c * 0.05, to[1] + 0.04, to[2] + s * 0.05], r: 0.022, rTo: 0.014 }, paint: '#a8723a', bone: 'stalk', noShadow: true })
   }
   const top = up(1)
   const tassel = [0, 1, 2, 3, 4].map((i) => {
     const a = k.seed + i * 1.26
-    return { kind: 'cone' as const, from: top, to: [top[0] + Math.cos(a) * 0.09, top[1] + 0.06 - (i % 2) * 0.06, top[2] + Math.sin(a) * 0.09] as Vec3, r: 0.016, rTo: 0.006 }
+    return { kind: 'cone' as const, from: top, to: [top[0] + Math.cos(a) * 0.09, top[1] + 0.06 - (i % 2) * 0.06, top[2] + Math.sin(a) * 0.09] as Vec3, r: 0.024, rTo: 0.016 }
   })
   return made(name, k.at, k.tall + 0.1, [
-    { shape: { kind: 'sweep', path: [0, 0.25, 0.5, 0.75, 1].map(up), r: 0.034, rTo: 0.02 }, paint: { kind: 'bands', axis: 'y', size: 0.12, colors: [k.green[0], k.green[0], k.green[1]] }, bone: 'stalk' },
+    { shape: { kind: 'sweep', path: [0, 0.25, 0.5, 0.75, 1].map(up), r: 0.042, rTo: 0.03 }, paint: { kind: 'bands', axis: 'y', size: 0.12, colors: [k.green[0], k.green[0], k.green[1]] }, bone: 'stalk' },
     { shape: { kind: 'join', shapes: leaves }, paint: { kind: 'speckle', size: 0.04, colors: [k.green[0], k.green[1], k.green[0]] }, bone: 'stalk', noShadow: true },
     ...ears,
-    { shape: { kind: 'join', shapes: [...tassel, { kind: 'cone', from: top, to: [top[0], top[1] + 0.12, top[2]], r: 0.016, rTo: 0.006 }] }, paint: { kind: 'speckle', size: 0.02, colors: ['#e0b430', '#cf9a52', '#f6dc6a'] }, bone: 'stalk', noShadow: true },
+    { shape: { kind: 'join', shapes: [...tassel, { kind: 'cone', from: top, to: [top[0], top[1] + 0.12, top[2]], r: 0.024, rTo: 0.016 }] }, paint: { kind: 'speckle', size: 0.02, colors: ['#e0b430', '#cf9a52', '#f6dc6a'] }, bone: 'stalk', noShadow: true },
   ], {
     bones: [{ name: 'stalk', at: k.at }],
     moves: [{ kind: 'sway', bone: 'stalk', axis: 'z', degrees: 1.2, times: 3, phase: (k.seed % 1), wind: 6 }],
