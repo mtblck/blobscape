@@ -6,10 +6,17 @@ import { Wax, radiiOf } from './wax.ts'
 
 // one lamp run two minutes, shared by the tests that only look at it
 const wax = new Wax(VESSEL, 0.12, 7)
-const seen = { inside: true, most: 0 }
+const seen = { inside: true, most: 0, top: 0, passed: 0 }
 for (let s = 0; s < 120; s += 0.5) {
   wax.run(0.5)
   seen.most = Math.max(seen.most, wax.blobs.length)
+  seen.top = Math.max(seen.top, wax.highest())
+  // two blobs that are only touching never sink far into each other
+  for (const a of wax.blobs) for (const c of wax.blobs) {
+    if (a.id >= c.id || a.into !== undefined || c.into !== undefined) continue
+    const d = Math.hypot(a.x - c.x, a.y - c.y, a.z - c.z), ra = radiiOf(a)[1], rc = radiiOf(c)[1]
+    if (d < (ra + rc) - Math.min(ra, rc) * 0.6) seen.passed++
+  }
   for (const b of wax.blobs) {
     const [, across] = radiiOf(b)
     const y = b.y
@@ -17,14 +24,16 @@ for (let s = 0; s < 120; s += 0.5) {
   }
 }
 
-test('wax buds off the pool, rises, splits, merges and lands again', () => {
+test('wax buds off the pool, rises to the top, runs together and lands again', () => {
   const e = wax.events
   assert.ok(e.buds > 10, `buds ${e.buds}`)
-  assert.ok(e.splits > 5, `splits ${e.splits}`)
   assert.ok(e.merges > 5, `merges ${e.merges}`)
   assert.ok(e.landed > 3, `landed ${e.landed}`)
   assert.ok(seen.most >= 2, `at most ${seen.most} blobs up at once`)
+  assert.ok(seen.top > 0.85, `the wax reached only ${seen.top} of the glass`)
 })
+
+test('blobs press together and never pass through each other', () => assert.equal(seen.passed, 0))
 
 test('the wax keeps its volume', () => {
   assert.ok(Math.abs(wax.volume() - wax.total) < wax.total * 1e-9, `${wax.volume()} of ${wax.total}`)

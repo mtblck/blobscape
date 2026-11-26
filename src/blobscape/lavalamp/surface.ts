@@ -1,24 +1,27 @@
-import { Wax, radiiOf, radiusOf, type Blob } from './wax.ts'
+import { Wax, TAIL_LIFE, ease, radiiOf, radiusOf, type Blob } from './wax.ts'
 
 /**
  * The wax drawn (pure, tested): the pool, every blob and every tie between them as one smoothly joined surface, cut
  * each frame into flat discs a grid cell apart, as voxel.ts cuts a scene's shapes. A blob is an ellipsoid drawn out
- * along its way, wobbling slowly; a tie is a tube that thins as it is drawn out; the joins are a smooth minimum, so a
- * bud keeps a neck to the pool until its tie snaps and two blobs about to merge reach for each other.
+ * along its way, wobbling slowly; a neck is a tube that thins as it is drawn out; a tail left by a neck that pinched
+ * off is a cone drawing back in. Blobs pressed together only just join, so they read as two soft things pushed
+ * against each other; one running into another (or into the pool) joins it by a bridge that widens as it runs in.
  */
 
-/** How far a join reaches, as a share of the smaller of the two radii it joins (at least `JOIN_LEAST` cells). */
-const JOIN = 0.55, JOIN_LEAST = 1.5
+/** How far a join between blobs that are only touching reaches, in cells. */
+const JOIN_LEAST = 1.5
+/** How far a running-in blob's bridge reaches as it starts and as it ends, as a share of its radius across. */
+const BRIDGE_FROM = 0.25, BRIDGE_TO = 1.6
 /** A blob's slow wobble, as a share of its radius, and how many times a second it goes round. */
 const WOBBLE = 0.07, WOBBLE_RATE = 0.35
 /** A tie's thickness at rest, as a share of the smaller radius it ties; it thins as it is drawn out to its snap. */
-const TIE_THICK = 0.42
+const TIE_THICK = 0.5
 /** A disc's radius across the surface as a share of the grid (wider than a scene's, as a creature's are, so nothing behind shows between). */
 export const WAX_DISC = 0.75
 
 /** One shape of the wax, ready to ask distances of. */
 interface Part {
-  kind: 'blob' | 'tie'
+  kind: 'blob' | 'tie' | 'tail'
   /** The box it reaches, joins included. */
   min: [number, number, number]; max: [number, number, number]
   /** For a blob: its middle, its way (unit), its radii along and across, its wobble's seed. */
@@ -72,30 +75,55 @@ export function waxParts(wax: Wax, seconds: number, cell: number): Part[] {
     const blend = Math.min(1, speed / 0.01)
     const w: [number, number, number] = [u[0] * blend, u[1] * blend + (1 - blend), u[2] * blend]
     const wl = Math.hypot(...w) || 1
-    const k = Math.max(JOIN * across, cell * JOIN_LEAST), reach = along + k + along * WOBBLE
+    // touching blobs only just join; one running in reaches for its host by a widening bridge
+    const bridge = b.into === undefined ? 0 : across * (BRIDGE_FROM + (BRIDGE_TO - BRIDGE_FROM) * ease(b.run))
+    const k = Math.max(bridge, cell * JOIN_LEAST), reach = along + k + along * WOBBLE
     return {
       kind: 'blob', c: [b.x, b.y, b.z], u: [w[0] / wl, w[1] / wl, w[2] / wl], along, across, seed: b.wobble + seconds * WOBBLE_RATE * Math.PI * 2,
       a: [0, 0, 0], b: [0, 0, 0], ra: 0, rb: 0, temp: b.temp, k,
       min: [b.x - reach, b.y - reach, b.z - reach], max: [b.x + reach, b.y + reach, b.z + reach],
     }
   }
-  for (const b of wax.blobs) parts.push(blobPart(b))
+  // blobs running in come last, so their bridge reaches what they run into
+  for (const b of wax.blobs) if (b.into === undefined) parts.push(blobPart(b))
+  for (const b of wax.blobs) if (b.into !== undefined) parts.push(blobPart(b))
   for (const t of wax.ties) {
     const a = byId.get(t.a), o = t.b >= 0 ? byId.get(t.b) : undefined
     if (!a || (t.b >= 0 && !o)) continue
     const ra = radiusOf(a.vol)
     const end: [number, number, number] = o ? [o.x, o.y, o.z] : [a.x * 0.6, wax.pool.depth - ra * 0.2, a.z * 0.6]
     const d = Math.hypot(end[0] - a.x, end[1] - a.y, end[2] - a.z)
-    const thin = Math.max(0, 1 - d / t.snap)
+    const thin = Math.sqrt(Math.max(0, 1 - d / t.snap))
     const rb = o ? radiusOf(o.vol) : ra * 1.4
     const r0 = Math.min(ra, rb) * TIE_THICK * thin
     if (r0 < cell * 0.4) continue
-    const k = Math.max(JOIN * r0 * 2, cell * JOIN_LEAST), pad = r0 + k
+    const k = Math.max(r0 * 1.1, cell * JOIN_LEAST), pad = r0 + k
     parts.push({
       kind: 'tie', a: [a.x, a.y, a.z], b: end, ra: r0, rb: r0 * (o ? 1 : 1.3), temp: (a.temp + (o ? o.temp : wax.pool.temp)) / 2, k,
       c: [0, 0, 0], u: [0, 1, 0], along: 0, across: 0, seed: 0,
       min: [Math.min(a.x, end[0]) - pad, Math.min(a.y, end[1]) - pad, Math.min(a.z, end[2]) - pad],
       max: [Math.max(a.x, end[0]) + pad, Math.max(a.y, end[1]) + pad, Math.max(a.z, end[2]) + pad],
+    })
+  }
+  // tails left by necks that pinched off: cones drawing back into their blob, or spikes sinking into the pool
+  for (const t of wax.tails) {
+    const left = 1 - t.age / TAIL_LIFE
+    const len = t.len * left * left, thick = t.thick * left
+    if (len < cell * 0.5 || thick < cell * 0.35) continue
+    let a: [number, number, number]
+    if (t.blob >= 0) {
+      const b = byId.get(t.blob)
+      if (!b) continue
+      const across = radiiOf(b)[1] * 0.75
+      a = [b.x + t.dx * across, b.y + t.dy * across, b.z + t.dz * across]
+    } else a = [t.x, wax.pool.depth - thick, t.z]
+    const end: [number, number, number] = [a[0] + t.dx * len, a[1] + t.dy * len, a[2] + t.dz * len]
+    const k = cell * JOIN_LEAST * 1.5, pad = thick + k
+    parts.push({
+      kind: 'tail', a, b: end, ra: thick, rb: cell * 0.3, temp: t.blob >= 0 ? (byId.get(t.blob)?.temp ?? wax.pool.temp) : wax.pool.temp, k,
+      c: [0, 0, 0], u: [0, 1, 0], along: 0, across: 0, seed: 0,
+      min: [Math.min(a[0], end[0]) - pad, Math.min(a[1], end[1]) - pad, Math.min(a[2], end[2]) - pad],
+      max: [Math.max(a[0], end[0]) + pad, Math.max(a[1], end[1]) + pad, Math.max(a[2], end[2]) + pad],
     })
   }
   return parts

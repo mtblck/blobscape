@@ -230,7 +230,8 @@ export function LavaLamp() {
       frame: async (seconds) => {
         const run = local.current
         if (run && shown) {
-          run.advance(Math.max(0, seconds - (run.wax.time - WARM)))
+          // the wax cuts a long gap short, so a jump ahead goes in steps
+          for (let gap = seconds - (run.wax.time - WARM) / run.wax.knobs.pace; gap > 1e-6; gap -= 0.5) run.advance(Math.min(gap, 0.5))
           const f = run.frame(seconds)
           latest.current = f
           placeWax(f, DETAILS[detail].cell, now.current.color, shown.wax.blobs)
