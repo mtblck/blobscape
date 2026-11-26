@@ -30,6 +30,7 @@ import { CAMP_MADE } from './camp.ts'
 import { FARM_MADE } from './farm.ts'
 import { LIGHTHOUSE_MADE } from './lighthouse.ts'
 import { CHRISTMAS_MADE } from './christmas.ts'
+import { CORNUCOPIA_MADE } from './cornucopia.ts'
 
 export type { MadeProp } from './garden.ts'
 
@@ -81,6 +82,7 @@ export const MADE: MadeProp[] = [
   ...LIGHTHOUSE_MADE,
   ...FARM_MADE,
   ...CHRISTMAS_MADE,
+  ...CORNUCOPIA_MADE,
 ]
 
 const BY_ID = new Map(MADE.map((m) => [m.id, m]))
