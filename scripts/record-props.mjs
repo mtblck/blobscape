@@ -26,7 +26,8 @@ if (!todo.length) { console.log('Every entry has its picture.'); process.exit(0)
 if (!existsSync(join(dist, 'experiments', 'diorama', 'index.html'))) { console.error('No built site to draw with: run `npm run build` first.'); process.exit(2) }
 
 /** When in its loop a card is drawn, as a share of it: a tenth in, unless the thing is only there later. */
-const MOMENT = { 'white-witch-sparks': 0.5 }
+// the cornucopia's visitors are drawn halfway in, where they stand as written (a visit's `go` bone is at rest a quarter of the way through it)
+const MOMENT = { 'white-witch-sparks': 0.5, 'visiting-squirrel': 0.09, 'visiting-cardinal': 0.41, 'visiting-fox': 0.73 }
 
 /** Card pictures are this size (4:3), whatever the view was. */
 const CARD = [320, 240]
