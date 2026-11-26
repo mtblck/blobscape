@@ -357,6 +357,34 @@ export const CORNSTALK_GOLD = cornstalk('Golden cornstalk', { at: [0.72, 0, -1.5
 /** A stalk leaning over, half green and half dry. */
 export const CORNSTALK_LEANING = cornstalk('Leaning cornstalk', { at: [-0.02, 0, -1.22], tall: 1.15, lean: [0.18, 0.06], green: ['#6e8a3a', '#cf9a52'], ears: 1, seed: 4.3 })
 
+// --- the lantern on its hook ---------------------------------------------------------------------------------------
+
+/** Where the lantern's stand stands, just past the mouth on its far side, and where the lantern hangs off the hook. */
+const STAND_AT: Vec3 = [0.56, 0, -0.86]
+const HUNG_AT: Vec3 = [0.56, 0.98, -0.6]
+
+/** A shepherd's hook of dark iron with a lantern hung off its crook, toward the horn's mouth; it lights when it gets dark. */
+export const HOOK_LANTERN: PropDoc = (() => {
+  const [x, , z] = STAND_AT
+  const crook: Vec3[] = [[x, 0, z], [x, 1.05, z], [x, 1.16, z + 0.05], [x, 1.18, z + 0.16], [x, 1.14, HUNG_AT[2]], [x, 1.08, HUNG_AT[2] + 0.02]]
+  const at = (dy: number): Vec3 => [HUNG_AT[0], HUNG_AT[1] + dy, HUNG_AT[2]]
+  return made('Hook lantern', STAND_AT, 1.2, [
+    { shape: { kind: 'sweep', path: crook, r: 0.035 }, paint: '#3a2416' },
+    // three feet so it stands
+    { shape: { kind: 'join', shapes: [0, 1, 2].map((k) => ({ kind: 'cone' as const, from: [x, 0.1, z] as Vec3, to: [x + Math.cos(k * 2.1 + 0.4) * 0.14, 0.01, z + Math.sin(k * 2.1 + 0.4) * 0.14] as Vec3, r: 0.035, rTo: 0.03 })) }, paint: '#3a2416', noShadow: true },
+    // the lantern on its own bone, swinging a little: a ring, a cap, the lit glass in its frame, a base
+    { shape: { kind: 'sweep', path: [add(at(0.1), [0, 0, 0.02]), at(0.16)], r: 0.022 }, paint: '#1e1410', bone: 'lantern', noShadow: true },
+    { shape: { kind: 'cone', from: at(0.05), to: at(0.11), r: 0.085, rTo: 0.035 }, paint: '#1e1410', bone: 'lantern', noShadow: true },
+    { shape: { kind: 'box', at: at(-0.04), half: [0.055, 0.075, 0.055] }, paint: '#f6dc6a', glow: true, lit: 'dark', unlit: '#e8c07a', bone: 'lantern', noShadow: true },
+    { shape: { kind: 'join', shapes: [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => ({ kind: 'cone' as const, from: add(at(-0.12), [a * 0.06, 0, b * 0.06]), to: add(at(0.05), [a * 0.06, 0, b * 0.06]), r: 0.018 })) }, paint: '#1e1410', bone: 'lantern', noShadow: true },
+    { shape: { kind: 'box', at: at(-0.13), half: [0.075, 0.02, 0.075] }, paint: '#1e1410', bone: 'lantern', noShadow: true },
+  ], {
+    bones: [{ name: 'lantern', at: at(0.16) }],
+    moves: [{ kind: 'sway', bone: 'lantern', axis: 'x', degrees: 3, times: 5, wind: 10 }],
+  })
+})()
+HOOK_LANTERN.doc.lights = [{ at: [HUNG_AT[0], HUNG_AT[1] - 0.04, HUNG_AT[2] + 0.12], color: '#f6a24a', strength: 3, range: 1.8, lit: 'dark', flicker: { by: 0.12, times: 15 } }]
+
 // --- the visitors --------------------------------------------------------------------------------------------------
 
 /** A share `a` to `b` of the way through the window `w`, as shares of the loop (wrapped into 0 to 1). */
@@ -540,6 +568,7 @@ export const CORNUCOPIA_MADE: MadeProp[] = [
   { id: 'cornstalk-tall', tags: ['farm', 'plant'], kind: 'prop', about: 'A tall green cornstalk with one ear and its tassel', prop: CORNSTALK_TALL },
   { id: 'cornstalk-gold', tags: ['farm', 'plant'], kind: 'prop', about: 'A cornstalk turning gold, with two ears', prop: CORNSTALK_GOLD },
   { id: 'cornstalk-leaning', tags: ['farm', 'plant'], kind: 'prop', about: 'A cornstalk leaning over, half green and half dry', prop: CORNSTALK_LEANING },
+  { id: 'hook-lantern', tags: ['lamp', 'farm'], kind: 'prop', about: "A lantern hung from a shepherd's hook, lit when it gets dark", prop: HOOK_LANTERN },
   { id: 'harvest-spill', tags: ['farm', 'thing'], kind: 'prop', about: 'Pumpkins, squash, gourds, apples, pears and grapes spilling out over the grass', prop: HARVEST_SPILL },
   { id: 'visiting-squirrel', tags: ['animal'], kind: 'prop', group: 'living', about: 'A red squirrel that scurries in, sits up to nibble an acorn, and scurries off again', prop: VISITING_SQUIRREL },
   { id: 'visiting-cardinal', tags: ['animal'], kind: 'prop', group: 'living', about: 'A red cardinal that flutters down, pecks at grapes and flies off again', prop: VISITING_CARDINAL },
@@ -562,6 +591,9 @@ export const CORNUCOPIA_PROJECT: SceneProject = {
     here('corn-shock', SHOCK_AT),
     { prop: 'corn-shock', at: [0.98, 0, -1.18], turn: 140, size: 0.85 },
     here('cornstalk-tall', CORNSTALK_TALL.foot),
+    here('hook-lantern', STAND_AT),
+    { prop: 'big-apple-tree', at: [-1.4, 0, 1.0], turn: 30, size: 1.05 },
+    { prop: 'apple-tree', at: [-0.75, 0, 1.5], turn: 200, size: 1.25 },
     here('cornstalk-gold', CORNSTALK_GOLD.foot),
     here('cornstalk-leaning', CORNSTALK_LEANING.foot),
     { ...here('visiting-squirrel', VISITING_SQUIRREL.foot), size: SQUIRREL_SIZE },
