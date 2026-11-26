@@ -93,7 +93,8 @@ async function record(id) {
   await ready()
   await page.waitForTimeout(1500)
   await ready()
-  const style = await page.evaluate(() => window.__diorama.style)
+  // the page sets __diorama again whenever its look changes, so wait out the moment it is gone
+  const style = await page.evaluate(async () => { while (!window.__diorama) await new Promise((r) => setTimeout(r, 50)); return window.__diorama.style })
   if (pixelArt !== ['pixel', 'glitch'].includes(style)) throw new Error(`${id}: asked for ${settings.get('style')} and the page drew ${style}`)
   const loop = scenes.get(id).loop
   const count = Math.round(loop * FPS)
