@@ -1,1 +1,1 @@
-Diorama: a new scene, Harvest cornucopia: a giant woven horn spilling pumpkins, squash, gourds, apples, pears and grapes on an autumn green, visited in turn by a squirrel, a cardinal and a fox. Its six pieces join the Scene Creator library.
+Diorama: a new scene, Harvest cornucopia: a giant woven horn heaped with produce and spilling pumpkins, squash, gourds, apples, pears and grapes onto an autumn green between two corn shocks, visited in turn by a squirrel, a cardinal and a fox. Its seven pieces join the Scene Creator library.

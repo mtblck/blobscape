@@ -136,33 +136,58 @@ const MOUTH = hornAt(0)
 
 const WICKER = { kind: 'bricks' as const, size: [0.1, 0.05] as [number, number], colors: ['#a8723a', '#cf9a52', '#a8723a', '#e8c07a'], line: '#5c3a20' }
 
+/**
+ * The heap inside the mouth: a pumpkin at the back with apples and a gourd on it, then apples, a pear, grapes and a
+ * squash lower down toward the lip, each resting on the horn's curved floor or on what is under it.
+ */
+const INSIDE: PartDoc[] = [
+  ...pumpkin([-0.05, 0.07, -0.1], 0.24),
+  ...pumpkin([0.16, 0.05, -0.27], 0.14, ['#f6dfa8', '#cf9a52', '#a8723a'], null),
+  ...apple([-0.08, 0.43, -0.22], undefined, false), ...apple([0.04, 0.41, 0.02], '#d8443a', false), ...apple([0.14, 0.26, 0.1], undefined, false),
+  { shape: { kind: 'ball', at: [-0.16, 0.48, 0.0], r: [0.08, 0.065, 0.07] }, paint: { kind: 'bands', axis: 'x', size: 0.03, colors: ['#46602a', '#9cb050', '#46602a', '#f6dc6a'] }, noShadow: true },
+  ...grapes([0.08, 0.56, -0.12], 3, undefined, false),
+  ...pear([0.2, 0.04, 0.04], 1),
+  ...apple([0.26, 0.04, 0.18]), ...apple([0.24, 0.05, -0.1], '#d8443a', false),
+  { shape: { kind: 'join', blend: 'smooth', by: 0.04, shapes: [{ kind: 'sphere', at: [0.02, 0.12, 0.2], r: 0.075 }, { kind: 'cone', from: [0.02, 0.12, 0.2], to: [0.2, 0.09, 0.3], r: 0.042, rTo: 0.038 }] }, paint: { kind: 'faces', top: '#f6dfa8', side: '#e8c07a', under: '#cf9a52' }, noShadow: true },
+]
+
 /** A giant woven horn of plenty lying on its side, its mouth open toward +x and its tip curled up behind. */
 export const CORNUCOPIA: PropDoc = made('Cornucopia', [-0.5, 0, -0.12], 1.1, [
   {
     shape: {
       kind: 'cut',
       shape: { kind: 'sweep', path: HORN_PATH, r: HORN_R[0], rTo: HORN_R[1] },
-      hole: { kind: 'sweep', path: [add(MOUTH, [0.25, 0, 0]), MOUTH, hornAt(1), hornAt(2), hornAt(3)], r: HORN_R[0] - 0.05, rTo: 0.2 },
+      hole: { kind: 'sweep', path: [add(MOUTH, [0.25, 0, 0]), MOUTH, hornAt(1), hornAt(2), hornAt(3)], r: 0.5175, rTo: 0.28 },
     },
     paint: WICKER,
     strokes: 0.4,
   },
-  // the dark inside, so the mouth reads as a hollow
-  { shape: { kind: 'sweep', path: [add(MOUTH, [-0.12, 0, 0]), hornAt(1), hornAt(2), hornAt(3)], r: HORN_R[0] - 0.1, rTo: 0.16 }, paint: { kind: 'bricks', size: [0.1, 0.05], colors: ['#5c3a20', '#7a4f24'], line: '#3a2416' }, noShadow: true },
+  // a darker weave lining the hollow, which runs a good way back so the mouth reads as open
+  {
+    shape: {
+      kind: 'cut',
+      shape: { kind: 'sweep', path: [add(MOUTH, [-0.03, 0, 0]), hornAt(1), hornAt(2), hornAt(3)], r: 0.476, rTo: 0.28 },
+      hole: { kind: 'sweep', path: [add(MOUTH, [0.2, 0, 0]), MOUTH, hornAt(1), hornAt(2), hornAt(3)], r: 0.468, rTo: 0.24 },
+    },
+    paint: { kind: 'bricks', size: [0.1, 0.05], colors: ['#5c3a20', '#7a4f24'], line: '#3a2416' },
+    noShadow: true,
+  },
+  // the harvest heaped inside, highest at the back, with the wheat and corn pushed into the top of the heap
+  ...INSIDE,
   // a braided rim round the mouth and two bands of binding along the horn
   { shape: { kind: 'sweep', path: loopAt(add(MOUTH, [0.01, 0, 0]), HORN_R[0] - 0.015, 15), r: 0.045 }, paint: { kind: 'bands', axis: 'y', size: 0.05, colors: ['#e8c07a', '#a8723a'] } },
   { shape: { kind: 'sweep', path: loopAt(add(hornAt(2), [0, 0, 0]), 0.405, 14), r: 0.028 }, paint: '#7a4f24', noShadow: true },
   { shape: { kind: 'sweep', path: loopAt(add(hornAt(4), [0, 0, 0]), 0.3, 12), r: 0.024 }, paint: '#7a4f24', noShadow: true },
   // wheat and corn standing up out of the top of the mouth
   {
-    shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'cone', from: [0.12, 0.72, -0.12], to: [x, y, z], r: 0.012, rTo: 0.008 })) },
+    shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'cone', from: [-0.02, 0.5, -0.12], to: [x, y, z], r: 0.012, rTo: 0.008 })) },
     paint: '#e0b430', noShadow: true,
   },
   {
     shape: { kind: 'join', shapes: [[0.42, 1.2, -0.32], [0.55, 1.28, -0.15], [0.6, 1.25, 0.03], [0.5, 1.18, 0.16], [0.68, 1.1, -0.3]].map(([x, y, z]) => ({ kind: 'ball', at: [x + 0.03, y + 0.05, z], r: [0.04, 0.07, 0.035] })) },
     paint: { kind: 'speckle', size: 0.02, colors: ['#e0b430', '#f6dc6a', '#b8861c'] }, noShadow: true,
   },
-  { shape: { kind: 'cone', from: [0.15, 0.62, 0.12], to: [0.55, 0.9, 0.22], r: 0.055, rTo: 0.045 }, paint: { kind: 'speckle', size: 0.025, colors: ['#e0b430', '#f6dc6a', '#b8861c'] }, noShadow: true },
+  { shape: { kind: 'cone', from: [0.08, 0.42, 0.08], to: [0.55, 0.9, 0.22], r: 0.055, rTo: 0.045 }, paint: { kind: 'speckle', size: 0.025, colors: ['#e0b430', '#f6dc6a', '#b8861c'] }, noShadow: true },
   { shape: { kind: 'join', shapes: [{ kind: 'cone', from: [0.5, 0.86, 0.2], to: [0.72, 0.84, 0.36], r: 0.03, rTo: 0.008 }, { kind: 'cone', from: [0.5, 0.88, 0.21], to: [0.7, 1.02, 0.25], r: 0.03, rTo: 0.008 }] }, paint: '#9cb050', noShadow: true },
 ])
 
@@ -182,16 +207,20 @@ function pumpkin(at: Vec3, r: number, colors = ['#e8782a', '#c4541a', '#8a3410']
 }
 
 /** An apple with a stalk. */
-const apple = (at: Vec3, color = '#a82226', stalk = true): PartDoc[] => [
+function apple(at: Vec3, color = '#a82226', stalk = true): PartDoc[] {
+  return [
   { shape: { kind: 'ball', at: add(at, [0, 0.06, 0]), r: [0.068, 0.062, 0.068] }, paint: { kind: 'faces', top: '#d8443a', side: color, under: '#6e1418' }, noShadow: true },
   ...(stalk ? [{ shape: { kind: 'cone', from: add(at, [0, 0.11, 0]), to: add(at, [0.01, 0.15, 0.005]), r: 0.008 }, paint: '#3a2416', noShadow: true } as PartDoc] : []),
-]
+  ]
+}
 
 /** A pear lying a little over. */
-const pear = (at: Vec3, lean: number): PartDoc[] => [
+function pear(at: Vec3, lean: number): PartDoc[] {
+  return [
   { shape: { kind: 'join', blend: 'smooth', by: 0.03, shapes: [{ kind: 'sphere', at: add(at, [0, 0.06, 0]), r: 0.065 }, { kind: 'sphere', at: add(at, [lean * 0.05, 0.13, 0]), r: 0.04 }] }, paint: { kind: 'faces', top: '#f6dc6a', side: '#e0b430', under: '#b8861c' }, noShadow: true },
   { shape: { kind: 'cone', from: add(at, [lean * 0.06, 0.17, 0]), to: add(at, [lean * 0.08, 0.21, 0]), r: 0.008 }, paint: '#3a2416', noShadow: true },
-]
+  ]
+}
 
 /** A bunch of grapes, `n` across, hanging or lying from `at` downward. */
 function grapes(at: Vec3, n: number, bone?: string, stalk = true): PartDoc[] {
@@ -213,10 +242,8 @@ const PECKED_AT: Vec3 = [0.64, 0.55, -0.28]
 
 /** Pumpkins, squash, gourds, apples, pears, grapes and leaves spilling out of the horn's mouth onto the grass. */
 export const HARVEST_SPILL: PropDoc = made('Harvest spill', [0.8, 0, 0.1], 0.8, [
-  // inside the mouth
-  ...pumpkin([0.36, 0.02, -0.16], 0.27, undefined, null),
-  ...apple([0.16, 0.12, 0.18], undefined, false), ...apple([0.02, 0.1, -0.42], '#d8443a', false),
-  ...grapes([0.32, 0.4, 0.22], 4, undefined, false),
+  // tumbling over the lip
+  ...apple([0.38, 0, -0.12], undefined, false), ...apple([0.42, 0, 0.06], '#d8443a'),
   // spilling out
   ...pumpkin([0.9, 0, -0.32], 0.32),
   ...pumpkin([1.05, 0, 0.3], 0.22),
@@ -225,7 +252,6 @@ export const HARVEST_SPILL: PropDoc = made('Harvest spill', [0.8, 0, 0.1], 0.8, 
   { shape: { kind: 'join', blend: 'smooth', by: 0.04, shapes: [{ kind: 'sphere', at: [0.72, 0.09, 0.55], r: 0.09 }, { kind: 'cone', from: [0.72, 0.09, 0.55], to: [0.9, 0.06, 0.74], r: 0.05, rTo: 0.045 }] }, paint: { kind: 'faces', top: '#f6dfa8', side: '#e8c07a', under: '#cf9a52' }, noShadow: true },
   { shape: { kind: 'ball', at: [1.38, 0.08, 0.05], r: [0.1, 0.08, 0.085] }, paint: { kind: 'bands', axis: 'x', size: 0.03, colors: ['#46602a', '#9cb050', '#46602a', '#f6dc6a'] }, noShadow: true },
   ...apple([0.5, 0, 0.18]), ...apple([0.98, 0, 0.62]), ...apple([1.3, 0, 0.38]), ...apple([0.25, 0, 0.62], '#d8443a'), ...apple([1.25, 0, -0.32]),
-  ...apple([0.33, 0.12, 0.02], undefined, false),
   ...pear([0.56, 0, 0.78], 1), ...pear([1.17, 0, 0.0], -1),
   ...apple([0.62, 0, 0.05]), ...apple([0.8, 0, 0.2], '#d8443a'), ...apple([1.4, 0, 0.55]), ...apple([0.15, 0, 0.42]),
   ...pumpkin([0.42, 0, -0.62], 0.13, ['#f6dfa8', '#cf9a52', '#a8723a']),
@@ -239,7 +265,7 @@ export const HARVEST_SPILL: PropDoc = made('Harvest spill', [0.8, 0, 0.1], 0.8, 
   { shape: { kind: 'join', blend: 'smooth', by: 0.03, shapes: [{ kind: 'sphere', at: add(GOURD_AT, [0, 0.075, 0]), r: 0.075 }, { kind: 'sphere', at: add(GOURD_AT, [0, 0.17, 0]), r: 0.045 }] }, paint: { kind: 'split', axis: 'y', at: 0.14, below: '#f6dc6a', above: '#6e8a3a' }, bone: 'gourd', noShadow: true },
   { shape: { kind: 'cone', from: add(GOURD_AT, [0, 0.21, 0]), to: add(GOURD_AT, [0.02, 0.25, 0]), r: 0.01 }, paint: '#3a2416', bone: 'gourd', noShadow: true },
   // leaves among it all
-  { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.62, 0.02, 0.32], r: [0.06, 0.012, 0.035] }, { kind: 'ball', at: [0.86, 0.02, 0.45], r: [0.055, 0.012, 0.035] }, { kind: 'ball', at: [0.95, 0.47, 0.15], r: [0.055, 0.012, 0.035] }] }, paint: '#c4541a', noShadow: true },
+  { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.62, 0.02, 0.32], r: [0.06, 0.012, 0.035] }, { kind: 'ball', at: [0.86, 0.02, 0.45], r: [0.055, 0.012, 0.035] }, { kind: 'ball', at: [1.1, 0.335, 0.31], r: [0.055, 0.012, 0.035] }] }, paint: '#c4541a', noShadow: true },
   { shape: { kind: 'join', shapes: [{ kind: 'ball', at: [0.3, 0.02, 0.34], r: [0.05, 0.012, 0.035] }, { kind: 'ball', at: [1.2, 0.02, 0.55], r: [0.06, 0.012, 0.04] }] }, paint: '#e0b430', noShadow: true },
 ], {
   bones: [
@@ -253,6 +279,38 @@ export const HARVEST_SPILL: PropDoc = made('Harvest spill', [0.8, 0, 0.1], 0.8, 
     { kind: 'sway', bone: 'gourd', axis: 'z', degrees: 6, times: 2, phase: 0.2, during: [0.8, 0.85] },
   ],
 })
+
+// --- the corn shocks ----------------------------------------------------------------------------------------------
+
+/** Where the corn shock stands, at the back of the green. */
+const SHOCK_AT: Vec3 = [0.3, 0, -1.35]
+
+/** Dry cornstalks bundled upright, tied round the middle, their feet splayed and their tops fanned out over the tie. */
+export const CORN_SHOCK: PropDoc = (() => {
+  const n = 13, tie = 0.52, top = 1.02
+  const stalks: { kind: 'sweep'; path: Vec3[]; r: number; rTo: number }[] = []
+  const leaves: { kind: 'cone'; from: Vec3; to: Vec3; r: number; rTo: number }[] = []
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * 2 * Math.PI + (k % 3) * 0.2
+    const c = Math.cos(a), s = Math.sin(a)
+    const foot = 0.16 + (k % 3) * 0.025, tip = 0.1 + ((k * 5) % 4) * 0.03, up = top - ((k * 7) % 5) * 0.04
+    const at = (r: number, y: number): Vec3 => [SHOCK_AT[0] + c * r, y, SHOCK_AT[2] + s * r]
+    stalks.push({ kind: 'sweep', path: [at(foot, 0), at(0.06, tie), at(tip, up)], r: 0.028, rTo: 0.016 })
+    {
+      const y = tie + 0.14 + (k % 4) * 0.06
+      leaves.push({ kind: 'cone', from: at(0.07, y), to: [SHOCK_AT[0] + Math.cos(a + 0.5) * 0.28, y - 0.12, SHOCK_AT[2] + Math.sin(a + 0.5) * 0.28], r: 0.026, rTo: 0.004 })
+    }
+  }
+  const tied = Array.from({ length: 15 }, (_, k): Vec3 => [SHOCK_AT[0] + Math.cos((k / 14) * 2 * Math.PI) * 0.07, tie, SHOCK_AT[2] + Math.sin((k / 14) * 2 * Math.PI) * 0.07])
+  return made('Corn shock', SHOCK_AT, top, [
+    { shape: { kind: 'join', shapes: stalks }, paint: { kind: 'bands', axis: 'y', size: 0.09, colors: ['#cf9a52', '#e8c07a', '#a8723a'] }, bone: 'shock' },
+    { shape: { kind: 'join', shapes: leaves }, paint: { kind: 'speckle', size: 0.03, colors: ['#e8c07a', '#cf9a52', '#b8861c'] }, bone: 'shock', noShadow: true },
+    { shape: { kind: 'sweep', path: tied, r: 0.025 }, paint: '#5c3a20', bone: 'shock', noShadow: true },
+  ], {
+    bones: [{ name: 'shock', at: SHOCK_AT }],
+    moves: [{ kind: 'sway', bone: 'shock', axis: 'z', degrees: 0.8, times: 3, wind: 4 }],
+  })
+})()
 
 // --- the visitors --------------------------------------------------------------------------------------------------
 
@@ -433,6 +491,7 @@ export const VISITING_FOX: PropDoc = made('Visiting fox', FX, 0.5, [
 export const CORNUCOPIA_MADE: MadeProp[] = [
   { id: 'autumn-green', tags: ['grassy', 'farm'], kind: 'land', about: 'A round of autumn grass on a golden afternoon, with fallen leaves, acorns and stones', prop: AUTUMN_GREEN },
   { id: 'cornucopia', tags: ['farm', 'thing'], kind: 'prop', about: 'A giant woven horn of plenty lying on its side, with wheat and corn standing out of its mouth', prop: CORNUCOPIA },
+  { id: 'corn-shock', tags: ['farm', 'plant'], kind: 'prop', about: 'Dry cornstalks bundled upright and tied round the middle', prop: CORN_SHOCK },
   { id: 'harvest-spill', tags: ['farm', 'thing'], kind: 'prop', about: 'Pumpkins, squash, gourds, apples, pears and grapes spilling out over the grass', prop: HARVEST_SPILL },
   { id: 'visiting-squirrel', tags: ['animal'], kind: 'prop', group: 'living', about: 'A red squirrel that scurries in, sits up to nibble an acorn, and scurries off again', prop: VISITING_SQUIRREL },
   { id: 'visiting-cardinal', tags: ['animal'], kind: 'prop', group: 'living', about: 'A red cardinal that flutters down, pecks at grapes and flies off again', prop: VISITING_CARDINAL },
@@ -441,7 +500,7 @@ export const CORNUCOPIA_MADE: MadeProp[] = [
 
 const here = (prop: string, at: Vec3): SceneProject['props'][number] => ({ prop, at, turn: 0, size: 1 })
 
-/** The cornucopia on the green, the harvest spilling out of it, a maple and corn behind, and the three visitors. */
+/** The cornucopia on the green, the harvest spilling out of it, a maple and two corn shocks behind, and the three visitors. */
 export const CORNUCOPIA_PROJECT: SceneProject = {
   kind: 'blobscape-project',
   version: 1,
@@ -452,7 +511,8 @@ export const CORNUCOPIA_PROJECT: SceneProject = {
     here('cornucopia', CORNUCOPIA.foot),
     here('harvest-spill', HARVEST_SPILL.foot),
     { prop: 'autumn-maple', at: [-1.25, 0, -1.3], turn: 0, size: 0.9 },
-    { prop: 'corn-stalks', at: [0.2, 0, -1.45], turn: 0, size: 0.8 },
+    here('corn-shock', SHOCK_AT),
+    { prop: 'corn-shock', at: [0.98, 0, -1.18], turn: 140, size: 0.85 },
     { ...here('visiting-squirrel', VISITING_SQUIRREL.foot), size: SQUIRREL_SIZE },
     { ...here('visiting-cardinal', VISITING_CARDINAL.foot), size: BIRD_SIZE },
     { ...here('visiting-fox', VISITING_FOX.foot), size: FOX_SIZE },
