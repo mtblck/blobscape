@@ -1,0 +1,1 @@
+- Lava Lamp (unlisted while it is reviewed): a lava lamp whose wax is simulated, heating on the bulb, rising, stretching, splitting, merging and sinking back, in eight wax colors on six bases and caps, drawn in any of the site's styles.

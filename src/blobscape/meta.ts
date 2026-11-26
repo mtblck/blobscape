@@ -65,6 +65,7 @@ const SEARCH: Partial<Record<Route['page'], string>> = {
   dungeon: 'Fight slimes in a torchlit dungeon with a sword, fire and frost. Hero, hall and slimes are all Gaussian splats, with fire that spreads across the floor.',
   scan: 'Open a Gaussian splat scan from your phone, turn it level, cut away the floor and the floaters, relight it and save it. Everything stays on your device.',
   shift: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner and travels to it.',
+  lava: 'A lava lamp of Gaussian splats: wax that warms, swells up out of its pool, rises, splits and sinks back, in eight colors and six bases.',
   jelly: 'A see-through jellyfish of Gaussian splats drifting in space: you see the stars through its bell, and light pulses run down its tentacles.',
   veggies: 'A mini game of vegetables made of blocks: tap or swipe the grumpy carrots, pumpkins and broccoli flying up to burst them, and leave the treats alone.',
   globe: "Shake a snow globe holding a little scene of Gaussian splats: the snow swirls up in water you can't see and settles on roofs, hats and the ground.",
@@ -117,6 +118,8 @@ function wordsFor(route: Route): Omit<PageMeta, 'search'> {
       return { path, title: `Scan Studio · ${SITE.name}`, description: 'Open a Gaussian splat scan of an object from your phone (Scaniverse, Polycam and others export .ply or .spz), find the table and turn it level, cut away the floor and the floaters, relight it with live lights, then take it into the sandbox or save it. Everything stays on your device.' }
     case 'shift':
       return { path, title: `Shape Shifter · ${SITE.name}`, description: 'One creature made of Gaussian splats turns into another: a frog into a dragon, an owl into a crocodile. Every blob finds a partner in the other creature and travels to it, blending its size, facing and color on the way. Pick the pair, send the blobs straight, in a swirl, through a puddle or out in a burst, and see what pairing by place is for.' }
+    case 'lava':
+      return { path, title: `Lava Lamp · ${SITE.name}`, description: 'A lava lamp drawn with Gaussian splats. The wax is simulated: the bulb warms its pool until a bud swells up and rises, stretching, splitting and running together, then cools at the top and sinks back. Its surface is cut into blobs every frame. Pick the wax and liquid, the base and cap, and any of the site\'s styles.' }
     case 'jelly':
       return { path, title: `Glass Jellyfish · ${SITE.name}`, description: 'A jellyfish made of Gaussian splats, nearly all of them almost clear, drifting through space so you can see the stars through its bell. Each beat of the bell sends light down its canals and along its tentacles, drawn as blobs that give their own light and glow through the lens. An experiment in what opacity alone can draw.' }
     case 'veggies':

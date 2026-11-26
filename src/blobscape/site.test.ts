@@ -44,7 +44,7 @@ test('every page has a title and a description a search result shows whole, and 
   const { pageMeta, SEARCH_MOST } = await import('./meta.ts')
   const { LESSONS } = await import('./routes.ts')
   const { POSTS } = await import('./news.ts')
-  const pages = ['home', 'lessons', 'sandbox', 'creator', 'experiments', 'creature', 'forest', 'pond', 'clockwork', 'shift', 'flow', 'brush', 'text', 'fourways', 'daynight', 'bouquet', 'islands', 'sweater', 'jelly', 'globe', 'veggies', 'timelapse', 'crumble', 'morph', 'diorama', 'dungeon', 'scan', 'engine', 'spec', 'api', 'contact', 'news'] as const
+  const pages = ['home', 'lessons', 'sandbox', 'creator', 'experiments', 'creature', 'forest', 'pond', 'clockwork', 'shift', 'flow', 'brush', 'text', 'fourways', 'daynight', 'bouquet', 'islands', 'sweater', 'jelly', 'lava', 'globe', 'veggies', 'timelapse', 'crumble', 'morph', 'diorama', 'dungeon', 'scan', 'engine', 'spec', 'api', 'contact', 'news'] as const
   const metas = [...pages.map((page) => pageMeta({ page } as Parameters<typeof pageMeta>[0])), ...LESSONS.map((l) => pageMeta({ page: 'lesson', id: l.id })), ...POSTS.map((p) => pageMeta({ page: 'post', id: p.id }))]
   for (const m of metas) {
     // the checker's own limits: a title over 65 or a description over 160 is cut off in results
