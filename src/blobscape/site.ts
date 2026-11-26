@@ -39,6 +39,17 @@ export const EXPERIMENTS = [
     body: 'A moon jelly made of blobs that are nearly all clear, drifting through space so you see the stars through its bell. Each beat sends light down its canals and out along its tentacles, in one color or a rainbow, a hue to each.',
   },
   {
+    id: 'lava',
+    title: 'Lava Lamp',
+    url: '/experiments/lava-lamp/',
+    cover: '/covers/lava-lamp.webp',
+    tags: ['watch'],
+    needs: 'WebGPU or WebGL 2',
+    published: '2026-11-26',
+    updated: '2026-11-26',
+    body: 'A lava lamp whose wax is simulated: buds swell off the warm pool, rise, press together and run into each other, then cool at the top and sink back. Eight wax colors, and a pulp rocket, a light bulb, a volcano and a coffee cup to stand it in.',
+  },
+  {
     id: 'veggies',
     title: 'Veggie Slayer',
     url: '/experiments/veggie-slayer/',

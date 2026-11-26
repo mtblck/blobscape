@@ -44,6 +44,22 @@ export const POSTS: Post[] = [
     ],
   },
   {
+    id: 'lava-lamp',
+    date: '2026-11-26',
+    title: 'A lava lamp you can watch for hours',
+    summary: 'Lava Lamp is a new experiment: the wax is simulated, so buds swell off the warm pool, rise, press together and run into each other, then cool at the top and sink back, in eight colors and five bases from a pulp rocket to a coffee cup.',
+    search: 'Lava Lamp is a new experiment: simulated wax that buds, rises, runs together and sinks back, in eight colors on a rocket, light bulb, volcano or coffee cup.',
+    image: { src: '/covers/lava-lamp.webp', alt: 'Five lava lamps side by side: violet wax on a basalt volcano with lava running down it, green wax on a light bulb screw base, orange wax in a red-finned pulp rocket, pink wax in a coffee cup on a saucer, and blue wax on a mint drum with three legs.' },
+    body: [
+      '[Lava Lamp](/experiments/lava-lamp/) is a lava lamp made of Gaussian splats, and its wax is simulated rather than played back. Pick the wax and the liquid, the base to stand it in and how it is drawn, then leave it running.',
+      '## How the wax moves',
+      'The bulb warms a pool of wax on the bottom until a bud of it swells up, fed by the pool and still held to it by a neck. Warm wax weighs a little less than the liquid, so the bud rises, and the neck thins as it pulls away until it pinches off, leaving a tail that draws back in. Only the liquid just over the bulb is warm, so a blob loses its heat all the way up, faster the smaller it is: it reaches the top, lingers there if it is big, then turns over and sinks.',
+      'Blobs never pass through each other. Two that meet press together and flatten while the film of liquid between them drains, and often part again. Once it has drained a bridge of wax opens between them and widens, and the smaller runs into the larger over a second or two. A blob that sinks onto the pool melts back into it the same way.',
+      '## Drawn every frame',
+      'Thirty times a second the pool, the blobs and their necks are joined into one smooth surface and cut into a few thousand flat blobs, each colored by how hot it is, with the bulb\'s light coming up through them. The bases, a 1950s pulp rocket standing on its fins, a light bulb\'s screw base, a volcano, a diner coffee cup and the atomic mint drum, are cut like any [Diorama](/experiments/diorama/) scene, so the lamp can be drawn in every style on the site, in Blocks to begin with.',
+    ],
+  },
+  {
     id: 'veggie-slayer',
     date: '2026-11-26',
     title: 'Burst the veggies, spare the treats',

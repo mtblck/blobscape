@@ -95,6 +95,8 @@ function structured(route: Route): object[] {
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Wading Pond', href(route)]])]
     case 'shift':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Shape Shifter', href(route)]])]
+    case 'lava':
+      return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Lava Lamp', href(route)]])]
     case 'jelly':
       return [work(experimentAt(href(route))!), breadcrumbs([home, ['Experiments', '/experiments/'], ['Glass Jellyfish', href(route)]])]
     case 'veggies':
@@ -225,7 +227,7 @@ const preloads = fonts.map((f) => `<link rel="preload" href="/assets/${f}" as="f
 const built = readFileSync(join(DIST, 'index.html'), 'utf8')
 if (!built.includes('<link rel="stylesheet"')) throw new Error('prerender: the built page has no stylesheet link')
 const template = built.replace('<link rel="stylesheet"', () => `${preloads}\n    <link rel="stylesheet"`)
-const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'creator' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'pond' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'text' }, { page: 'jelly' }, { page: 'globe' }, { page: 'veggies' }, { page: 'timelapse' }, { page: 'crumble' }, { page: 'morph' }, { page: 'fourways' }, { page: 'daynight' }, { page: 'bouquet' }, { page: 'islands' }, { page: 'sweater' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }, { page: 'news' }, ...POSTS.map((p) => ({ page: 'post' as const, id: p.id }))]
+const routes: Route[] = [{ page: 'home' }, { page: 'lessons' }, ...LESSONS.map((l) => ({ page: 'lesson' as const, id: l.id })), { page: 'sandbox' }, { page: 'creator' }, { page: 'experiments' }, { page: 'creature' }, { page: 'forest' }, { page: 'pond' }, { page: 'clockwork' }, { page: 'shift' }, { page: 'flow' }, { page: 'brush' }, { page: 'text' }, { page: 'jelly' }, { page: 'lava' }, { page: 'globe' }, { page: 'veggies' }, { page: 'timelapse' }, { page: 'crumble' }, { page: 'morph' }, { page: 'fourways' }, { page: 'daynight' }, { page: 'bouquet' }, { page: 'islands' }, { page: 'sweater' }, { page: 'diorama' }, { page: 'dungeon' }, { page: 'scan' }, { page: 'engine' }, { page: 'spec' }, { page: 'api' }, { page: 'contact' }, { page: 'news' }, ...POSTS.map((p) => ({ page: 'post' as const, id: p.id }))]
 for (const r of routes) write(join(DIST, href(r), 'index.html'), render(template, r))
 write(join(DIST, '404.html'), render(template, { page: 'notfound' }))
 
