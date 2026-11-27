@@ -1839,6 +1839,40 @@ export default [
     },
   },
   {
+    name: 'glass-jellyfish',
+    about: 'Glass Jellyfish: the jellyfish draws, and a pulse lights the top of the bell as a beat starts and the tentacles a moment later',
+    entries: ['src/blobscape/GlassJellyfish.tsx', 'src/blobscape/jelly/jellyfish.ts'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/glass-jellyfish/?offscreen=1&detail=60k&lights=rainbow', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__jelly, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__jelly) return null
+        const { stage, jelly } = window.__jelly
+        const canvas = document.querySelector('[data-testid=jelly-view]')
+        // how much of the view is lit, and how many lights shine (each light blob's opacity follows its pulse)
+        const at = async (t) => {
+          await stage.frame(t)
+          const c = document.createElement('canvas')
+          c.width = 160; c.height = 120
+          const x = c.getContext('2d', { willReadFrequently: true })
+          x.drawImage(canvas, 0, 0, 160, 120)
+          const d = x.getImageData(0, 0, 160, 120).data
+          let lit = 0
+          for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 180) lit++
+          const o = jelly.lights.blobs.opacity, on = jelly.path.on
+          let top = 0, tails = 0
+          for (let i = 0; i < jelly.lights.blobs.count; i++) if (o[i] > 0.6) { if (on[i] < 0) top++; else tails++ }
+          return { lit: lit / (160 * 120), top, tails }
+        }
+        return { early: await at(0.3), later: await at(2.3) }
+      })
+      if (!got) fails.push('glass jellyfish: the page never started (no window.__jelly)')
+      else if (!(got.early.lit > 0.02 && got.early.top > 50 && got.later.tails > 50 && got.later.tails > got.early.tails)) fails.push(`glass jellyfish: ${JSON.stringify(got)}`)
+      else ok(`glass jellyfish: drawn (${Math.round(got.early.lit * 100)}% of the view lit); a beat lights ${got.early.top} lights in the bell, then ${got.later.tails} down the tentacles`)
+      await g.ctx.close()
+    },
+  },
+  {
     name: 'snow-globe',
     about: 'Snow Globe: the snow stays inside the glass, a shake lifts it off the ground and it settles again',
     entries: ['src/blobscape/SnowGlobe.tsx'],

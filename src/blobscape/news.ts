@@ -30,6 +30,20 @@ const CHANGES = 'https://github.com/mtblck/blobscape/blob/main/CHANGELOG.md'
 
 export const POSTS: Post[] = [
   {
+    id: 'glass-jellyfish',
+    date: '2026-11-26',
+    title: 'A jellyfish you can see through',
+    summary: 'Glass Jellyfish is a moon jelly made of blobs that are nearly all clear, drifting through space. With each beat of its bell a pulse of light runs down its canals and out along its tentacles, in one color or a rainbow.',
+    search: 'Glass Jellyfish: a see-through moon jelly of nearly clear Gaussian splats in space, with pulses of light running down its tentacles in one color or a rainbow.',
+    image: { src: '/covers/glass-jellyfish.webp', alt: 'A see-through jellyfish against a starry night, its pink gonads showing through the bell, its long tentacles tipped with points of light in every color of the rainbow.' },
+    body: [
+      '[Glass Jellyfish](/experiments/glass-jellyfish/) is an experiment in opacity. Almost every blob in it lets through more than nine tenths of the light behind it, so one alone would hardly show. Where you look along the bell at a slant, or through a fold of an arm, your line of sight crosses dozens of them, and that is where the jellyfish draws itself: its rim, its canals, its frills. Everywhere else you see the stars through it.',
+      '## What is in it',
+      'The bell is two skins with a thin gel between them, sixteen canals running out from the top and a ring canal round the margin. Through the top you can see the four pink horseshoes a real moon jelly carries. Four frilled arms hang from the middle, and 48 long tentacles from the margin, each moving a little differently from its neighbors.',
+      'Each beat squeezes the margin in, lifts the bell and sends a wave down the tentacles. At the same moment a pulse of light leaves the top of the bell, runs down every canal and on along about half of the tentacles, a different half each time. Pick cyan, violet or amber, or Rainbow, which gives every tentacle its own color. The See-through slider makes the whole thing clearer or milkier.',
+    ],
+  },
+  {
     id: 'lava-lamp',
     date: '2026-11-26',
     title: 'A lava lamp you can watch for hours',
