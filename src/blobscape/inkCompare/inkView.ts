@@ -18,12 +18,9 @@ interface InkModule {
   gaussianSplatWorld(cloud: Any, opts: { size: number; colorMode?: string; palette?: number[] }): Any
 }
 
-declare global {
-  interface Window {
-    /** Ink Studio's toolkit (`KIT`, `PixelLook`), set by the page after its browser bundle loads. */
-    __inkToolkit?: { KIT: Any; PixelLook: Any }
-  }
-}
+/* Ink Studio's browser bundle, loaded by the page as a classic script, declares these at the top level of the page. */
+declare const KIT: Any
+declare const PixelLook: Any
 
 /** Where the dev server serves Ink Studio from. */
 export const INK_BASE = '/ink-studio/'
@@ -35,9 +32,9 @@ export async function loadInk(): Promise<{ ink: InkModule; toolkit: { KIT: Any; 
   if (!status.dir) throw new Error('Set INK_STUDIO_DIR to a clone of Ink Studio and restart `npm run dev`.')
   if (!status.renderer) throw new Error(`${status.dir} holds no webgl.mjs: is it Ink Studio?`)
   if (!status.built) throw new Error(`Build Ink Studio first: cd ${status.dir} && npm install && npm run build`)
-  if (!window.__inkToolkit) throw new Error('Ink Studio\'s browser bundle did not load (dist/ink-studio.browser.js).')
+  if (typeof KIT === 'undefined' || typeof PixelLook === 'undefined') throw new Error('Ink Studio\'s browser bundle did not load (dist/ink-studio.browser.js).')
   const ink = await import(/* @vite-ignore */ `${INK_BASE}webgl.mjs`) as InkModule
-  return { ink, toolkit: window.__inkToolkit }
+  return { ink, toolkit: { KIT, PixelLook } }
 }
 
 /** What the comparison reads from a Blobscape page with a stage (Diorama's `window.__diorama`). */
@@ -107,9 +104,9 @@ export class InkView {
     })
     const cloud = inkCloud(this.posed)
     this.fit = inkFit(cloud)
-    const palette = look?.palette ?? inkPalette(src.palette.length ? src.palette : [[0, 0, 0], [255, 255, 255]])
-    const world = this.ink.gaussianSplatWorld(cloud, { size: this.fit.size, colorMode: look?.colorMode ?? 'baked', palette: palette.length ? palette : [0, 0xffffff] })
-    if (src.sky) world.bg = [...src.sky]
+    // Ink clears to its first swatch, so the scene's sky goes first
+    const palette = look?.palette ?? inkPalette([...(src.sky ? [src.sky] : []), ...(src.palette.length ? src.palette : [[0, 0, 0], [255, 255, 255]] as Rgb[])])
+    const world = this.ink.gaussianSplatWorld(cloud, { size: this.fit.size, colorMode: look?.colorMode ?? 'baked', palette })
     Object.assign(world, look?.world ?? {})
     world.look = { ...(world.look ?? {}), ...(look?.look ?? {}) }
     if (look?.asset) {

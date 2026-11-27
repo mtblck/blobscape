@@ -1,15 +1,16 @@
 /**
  * Ink Studio side by side (`/dev/ink-compare/`, dev server only; see scripts/ink-studio-dev.ts): our real Diorama
- * page on the left, in a frame, and the same scene, pose and view drawn by Silicon Jungle's Ink Studio on the right,
+ * page on the left, mounted here, and the same scene, pose and view drawn by Silicon Jungle's Ink Studio on the right,
  * in whichever of its looks is picked. Looks are JSON files: those in `dev/ink-looks/` and any dropped on the page
  * (translate.ts `readInkLooks`). Nothing here is in the site's build.
  */
 import { createRoot } from 'react-dom/client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import '../../shared/theme.css'
-import { Button, Chip, Toggle } from '../../shared/ui.tsx'
+import { Chip, Toggle } from '../../shared/ui.tsx'
 import { InkView, loadInk, type InkDrawn } from './inkView.ts'
 import { readInkLooks, type InkLook } from './translate.ts'
+import { PixelDiorama } from '../PixelDiorama.tsx'
 
 /** The look files kept in the repo: our own settings for Ink's looks, written from its docs. */
 const KEPT = import.meta.glob('../../../dev/ink-looks/*.json', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
@@ -22,20 +23,18 @@ function keptLooks(): { looks: InkLook[]; errors: string[] } {
   return { looks, errors }
 }
 
-const START = '?scene=windmill&style=pixel'
+// Diorama reads its scene and style from the address, as on its own page, and writes them back as they change
+if (!new URLSearchParams(location.search).has('scene')) history.replaceState(null, '', '?scene=windmill&style=pixel')
 
 function Compare() {
   const kept = useMemo(keptLooks, [])
   const [looks, setLooks] = useState(kept.looks)
   const [errors, setErrors] = useState(kept.errors)
   const [picked, setPicked] = useState(kept.looks[0]?.id)
-  const [address, setAddress] = useState(() => new URLSearchParams(location.search).get('diorama') ?? START)
-  const [shown, setShown] = useState(address)
   const [extras, setExtras] = useState(false)
   const [pixel, setPixel] = useState<number | 'match'>('match')
   const [failed, setFailed] = useState<string>()
   const [drawn, setDrawn] = useState<InkDrawn & { waiting?: string }>()
-  const frame = useRef<HTMLIFrameElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const look = looks.find((l) => l.id === picked)
@@ -51,9 +50,8 @@ function Compare() {
       view = new InkView(canvas.current!, ink, toolkit)
       const tick = () => {
         raf = requestAnimationFrame(tick)
-        const win = frame.current?.contentWindow as (Window & typeof globalThis) | null
-        const d = win?.__diorama
-        const target = win?.document.querySelector<HTMLCanvasElement>('[data-testid="diorama-view"]')
+        const d = window.__diorama
+        const target = document.querySelector<HTMLCanvasElement>('[data-testid="diorama-view"]')
         let out: InkDrawn & { waiting?: string }
         if (!d || !target) out = { blobs: 0, art: { width: 0, height: 0 }, waiting: 'Waiting for Diorama to start…' }
         else if (!d.stage.shownActors.length) out = { blobs: 0, art: { width: 0, height: 0 }, waiting: 'Waiting for the scene to be cut…' }
@@ -62,11 +60,14 @@ function Compare() {
           const art = d.stage.artSize
           const px = opts.current.pixel === 'match' ? (art ? rect.width / art.width : 1) : opts.current.pixel
           const l = lookRef.current
-          if (box.current) { box.current.style.width = `${rect.width}px`; box.current.style.height = `${rect.height}px` }
+          // the same picture as Diorama's view, shrunk to the column if it is wider
+          const fit = Math.min(1, (box.current?.parentElement?.clientWidth ?? rect.width) / rect.width)
+          const w = rect.width * fit, h = rect.height * fit
+          if (box.current) { box.current.style.width = `${w}px`; box.current.style.height = `${h}px` }
           const pal = d.look()
           out = view!.draw({ stage: d.stage, palette: pal.palette, sky: pal.sky?.[0] }, l, { width: rect.width, height: rect.height, pixel: l?.pixelSize ?? px }, { extras: opts.current.extras, every: 500 })
-          canvas.current!.style.width = `${rect.width}px`
-          canvas.current!.style.height = `${rect.height}px`
+          canvas.current!.style.width = `${w}px`
+          canvas.current!.style.height = `${h}px`
         }
         // the line under the view changes a few times a second at most
         const now = performance.now()
@@ -93,18 +94,13 @@ function Compare() {
       <header className="grid gap-1">
         <h1 className="font-display text-2xl">Ink Studio side by side</h1>
         <p className="text-sm text-ink-muted">
-          A dev tool, never in the site. Left: our Diorama page, with all its controls. Right: the same scene, pose and view
+          A dev tool, never in the site. Left: our Diorama, with all its controls (its scene and style are in this page's address). Right: the same scene, pose and view
           drawn by <a className="underline" href="https://github.com/siliconjungle/shapeshift-labs-ink-studio">Silicon Jungle&rsquo;s Ink Studio</a> (MIT) in the look picked below.
           Turn or zoom the left view and the right follows; pause it there to compare one moment.
         </p>
       </header>
-      <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); setShown(address); history.replaceState(null, '', `?diorama=${encodeURIComponent(address)}`) }}>
-        <label className="text-sm text-ink-muted" htmlFor="addr">Diorama address</label>
-        <input id="addr" className="min-w-[18rem] flex-1 rounded border border-rule bg-paper px-2 py-1 font-mono text-sm" value={address} onChange={(e) => setAddress(e.target.value)} />
-        <Button type="submit" small>Open</Button>
-      </form>
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <iframe ref={frame} title="Diorama" src={`/experiments/diorama/${shown.startsWith('?') ? shown : `?${shown}`}`} className="h-[92svh] w-full rounded border border-rule" />
+        <div className="min-w-0"><PixelDiorama /></div>
         <section className="sticky top-4 grid gap-3" aria-label="Ink Studio">
           <div ref={box} className="relative max-w-full overflow-hidden rounded border border-rule bg-paper-sunk">
             <canvas ref={canvas} className="block" style={{ imageRendering: 'pixelated' }} data-testid="ink-view" />
