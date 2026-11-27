@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ink Studio side by side · Blobscape dev</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script src="/theme.js"></script>
+    <!-- Dev server only (scripts/ink-studio-dev.ts): Silicon Jungle's Ink Studio, from a local build of it.
+         Its browser bundle declares KIT and PixelLook at the top level; the page reads them from here. -->
+    <script src="/ink-studio/dist/ink-studio.browser.js"></script>
+    <script>window.__inkToolkit = typeof KIT !== 'undefined' && typeof PixelLook !== 'undefined' ? { KIT, PixelLook } : undefined</script>
+  </head>
+  <body>
+    <div id="root"><noscript>This page needs JavaScript.</noscript></div>
+    <script type="module" src="/src/blobscape/inkCompare/main.tsx"></script>
+  </body>
+</html>

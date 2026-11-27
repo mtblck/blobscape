@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { inkStudioDev } from './scripts/ink-studio-dev.ts'
 
 // Blobscape is its own site (blobscape.dev): served from the root. Every page is
 // a folder with an index.html; scripts/prerender.ts then writes one for each of
@@ -17,7 +18,7 @@ for (const h of vercel.headers[0].headers) previewHeaders[h.key] = h.value
 
 export default defineConfig({
   base: BASE,
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), inkStudioDev()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
