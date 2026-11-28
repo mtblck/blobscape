@@ -102,6 +102,8 @@ export class PixelPass {
   private readonly count = uniform(0)
   /** How many of the palette's colors are its own, before its ramp (`PixelLook.base`): the sky snaps to those only. */
   private readonly base = uniform(0)
+  /** Full color's steps a channel (`PixelLook.levels`), 0 with a palette or none asked for. */
+  private readonly levels = uniform(0)
   private readonly dither = uniform(0)
   private readonly surface = uniform(0)
   private readonly glow = uniform(0)
@@ -179,6 +181,7 @@ export class PixelPass {
     }
     this.count.value = n
     this.base.value = Math.min(n, look.base ?? n)
+    this.levels.value = n ? 0 : Math.max(0, look.levels ?? 0)
     this.dither.value = look.dither
     // flat surfaces dither only where a glow spills, so the map of steps is not worth a draw of every blob
     this.surface.value = look.surface && !look.flat ? 1 : 0
@@ -616,6 +619,28 @@ export class PixelPass {
           // color cycling, on the scene's own pixels
           const shownAs = select(here.solid, palLab.element(int(pick)).w, pick)
           out.assign(vec4(palShown.element(int(shownAs)).xyz, 1))
+        }).ElseIf(this.levels.greaterThan(1), () => {
+          // full color: each channel to the nearest of `levels` even steps, dithered by a step's share (the twin is
+          // pixelArt's levels branch and `levelOf`)
+          const s = float(255).div(this.levels.sub(1)).toVar()
+          const level = (v: unknown) => floor(min(max(floor(vec3(v).div(s).add(0.5)).mul(s), 0), 255).add(0.5))
+          const screenStep = float(bayer.element(int(mod(row, 4).mul(4).add(mod(home.x, 4)))))
+          const q = level(color.add(screenStep.div(16).sub(0.5).mul(spread).mul(s))).toVar()
+          // steady: last frame's color while it is within a step of what is wanted in every channel, nearly as close
+          // as the new one, and never the color the sky would take here
+          const was = this.beforeTex.sample(vec2(home.x.add(0.5).div(res.x), float(1).sub(home.y.add(0.5).div(res.y))))
+          const wasRgb = floor(was.rgb.mul(255).add(0.5)).toVar()
+          const want = toLab(color).toVar()
+          const dq = want.sub(toLab(q)), dw = want.sub(toLab(wasRgb))
+          const gap = abs(wasRgb.sub(color)), moved = abs(wasRgb.sub(q))
+          const tSky = min(row.add(0.5).div(res.y).div(this.skyReach), 1).toVar()
+          const skySpread = max(this.dither, select(this.skyReach.lessThan(1), min(float(1).sub(tSky).mul(4), 1), 1).mul(SKY_DITHER))
+          const skyQ = level(min(this.skyTop.add(this.skyLow.sub(this.skyTop).mul(tSky)).add(spill), 255).add(screenStep.div(16).sub(0.5).mul(skySpread).mul(s)))
+          const skyGap = abs(wasRgb.sub(skyQ))
+          const isSky = this.skied.greaterThan(0.5).and(max(skyGap.x, max(skyGap.y, skyGap.z)).lessThan(0.5))
+          If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(max(moved.x, max(moved.y, moved.z)).greaterThan(0.5)).and(isSky.not())
+            .and(max(gap.x, max(gap.y, gap.z)).lessThanEqual(s)).and(length(dw).lessThanEqual(length(dq).add(this.sticky))), () => { q.assign(wasRgb) })
+          out.assign(vec4(q.div(255), 1))
         }).Else(() => {
           out.assign(vec4(color.div(255), 1))
         })

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { STEADY, rampPalette } from '../splat-core/pixel.ts'
+import { FULL_LEVELS, STEADY, rampPalette } from '../splat-core/pixel.ts'
 import { readFileSync } from 'node:fs'
 import { cutAsk, detailStart, pixelSizeAt, pixelZoomAsked, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelStart, styleStart, type Finish } from './styleSettings.ts'
 
@@ -51,6 +51,9 @@ test('the pixel look follows the settings and the scene', () => {
   assert.deepEqual(pixelLookOf(s, { colors: own, finish: FINISH, loop: 12 }, pixelFlags(new URLSearchParams('ramps=0'))).palette, own)
   assert.deepEqual(pixelLookOf({ ...s, palette: 'gameboy' }, { colors: own, finish: FINISH, loop: 12 }).palette, own)
   assert.deepEqual(look.outline, [10, 20, 30])
+  // full color rounds to even steps; a palette has none
+  assert.equal(look.levels, undefined)
+  assert.equal(pixelLookOf({ ...s, palette: 'none' }, { colors: [], finish: FINISH, loop: 12 }).levels, FULL_LEVELS)
   assert.deepEqual(look.sky, sky)
   assert.equal(look.edges, 1)
   assert.equal(look.parts, true)

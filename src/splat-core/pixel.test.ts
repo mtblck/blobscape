@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, rampPalette, MAX_RAMPED, RAMP_STEP, RING2, TEXTURE_KEEP, keptNearest, lighterStep, peakAt, rimStep, screenWay, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, rampPalette, FULL_LEVELS, levelOf, MAX_RAMPED, RAMP_STEP, RING2, TEXTURE_KEEP, keptNearest, lighterStep, peakAt, rimStep, screenWay, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -700,4 +700,25 @@ test('lines only across things: a jump in color within one part takes no line, t
   assert.ok(lined(pixelArt(frame, look)))
   assert.ok(!lined(pixelArt(frame, { ...look, across: true }, undefined, map([1, 1, 1, 1]))))
   assert.ok(lined(pixelArt(frame, { ...look, across: true }, undefined, map([1, 1, 2, 2]))))
+})
+
+test('full color rounds each channel to even steps, so one shade is one color, and steady pixels hold a step', () => {
+  const s = 255 / (FULL_LEVELS - 1)
+  const f = solid(4, 1, () => true, [100, 101, 103])
+  f.data.set([102, 99, 104, 255], 4)
+  const look: PixelLook = { palette: [], levels: FULL_LEVELS, dither: 0, outline: null, glow: 0 }
+  const got = pixelArt(f, look)
+  const first = [...got.data.slice(0, 3)]
+  for (const c of first) assert.equal(c % 1, 0)
+  assert.deepEqual(first, [100, 101, 103].map((v) => levelOf(v, s)))
+  // nearby shades land on the same color
+  assert.deepEqual([...got.data.slice(4, 7)], first)
+  // a pixel just over the middle between two steps keeps the step it had with steady pixels on
+  const mid = Math.round(s * 12.5) + 1
+  const g = solid(1, 1, () => true, [mid, mid, mid])
+  const before = solid(1, 1, () => true, [levelOf(s * 12, s), levelOf(s * 12, s), levelOf(s * 12, s)])
+  assert.equal(pixelArt(g, look).data[0], levelOf(s * 13, s))
+  assert.equal(pixelArt(g, { ...look, steady: 0.04 }, before).data[0], before.data[0])
+  // without levels, a look with no palette passes colors through as drawn
+  assert.equal(pixelArt(f, { ...look, levels: undefined }).data[0], 100)
 })

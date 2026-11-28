@@ -405,6 +405,12 @@ export interface PixelLook {
    */
   steady?: number
   /**
+   * Full color (a look with no palette): each channel is rounded to this many even steps instead of snapped to a
+   * palette, so neighbors of one shade are one color and the cleanup and steady pixels still have colors to match;
+   * dither checkers between two steps. Left out, a look with no palette passes colors through as drawn.
+   */
+  levels?: number
+  /**
    * Lone-pixel cleanup, as a pixel artist does it: a scene pixel whose color none of its eight neighbors shares, while
    * six or more of them share one other color, takes that color. With a map of parts, only a pixel inside its own
    * part (four or more neighbors of its part) is touched, so a speck, an eye or a firefly in front of something stays.
@@ -596,6 +602,14 @@ export function snapShift(ndc: number, size: number): number {
 
 /** How far past halfway, in art pixels, `snapShift` still takes a point to the lower edge: far over rounding noise. */
 export const SNAP_TIE = 1e-4
+
+/** Full color's steps a channel (`PixelLook.levels`): fine enough to keep texture, coarse enough that one shade is one color. */
+export const FULL_LEVELS = 32
+
+/** A channel rounded to the nearest whole step of `s` (and to a whole sRGB level), 0 to 255: full color's rounding, the pass's twin. */
+export function levelOf(v: number, s: number): number {
+  return Math.round(Math.min(255, Math.max(0, Math.floor(v / s + 0.5) * s)))
+}
 
 /** A good `steady` for a moving scene: under the gap between neighboring palette colors, so shapes still move freely. */
 export const STEADY = 0.04
@@ -832,6 +846,28 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
         // color cycling, on the scene's own pixels
         const c = look.palette[solid(x, y) ? turn[k] : k]
         r = c[0]; gg = c[1]; b = c[2]
+      } else if (look.levels && look.levels > 1) {
+        // full color: each channel to the nearest of `levels` even steps, dithered by a step's share
+        const s = 255 / (look.levels - 1)
+        const off = spread > 0 ? (BAYER4[(y & 3) * 4 + (x0 & 3)] / 16 - 0.5) * (spread / 48) * s : 0
+        const raw: Rgb = [r, gg, b]
+        let q = raw.map((v) => levelOf(v + off, s)) as Rgb
+        // steady: keep last frame's color while it is within a step of what is wanted in every channel, nearly as
+        // close as the new one, and never the color the sky would take here
+        if (steady > 0 && solid(x, y) && before!.data[o + 3] === 255) {
+          const was: Rgb = [before!.data[o], before!.data[o + 1], before!.data[o + 2]]
+          const want = oklab(...raw)
+          const far = (c: Rgb) => { const l = oklab(...c); return Math.hypot(want[0] - l[0], want[1] - l[1], want[2] - l[2]) }
+          let skyQ: Rgb | undefined
+          if (look.sky) {
+            const [top, low] = look.sky, reach = skyReach(look.sky), t = Math.min(1, (y + 0.5) / h / reach)
+            const so = (BAYER4[(y & 3) * 4 + (x0 & 3)] / 16 - 0.5) * Math.max(look.dither, SKY_DITHER * (reach < 1 ? Math.min(1, (1 - t) * 4) : 1)) * s
+            skyQ = [0, 1, 2].map((c) => levelOf(Math.min(255, top[c] + (low[c] - top[c]) * t + g[c]) + so, s)) as Rgb
+          }
+          const same = (a: Rgb, b2: Rgb) => a[0] === b2[0] && a[1] === b2[1] && a[2] === b2[2]
+          if (!same(was, q) && (!skyQ || !same(was, skyQ)) && was.every((v, c) => Math.abs(v - raw[c]) <= s) && far(was) <= far(q) + steady) q = was
+        }
+        r = q[0]; gg = q[1]; b = q[2]
       }
       out.data[o] = r; out.data[o + 1] = gg; out.data[o + 2] = b; out.data[o + 3] = 255
     }

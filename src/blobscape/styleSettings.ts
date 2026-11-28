@@ -1,7 +1,7 @@
 import type { CelLook } from '../splat-core/cel.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 import { LIT_MAX } from '../splat-engine/voxel.ts'
-import { MAX_RAMPED, STEADY, darkest, heatPace, rampPalette, screenWay, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
+import { FULL_LEVELS, MAX_RAMPED, STEADY, darkest, heatPace, rampPalette, screenWay, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Diorama } from './diorama/scenes.ts'
 import { DEFAULT_STYLE, isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
@@ -110,7 +110,7 @@ export function pixelLookOf(s: PixelSettings, scene: PixelScene, f: PixelFlags =
   const cycling = s.cycle ? (finish.cycle ?? []).flatMap((c) => c.colors) : []
   const palette = f.ramps && s.palette === 'own' && colors.length ? rampPalette(colors, MAX_RAMPED, cycling) : colors
   return {
-    palette, base: colors.length, dither: s.dither, outline: s.outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow: s.glow,
+    palette, base: colors.length, levels: colors.length ? undefined : FULL_LEVELS, dither: s.dither, outline: s.outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow: s.glow,
     edges: s.lines && finish.edges ? 1 : 0, parts: s.lines, across: f.across, solid: f.solid,
     sky: s.sky || scene.skyForced ? scene.sky : undefined,
     steady: f.steady ? STEADY : 0, tidy: f.tidy, calm: f.calm, flat: f.flat, fine: f.fine, shine: f.shine,
