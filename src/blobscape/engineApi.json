@@ -17866,7 +17866,7 @@
     {
      "name": "CUTOUT_START",
      "kind": "const",
-     "doc": "Where paper cutout's settings start.",
+     "doc": "Where paper cutout's settings start: Matt's defaults (2026-11-28).",
      "type": "CutoutChoice"
     },
     {
