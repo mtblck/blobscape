@@ -255,7 +255,10 @@ export default [
         const g = t.getContext('2d', { willReadFrequently: true }); g.drawImage(document.querySelector('[data-testid=creator-view]'), 0, 0, 96, 72)
         return Array.from(g.getImageData(0, 0, 96, 72).data)
       })
-      const differ = (a, b) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 30) n++; return n }
+      const differ = (a, b, by = 30) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > by) n++; return n }
+      // a moment drawn twice is the same picture, so any change at all is the move; pixel art starts in Full color, whose
+      // neighboring shades are a step of 8 apart where a palette's jump further, so a move is told by a smaller change
+      const moved = (a, b) => differ(a, b, 6)
       const state = () => p.evaluate(() => ({ props: window.__creator.props(), land: window.__creator.land(), blobs: window.__creator.blobs(), picked: window.__creator.picked() }))
       const count = () => p.getByTestId('creator-prop-count').innerText().catch(() => '')
       const steps = []
@@ -308,7 +311,7 @@ export default [
       const later = await p.evaluate(async () => { const s = window.__creator.stage; await s.frame(2.7); await s.frame(2.7); return null }).then(() => picture())
       steps.push(['fox set down', fox?.prop === 'creature-fox' && fox.size < 1 && foxed.blobs > packed.blobs],
         ['picture follows the fox', differ(withPack, withFox) > 20],
-        ['the fox moves', differ(withFox, later) > 5])
+        ['the fox moves', moved(withFox, later) > 5])
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-creature.png') })
       await p.getByRole('searchbox', { name: 'Find a prop or land' }).fill('')
       // a model of your own (#367): the puffer's rigged splat .glb, playing its clip and its blend shapes
@@ -320,7 +323,7 @@ export default [
       const puffed = await p.evaluate(async () => { const s = window.__creator.stage; await s.frame(4.1); await s.frame(4.1); return null }).then(() => picture())
       steps.push(['model opened', opened && /^model-/.test(String(model?.prop)) && modeled.blobs > foxed.blobs],
         ['picture follows the model', differ(withFox, withModel) > 20],
-        ['the model moves', differ(withModel, puffed) > 5])
+        ['the model moves', moved(withModel, puffed) > 5])
       await p.screenshot({ path: join(shots, 'blobscape-scene-creator-model.png') })
       // a still mesh (#368): a little house as an .obj with its .mtl, cut on the scene's grid in its own colors
       await p.getByTestId('creator-model-file').setInputFiles([
@@ -347,7 +350,7 @@ export default [
       steps.push(['undone', back.land === start.land && JSON.stringify(back.props) === JSON.stringify(start.props)])
       const room = await p.getByTestId('creator-room').innerText().catch(() => '')
       const bad = steps.filter(([, good]) => !good).map(([name]) => name)
-      if (bad.length) fails.push(`blobscape scene creator props: ${bad.join(', ')} failed ${JSON.stringify({ start: start.props.length, turkey: turkey.props.length, dropped: dropped.props.length, land: swapped.land, room })}`)
+      if (bad.length) fails.push(`blobscape scene creator props: ${bad.join(', ')} failed ${JSON.stringify({ start: start.props.length, turkey: turkey.props.length, dropped: dropped.props.length, land: swapped.land, room, foxMoved: moved(withFox, later), modelMoved: moved(withModel, puffed) })}`)
       else ok(`blobscape scene creator props: the turkey found and added to the windmill hill, a haystack dropped on the view, the land swapped to turf, the old ruins pack set down, the fox from Splat Creatures added and moving, the puffer's .glb opened as a model and moving, an .obj hut cut on the grid, an open tent covered in blobs, counts and picture following, and all undone ("${room}")`)
     },
   },
