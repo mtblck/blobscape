@@ -37,6 +37,7 @@ import { FIREPLACE_PROJECT, ORNAMENT_PROJECT, PRESENTS_PROJECT, SANTA_PROJECT, S
 import { madeProp, madeTags } from '../props/index.ts'
 import { composeScene } from '../../splat-engine/compose.ts'
 import type { SceneProject } from '../../splat-engine/project.ts'
+import type { SkyEffectId } from '../../splat-engine/skyEffects.ts'
 import type { WeatherId } from '../../splat-engine/skyRecipes.ts'
 import { HENGE, HENGE_PROJECT } from './scenes/henge.ts'
 import { WHALES, WHALES_PROJECT } from './scenes/whales.ts'
@@ -56,6 +57,11 @@ export interface Diorama {
   project?: SceneProject
   /** The shared weather it starts under (skyRecipes.ts `WEATHERS`), where it has one: the koi pond's light rain. */
   weather?: WeatherId
+  /**
+   * The shared sky effect it starts with (skyEffects.ts `SKY_EFFECTS`), where it has one: the lantern grove's aurora.
+   * Laid behind the scene, never cut into it, and out only at night under a clear enough sky.
+   */
+  skyEffect?: SkyEffectId
   /** False where the weather's clouds start left out, its rain and snow falling in from over the picture (the koi pond's tree and bamboo stand nearly into them). */
   overhead?: boolean
   /**
@@ -188,7 +194,7 @@ const night = (palette: Rgb[]): [Rgb, Rgb] => {
 /** A scene written as a description (splat-engine/sceneDoc.ts), made ready for the page. */
 /** What the page calls the palette a scene was made with. */
 
-export function described(id: string, doc: SceneDoc, about: string, more: Pick<Diorama, 'project' | 'weather' | 'overhead' | 'byDay'> = {}): Diorama {
+export function described(id: string, doc: SceneDoc, about: string, more: Pick<Diorama, 'project' | 'weather' | 'overhead' | 'byDay' | 'skyEffect'> = {}): Diorama {
   // a scene written as a day keeps its lamps as written but has no moon or stars out ('always' never lights the night's)
   const c = compileScene(more.byDay ? litFor(doc, false, 'always') : doc)
   let pond: SceneWater | undefined
@@ -317,7 +323,7 @@ export const DIORAMAS: Diorama[] = [
   described('cornucopia', composeScene(CORNUCOPIA_PROJECT, madeProp), 'A giant woven cornucopia on an autumn green on a golden afternoon, spilling pumpkins, squash, gourds, apples, pears and grapes, with wheat and corn standing out of its mouth; a squirrel scurries in to nibble an acorn, a cardinal flutters down to peck the grapes, and a fox trots out to sniff the gourds and nudge one, each looking it over before it goes', { project: CORNUCOPIA_PROJECT, byDay: true }),
   described('lab', LAB, 'A laboratory at night where sprouts grow in three tall jars of glowing liquid, with rising bubbles, a steaming flask, blinking dials, a swaying lamp and a cat keeping watch.', { project: LAB_PROJECT }),
   described('croc', CROC, 'A crocodile basking on a sandbar in a sunny pond, yawning, with flowers growing along its back, a small bird riding on it and butterflies overhead.', { project: CROC_PROJECT }),
-  described('grove', GROVE, 'A grove of birches in the snow at night, their faces lit from inside like lanterns, with paper lamps on the branches, a fox asleep below and ribbons of light in the sky.', { project: GROVE_PROJECT, weather: 'snow', overhead: false }),
+  described('grove', GROVE, 'A grove of birches in the snow at night, their faces lit from inside like lanterns, with paper lamps on the branches, a fox asleep below and ribbons of light in the sky.', { project: GROVE_PROJECT, weather: 'snow', overhead: false, skyEffect: 'aurora' }),
   described('hut', HUT, 'A fishing hut on stilts over a mangrove lagoon at dawn, with a lantern, drying nets, a rowing boat, and a heron in the shallows.', { project: HUT_PROJECT }),
   described('window', WINDOW, 'A round stained glass window with turning rings of panes, in the last wall of a ruined library at sunrise, with shelves, piles of books and a tree grown over the wall.', { project: WINDOW_PROJECT }),
   described('spider', SPIDER, 'A wind-up brass spider with a lantern for a body, on its web between two bare trees, with moths circling the light.', { project: SPIDER_PROJECT }),
