@@ -43,7 +43,11 @@ test('settings kept by an older page are read back over a start', () => {
 })
 
 test('the pixel look follows the settings and the scene', () => {
-  const s = { ...pixelStart(FINISH), palette: 'own' }
+  // lines inside the scene start off (Matt, 2026-11-28), and the address brings them back
+  assert.equal(pixelStart(FINISH).lines, false)
+  assert.equal(pixelStart(FINISH, new URLSearchParams('parts=1')).lines, true)
+  assert.deepEqual([pixelLookOf(pixelStart(FINISH), { colors: own, finish: FINISH, loop: 12 }).edges, pixelLookOf(pixelStart(FINISH), { colors: own, finish: FINISH, loop: 12 }).parts], [0, false])
+  const s = { ...pixelStart(FINISH), palette: 'own', lines: true }
   const look = pixelLookOf(s, { colors: own, sky, finish: FINISH, loop: 12 })
   // the scene's own palette with its ramp (a step darker and lighter of each color), and only its own
   assert.deepEqual(look.palette, rampPalette(own))

@@ -265,7 +265,7 @@ export default [
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       for (const q of ['', '&webgl=1']) {
-        const d = await open(`/experiments/diorama/?offscreen=1&style=pixel${q}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&parts=1${q}`, { viewport: { width: 1280, height: 900 } })
         await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
         const shot = (t) => d.page.evaluate(async (t) => {
           const { stage, look } = window.__diorama

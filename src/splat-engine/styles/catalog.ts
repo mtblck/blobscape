@@ -274,7 +274,7 @@ const height = <V extends { height: number }>(): RangeSetting<V> => ({ key: 'hei
  */
 export const PIXEL: StyleDef<PixelSettings> = {
   id: 'pixel', styles: ['pixel', 'glitch'],
-  start: { palette: 'none', size: 2, rate: 0, dither: 0.5, glow: 1, outline: true, own: true, lines: true, sky: true, heat: 0, bands: 2, selout: true, cycle: true, steps: false, texel: 0, shade: false, rock: true, exact: false },
+  start: { palette: 'none', size: 2, rate: 0, dither: 0.5, glow: 1, outline: true, own: true, lines: false, sky: true, heat: 0, bands: 2, selout: true, cycle: true, steps: false, texel: 0, shade: false, rock: true, exact: false },
   settings: [
     { key: 'palette', kind: 'choice', label: 'Palette', tab: 'style', options: [{ id: 'own', label: 'Scene’s own' }], open: true },
     { key: 'size', kind: 'choice', label: 'Pixel size', tab: 'style', address: 'px', options: PIXEL_SIZES.map((n) => ({ id: n, label: `${n}×` })) },
@@ -287,6 +287,7 @@ export const PIXEL: StyleDef<PixelSettings> = {
     { key: 'shade', kind: 'toggle', label: 'Shade each pixel', tab: 'switches', address: 'shade', when: pixelArt, about: 'Works the light out a pixel at a time from the scene\'s sun and lamps, so light and shade fall in bands that follow each shape. Cuts the scene again.' },
     { key: 'outline', kind: 'toggle', label: 'Outline', tab: 'switches', when: pixelArt, draw: { kind: 'choice', options: [{ id: 'none', label: 'None' }, { id: 'one', label: 'One color' }, { id: 'own', label: 'Each thing’s own' }], at: (v) => (!v.outline ? 'none' : v.own ? 'own' : 'one'), set: (id) => (id === 'none' ? { outline: false } : { outline: true, own: id === 'own' }) } },
     { key: 'own', kind: 'toggle', label: 'Outline in each thing’s own color', address: 'own' },
+    // off at first (Matt, 2026-11-28): the outline and the color jumps already draw the shapes; `?parts=1` brings them
     { key: 'lines', kind: 'toggle', label: 'Lines inside the scene', tab: 'switches', address: 'parts', when: pixelArt },
     { key: 'sky', kind: 'toggle', label: 'Sky behind', tab: 'switches', when: pixelArt },
     { key: 'heat', kind: 'range', label: 'Heat haze over glowing things', tab: 'switches', address: 'heat', when: pixelArt, min: 0, max: 3, step: 1, unit: 'px', whole: true, draw: { kind: 'toggle', at: (v) => v.heat > 0, set: (to, on) => ({ heat: to ? on.heat || 1 : 0 }) } },
