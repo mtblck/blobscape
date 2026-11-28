@@ -10966,6 +10966,12 @@
        "doc": "Steady pixels: a pixel keeps the palette color it had in the frame before unless another is closer by more than this (an OKLab distance; 0 or left out is off).\nWithout it, a pixel that sits between two colors flips back and forth as lights flicker and the view turns."
       },
       {
+       "name": "levels",
+       "optional": true,
+       "type": "number",
+       "doc": "Full color (a look with no palette): each channel is rounded to this many even steps instead of snapped to a\npalette, so neighbors of one shade are one color and the cleanup and steady pixels still have colors to match;\ndither checkers between two steps. Left out, a look with no palette passes colors through as drawn."
+      },
+      {
        "name": "tidy",
        "optional": true,
        "type": "boolean",

@@ -274,12 +274,12 @@ const height = <V extends { height: number }>(): RangeSetting<V> => ({ key: 'hei
  */
 export const PIXEL: StyleDef<PixelSettings> = {
   id: 'pixel', styles: ['pixel', 'glitch'],
-  start: { palette: 'own', size: 2, rate: 0, dither: 0.5, glow: 1, outline: true, own: true, lines: true, sky: true, heat: 0, bands: 2, selout: true, cycle: true, steps: false, texel: 0, shade: false, rock: true, exact: false },
+  start: { palette: 'none', size: 2, rate: 0, dither: 0.5, glow: 1, outline: true, own: true, lines: true, sky: true, heat: 0, bands: 2, selout: true, cycle: true, steps: false, texel: 0, shade: false, rock: true, exact: false },
   settings: [
     { key: 'palette', kind: 'choice', label: 'Palette', tab: 'style', options: [{ id: 'own', label: 'Scene’s own' }], open: true },
     { key: 'size', kind: 'choice', label: 'Pixel size', tab: 'style', address: 'px', options: PIXEL_SIZES.map((n) => ({ id: n, label: `${n}×` })) },
     { key: 'rate', kind: 'choice', label: 'Motion', tab: 'style', options: PIXEL_RATES.map((n) => ({ id: n, label: n ? `${n} a second` : 'Smooth' })) },
-    { key: 'dither', kind: 'range', label: 'Dither', tab: 'finish', when: pixelArt, min: 0, max: 1, step: 0.05, unit: 'percent', hint: (on) => (on.colors ? 'Checkers two palette colors to fake the ones between, where a pixel artist would: in the sky and the light round glowing things. Surfaces stay flat.' : 'Needs a palette: Full color has none to mix.') },
+    { key: 'dither', kind: 'range', label: 'Dither', tab: 'finish', when: pixelArt, min: 0, max: 1, step: 0.05, unit: 'percent', hint: (on) => (on.colors ? 'Checkers two palette colors to fake the ones between, where a pixel artist would: in the sky and the light round glowing things. Surfaces stay flat.' : 'Checkers two neighboring shades to smooth the sky and the light round glowing things. Surfaces stay flat.') },
     // neon, stained glass and knitting put the scene's lights by (neon has a Glow of its own), so this one would do nothing there
     { key: 'glow', kind: 'range', label: 'Glow', tab: 'finish', address: 'glow', when: (_v, on) => on.style !== 'neon' && on.style !== 'glass' && on.style !== 'knit', min: 0, max: 4, step: 0.25, unit: 'times', zero: 'off', hint: (on) => (pixelArt(0, on) ? 'How strongly lamps, fires and other glowing things light what is round them, and how far bright pixels shine into the ones beside them.' : 'How strongly lamps, fires and other glowing things light what is round them.') },
     { key: 'steps', kind: 'toggle', label: 'Paint in steps of the palette', tab: 'switches', address: 'steps', when: pixelArt, held: (on) => (on.colors ? undefined : 'Needs a palette: Full color has no steps.'), about: 'Cuts the scene again with every blob in one palette color, a step of its own paint from shade to sun, so shade falls in flat bands.' },

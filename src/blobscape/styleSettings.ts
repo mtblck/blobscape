@@ -1,7 +1,7 @@
 import type { CelLook } from '../splat-core/cel.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 import { LIT_MAX } from '../splat-engine/voxel.ts'
-import { MAX_RAMPED, STEADY, darkest, heatPace, rampPalette, screenWay, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
+import { FULL_LEVELS, MAX_RAMPED, STEADY, darkest, heatPace, rampPalette, screenWay, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Diorama } from './diorama/scenes.ts'
 import { DEFAULT_STYLE, isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
@@ -60,7 +60,7 @@ export const styleStart = (finish: Finish, q?: URLSearchParams): StyleSettings =
 
 /** A new scene's own finish over the settings the visitor has: its palette, dither, glow, outline, sky and art-pixel effects. */
 export const pixelFor = (s: PixelSettings, finish: Finish): PixelSettings => ({
-  ...s, palette: 'own', dither: finish.dither, glow: finish.glow, outline: finish.outline, sky: finish.sky, bands: finish.bands ?? 2, heat: finish.heat ?? 0,
+  ...s, palette: 'none', dither: finish.dither, glow: finish.glow, outline: finish.outline, sky: finish.sky, bands: finish.bands ?? 2, heat: finish.heat ?? 0,
 })
 
 /**
@@ -104,13 +104,16 @@ export interface PixelScene {
 
 /** The pixel look for the settings and the scene. */
 export function pixelLookOf(s: PixelSettings, scene: PixelScene, f: PixelFlags = pixelFlags()): PixelLook {
-  const { colors, finish } = scene
+  const { finish } = scene
+  // Full color (the start, Matt 2026-11-28) is no palette whatever colors the page hands in; the outline still takes
+  // the darkest of them
+  const given = scene.colors, colors = s.palette === 'none' ? [] : given
   // a scene's own palette gains a step darker and lighter of each color, so texture has shades to fall into (Matt,
   // 2026-11-28); a shared palette is a set someone chose, so it is kept as it is, and a color that cycles gets no steps
   const cycling = s.cycle ? (finish.cycle ?? []).flatMap((c) => c.colors) : []
   const palette = f.ramps && s.palette === 'own' && colors.length ? rampPalette(colors, MAX_RAMPED, cycling) : colors
   return {
-    palette, base: colors.length, dither: s.dither, outline: s.outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow: s.glow,
+    palette, base: colors.length, levels: colors.length ? undefined : FULL_LEVELS, dither: s.dither, outline: s.outline ? (given.length ? darkest(given) : [11, 16, 38]) : null, glow: s.glow,
     edges: s.lines && finish.edges ? 1 : 0, parts: s.lines, across: f.across, solid: f.solid,
     sky: s.sky || scene.skyForced ? scene.sky : undefined,
     steady: f.steady ? STEADY : 0, tidy: f.tidy, calm: f.calm, flat: f.flat, fine: f.fine, shine: f.shine,

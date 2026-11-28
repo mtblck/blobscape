@@ -16,7 +16,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, ViewPopup, Workbench } from '../shared/Workbench.tsx'
-import { DETAIL, PALETTES } from './diorama/scene.ts'
+import { DETAIL, FULL_COLOR, PALETTES } from './diorama/scene.ts'
 import { DIORAMAS, described, sceneOf, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
 import type { Skeleton } from '../splat-engine/rig.ts'
@@ -172,7 +172,7 @@ export function PixelDiorama() {
     const q = new URLSearchParams(location.search), start = pixelStart(diorama.finish, q), c = { ...start, ...choiceFrom('pixel', start, q) }
     return {
       ...c,
-      palette: c.palette === 'own' || PALETTES.some((p) => p.id === c.palette) ? c.palette : 'own',
+      palette: c.palette === 'own' || PALETTES.some((p) => p.id === c.palette) ? c.palette : 'none',
       size: PIXEL_SIZES.includes(c.size) ? c.size : start.size,
       rate: PIXEL_RATES.includes(c.rate) ? c.rate : start.rate,
       dither: Math.max(0, Math.min(1, c.dither)),
@@ -274,7 +274,7 @@ export function PixelDiorama() {
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => {
         t = setTimeout(() => {
-          if (!settled) setPixel({ palette: 'own', steps: diorama.finish.steps })
+          if (!settled) setPixel({ palette: 'none', steps: diorama.finish.steps })
           // a scene with water works one loop of its ripples out here too, while the waiting mark shows
           diorama.water?.()
           // and one with a fire burning, one loop of that
@@ -312,8 +312,8 @@ export function PixelDiorama() {
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 
-  // the scene's own palette first, then the shared ones
-  const palettes = useMemo(() => [{ id: 'own', ...shown.palette, colors: paletteUnder(shown.palette.colors, shown.sky, skyState(weather, clouds, wind)) }, ...PALETTES.slice(1)], [shown, weather, clouds, wind])
+  // full color first (the default, Matt 2026-11-28), then the scene's own palette, then the shared ones
+  const palettes = useMemo(() => [FULL_COLOR, { id: 'own', ...shown.palette, colors: paletteUnder(shown.palette.colors, shown.sky, skyState(weather, clouds, wind)) }, ...PALETTES.slice(1).filter((p) => p !== FULL_COLOR)], [shown, weather, clouds, wind])
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
   const colors = picked.colors
   /** How it's made: which step of the walk-through is showing, or none. */
@@ -326,7 +326,7 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
+  const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors: colors.length ? colors : palettes[1].colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
