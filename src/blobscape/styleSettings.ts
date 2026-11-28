@@ -60,7 +60,7 @@ export const styleStart = (finish: Finish, q?: URLSearchParams): StyleSettings =
 
 /** A new scene's own finish over the settings the visitor has: its palette, dither, glow, outline, sky and art-pixel effects. */
 export const pixelFor = (s: PixelSettings, finish: Finish): PixelSettings => ({
-  ...s, palette: 'own', dither: finish.dither, glow: finish.glow, outline: finish.outline, sky: finish.sky, bands: finish.bands ?? 2, heat: finish.heat ?? 0,
+  ...s, palette: 'none', dither: finish.dither, glow: finish.glow, outline: finish.outline, sky: finish.sky, bands: finish.bands ?? 2, heat: finish.heat ?? 0,
 })
 
 /**

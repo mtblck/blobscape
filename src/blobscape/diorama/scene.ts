@@ -15,6 +15,9 @@ const shared = (id: string): Rgb[] => SPRITE_PALETTES.find((p) => p.id === id)!.
 
 const hex = (...h: string[]): Rgb[] => h.map((c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)])
 
+/** No palette: pixel art rounds each color to fine steps (`FULL_LEVELS`); pixel art's default (Matt, 2026-11-28). */
+export const FULL_COLOR: Palette = { id: 'none', label: 'Full color', colors: [] }
+
 export const PALETTES: Palette[] = [
   { id: 'dusk', label: 'Dusk', colors: hex('#0b1026', '#1b2148', '#27407a', '#3f62a8', '#6fa3d8', '#cfe6f5', '#22402f', '#3f7a45', '#69b05a', '#3b3848', '#514c5e', '#6b6474', '#9d97a6', '#d3cfd6', '#6b4a35', '#a37a52', '#d8c08f', '#7d2836', '#c9485a', '#f4f1e4', '#ffd166', '#fff3b0') },
   { id: 'ember', label: 'Ember', colors: hex('#120a06', '#2b1608', '#4d260b', '#7a3d0d', '#a85d12', '#d98a1f', '#f5b83d', '#ffe08a', '#fff6d6', '#cfe9f2') },
@@ -26,5 +29,5 @@ export const PALETTES: Palette[] = [
   { id: 'neon', label: 'Neon', colors: hex('#0d0221', '#1f0a47', '#3d1378', '#7a1fa2', '#c2259c', '#ff3d8b', '#ff8fb8', '#ffd9e8', '#123a6b', '#1a7fb5', '#27d3e6', '#b8fbff') },
   { id: 'sepia', label: 'Sepia', colors: hex('#1c120b', '#3d2a1a', '#6b4a2e', '#9c7448', '#c9a473', '#ecd9b0') },
   { id: 'onebit', label: '1-bit', note: 'Two colors, as on the first black and white screens.', colors: hex('#16161d', '#f1ecdc') },
-  { id: 'none', label: 'Full color', colors: [] },
+  FULL_COLOR,
 ]

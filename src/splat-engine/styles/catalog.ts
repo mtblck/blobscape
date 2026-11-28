@@ -274,7 +274,7 @@ const height = <V extends { height: number }>(): RangeSetting<V> => ({ key: 'hei
  */
 export const PIXEL: StyleDef<PixelSettings> = {
   id: 'pixel', styles: ['pixel', 'glitch'],
-  start: { palette: 'own', size: 2, rate: 0, dither: 0.5, glow: 1, outline: true, own: true, lines: true, sky: true, heat: 0, bands: 2, selout: true, cycle: true, steps: false, texel: 0, shade: false, rock: true, exact: false },
+  start: { palette: 'none', size: 2, rate: 0, dither: 0.5, glow: 1, outline: true, own: true, lines: true, sky: true, heat: 0, bands: 2, selout: true, cycle: true, steps: false, texel: 0, shade: false, rock: true, exact: false },
   settings: [
     { key: 'palette', kind: 'choice', label: 'Palette', tab: 'style', options: [{ id: 'own', label: 'Scene’s own' }], open: true },
     { key: 'size', kind: 'choice', label: 'Pixel size', tab: 'style', address: 'px', options: PIXEL_SIZES.map((n) => ({ id: n, label: `${n}×` })) },

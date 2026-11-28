@@ -10,7 +10,7 @@ const sky: [[number, number, number], [number, number, number]] = [[0, 0, 40], [
 
 test('a scene’s finish starts pixel art, and the address overrides it', () => {
   const s = pixelStart(FINISH)
-  assert.equal(s.palette, 'own')
+  assert.equal(s.palette, 'none')
   assert.equal(s.dither, 0.5)
   assert.equal(s.glow, 1.5)
   assert.equal(s.outline, true)
@@ -28,7 +28,7 @@ test('a scene’s finish starts pixel art, and the address overrides it', () => 
 test('a new scene brings its own finish and keeps the visitor’s other choices', () => {
   const was = { ...pixelStart(FINISH), palette: 'gameboy', size: 4, own: false, shade: true }
   const next = pixelFor(was, { ...FINISH, dither: 0.2, outline: false, heat: undefined })
-  assert.deepEqual([next.palette, next.dither, next.outline, next.heat], ['own', 0.2, false, 0])
+  assert.deepEqual([next.palette, next.dither, next.outline, next.heat], ['none', 0.2, false, 0])
   assert.deepEqual([next.size, next.own, next.shade], [4, false, true])
 })
 
@@ -43,7 +43,7 @@ test('settings kept by an older page are read back over a start', () => {
 })
 
 test('the pixel look follows the settings and the scene', () => {
-  const s = pixelStart(FINISH)
+  const s = { ...pixelStart(FINISH), palette: 'own' }
   const look = pixelLookOf(s, { colors: own, sky, finish: FINISH, loop: 12 })
   // the scene's own palette with its ramp (a step darker and lighter of each color), and only its own
   assert.deepEqual(look.palette, rampPalette(own))
