@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { STEADY } from '../splat-core/pixel.ts'
+import { STEADY, rampPalette } from '../splat-core/pixel.ts'
 import { readFileSync } from 'node:fs'
 import { cutAsk, detailStart, pixelSizeAt, pixelZoomAsked, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelStart, styleStart, type Finish } from './styleSettings.ts'
 
@@ -45,7 +45,11 @@ test('settings kept by an older page are read back over a start', () => {
 test('the pixel look follows the settings and the scene', () => {
   const s = pixelStart(FINISH)
   const look = pixelLookOf(s, { colors: own, sky, finish: FINISH, loop: 12 })
-  assert.deepEqual(look.palette, own)
+  // the scene's own palette with its ramp (a step darker and lighter of each color), and only its own
+  assert.deepEqual(look.palette, rampPalette(own))
+  assert.deepEqual(look.palette.slice(0, own.length), own)
+  assert.deepEqual(pixelLookOf(s, { colors: own, finish: FINISH, loop: 12 }, pixelFlags(new URLSearchParams('ramps=0'))).palette, own)
+  assert.deepEqual(pixelLookOf({ ...s, palette: 'gameboy' }, { colors: own, finish: FINISH, loop: 12 }).palette, own)
   assert.deepEqual(look.outline, [10, 20, 30])
   assert.deepEqual(look.sky, sky)
   assert.equal(look.edges, 1)

@@ -1,7 +1,7 @@
 import type { CelLook } from '../splat-core/cel.ts'
 import { srgbToLinear } from '../splat-core/color.ts'
 import { LIT_MAX } from '../splat-engine/voxel.ts'
-import { STEADY, darkest, heatPace, screenWay, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
+import { MAX_RAMPED, STEADY, darkest, heatPace, rampPalette, screenWay, type PixelLook, type Rgb } from '../splat-core/pixel.ts'
 import type { Orbit } from '../splat-core/view.ts'
 import type { Diorama } from './diorama/scenes.ts'
 import { DEFAULT_STYLE, isPixelStyle, lightsItself, type Style } from './diorama/styles.ts'
@@ -80,12 +80,12 @@ export function pixelFrom(start: PixelSettings, x: unknown): PixelSettings {
 }
 
 /** Switches of pixel art that only the address turns off (`?steady=0`, `?calm=0`, …): every one is on by default. */
-export interface PixelFlags { steady: boolean; tidy: boolean; calm: boolean; flat: boolean; fine: boolean; shine: boolean; rim: boolean; surface: boolean; across: boolean; solid: boolean }
+export interface PixelFlags { steady: boolean; tidy: boolean; calm: boolean; flat: boolean; fine: boolean; shine: boolean; rim: boolean; surface: boolean; across: boolean; solid: boolean; ramps: boolean }
 
 /** The flags as the address has them. */
 export function pixelFlags(q: URLSearchParams = new URLSearchParams()): PixelFlags {
   const on = (k: string) => q.get(k) !== '0'
-  return { steady: on('steady'), tidy: on('tidy'), calm: on('calm'), flat: on('flat'), fine: on('fine'), shine: on('shine'), rim: on('rim'), surface: on('surface'), across: on('across'), solid: on('solid') }
+  return { steady: on('steady'), tidy: on('tidy'), calm: on('calm'), flat: on('flat'), fine: on('fine'), shine: on('shine'), rim: on('rim'), surface: on('surface'), across: on('across'), solid: on('solid'), ramps: on('ramps') }
 }
 
 /** What a scene gives the pixel look besides the settings. */
@@ -105,8 +105,12 @@ export interface PixelScene {
 /** The pixel look for the settings and the scene. */
 export function pixelLookOf(s: PixelSettings, scene: PixelScene, f: PixelFlags = pixelFlags()): PixelLook {
   const { colors, finish } = scene
+  // a scene's own palette gains a step darker and lighter of each color, so texture has shades to fall into (Matt,
+  // 2026-11-28); a shared palette is a set someone chose, so it is kept as it is, and a color that cycles gets no steps
+  const cycling = s.cycle ? (finish.cycle ?? []).flatMap((c) => c.colors) : []
+  const palette = f.ramps && s.palette === 'own' && colors.length ? rampPalette(colors, MAX_RAMPED, cycling) : colors
   return {
-    palette: colors, dither: s.dither, outline: s.outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow: s.glow,
+    palette, base: colors.length, dither: s.dither, outline: s.outline ? (colors.length ? darkest(colors) : [11, 16, 38]) : null, glow: s.glow,
     edges: s.lines && finish.edges ? 1 : 0, parts: s.lines, across: f.across, solid: f.solid,
     sky: s.sky || scene.skyForced ? scene.sky : undefined,
     steady: f.steady ? STEADY : 0, tidy: f.tidy, calm: f.calm, flat: f.flat, fine: f.fine, shine: f.shine,

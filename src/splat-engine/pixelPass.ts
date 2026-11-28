@@ -1,8 +1,8 @@
-import { BlendMode, MaterialBlending, Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
+import { BlendMode, MaterialBlending, Matrix4, NearestFilter, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
 import { solidOutput } from './engine.ts'
 import { BLOCK_WIDE, MIX_A, MIX_B, SALT, STRIPS, TURNED, type GlitchState } from '../splat-core/glitch.ts'
-import { BAYER4, CALM_MOST, SHINE_FROM, SHINE_SMOOTH, STEP_UP, rimStep, SPECK_KEEP, SPECK_MOST, HALO_GRAY, HALO_HUE, LINE_LIFT, LINE_LUMA, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_PALETTE_SIZE, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
+import { BAYER4, CALM_MOST, RING2, TEXTURE_KEEP, THREADS, SHINE_FROM, SHINE_SMOOTH, STEP_UP, rimStep, SPECK_KEEP, SPECK_MOST, HALO_GRAY, HALO_HUE, LINE_LIFT, LINE_LUMA, EDGE_DARK, snapShift, EDGE_JUMP, GLOW_FROM, GLOW_SHOWS, GLOW_TAPS, HALO_R, HALO_SHARE, HEAT_R, HEAT_UP, HEAT_WAVE, MAX_RAMPED, OWN_C, OWN_L, OWN_UNDER, PIXEL_CUT, SELOUT_FROM, SELOUT_L, SKY_DITHER, cycleTurns, oklab, skyReach, type PixelLook } from '../splat-core/pixel.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -18,7 +18,7 @@ const NO_PART = 16777216
 /** A stored pixel is taken for a palette color when it is this close to it in OKLab: the art keeps palette colors exactly, so this only allows for rounding. */
 const SAME = 0.004
 
-const MAX_PALETTE = MAX_PALETTE_SIZE
+const MAX_PALETTE = MAX_RAMPED
 
 /**
  * Pixel mode: the scene is drawn small into a target, and one full-screen pass
@@ -100,6 +100,8 @@ export class PixelPass {
   /** How many art pixels fit across and down the screen: the art's size or a fraction under it, as the last one may be cut off. */
   private readonly cells = uniform(new Vector2(1, 1))
   private readonly count = uniform(0)
+  /** How many of the palette's colors are its own, before its ramp (`PixelLook.base`): the sky snaps to those only. */
+  private readonly base = uniform(0)
   private readonly dither = uniform(0)
   private readonly surface = uniform(0)
   private readonly glow = uniform(0)
@@ -120,13 +122,11 @@ export class PixelPass {
   private readonly heatTick = uniform(0)
   private readonly selout = uniform(0)
   /** Color cycling at this frame's time (`cycleTurns`): the palette index each is drawn as, and whether it cycles. */
-  private readonly turns = Array.from({ length: MAX_PALETTE }, (_, i) => i)
-  private readonly members = Array.from({ length: MAX_PALETTE }, () => 0)
-  private readonly turnU = uniformArray(this.turns, 'float')
-  private readonly memberU = uniformArray(this.members, 'float')
-  private readonly palLab = Array.from({ length: MAX_PALETTE }, () => new Vector3())
+  // (they ride in the w of `palLab` and `palShown`, so a palette with its ramps stays within a phone's uniforms)
+  /** The palette in OKLab, with w the index it is drawn as under color cycling. */
+  private readonly palLab = Array.from({ length: MAX_PALETTE }, (_, i) => new Vector4(0, 0, 0, i))
   /** The palette as it is stored in the art: sRGB, 0–1. */
-  private readonly palShown = Array.from({ length: MAX_PALETTE }, () => new Vector3())
+  private readonly palShown = Array.from({ length: MAX_PALETTE }, () => new Vector4())
 
   constructor(look: PixelLook) {
     this.material.fragmentNode = this.fragment()
@@ -173,10 +173,12 @@ export class PixelPass {
     const n = Math.min(MAX_PALETTE, look.palette.length)
     for (let i = 0; i < n; i++) {
       const c = look.palette[i]
-      this.palLab[i].set(...oklab(c[0], c[1], c[2]))
-      this.palShown[i].set(c[0] / 255, c[1] / 255, c[2] / 255)
+      const [l, a, b] = oklab(c[0], c[1], c[2])
+      this.palLab[i].set(l, a, b, this.palLab[i].w)
+      this.palShown[i].set(c[0] / 255, c[1] / 255, c[2] / 255, this.palShown[i].w)
     }
     this.count.value = n
+    this.base.value = Math.min(n, look.base ?? n)
     this.dither.value = look.dither
     // flat surfaces dither only where a glow spills, so the map of steps is not worth a draw of every blob
     this.surface.value = look.surface && !look.flat ? 1 : 0
@@ -215,9 +217,7 @@ export class PixelPass {
     const look = this.look
     this.heatTick.value = look.heat ? Math.floor(t * look.heat.pace + 1e-6) : 0
     const { turn, member } = cycleTurns(look, t)
-    for (let i = 0; i < MAX_PALETTE; i++) { this.turns[i] = i < turn.length ? turn[i] : i; this.members[i] = i < member.length ? member[i] : 0 }
-    this.turnU.array = this.turns
-    this.memberU.array = this.members
+    for (let i = 0; i < MAX_PALETTE; i++) { this.palLab[i].w = i < turn.length ? turn[i] : i; this.palShown[i].w = i < member.length ? member[i] : 0 }
   }
 
   /**
@@ -343,7 +343,7 @@ export class PixelPass {
   private fragment() {
     const small = this.small.texture, ids = this.ids.texture, ranks = this.ranks.texture
     const { res } = this
-    const palLab = uniformArray(this.palLab, 'vec3'), palShown = uniformArray(this.palShown, 'vec3')
+    const palLab = uniformArray(this.palLab, 'vec4'), palShown = uniformArray(this.palShown, 'vec4')
     const bayer = uniformArray(BAYER4, 'float')
     const heatWave = uniformArray(HEAT_WAVE, 'float')
     const toSrgb = (c: unknown) => select(float(c).lessThanEqual(0.0031308), float(c).mul(12.92), pow(max(c, 0), 1 / 2.4).mul(1.055).sub(0.055))
@@ -480,9 +480,9 @@ export class PixelPass {
               const best = float(1e9).toVar()
               Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
                 If(float(i).lessThan(this.count), () => {
-                  const d = aim.sub(palLab.element(i))
+                  const d = aim.sub(palLab.element(i).xyz)
                   const dd = dot(d, d)
-                  If(dd.lessThan(best), () => { best.assign(dd); out.assign(vec4(palShown.element(i), 1)) })
+                  If(dd.lessThan(best), () => { best.assign(dd); out.assign(vec4(palShown.element(i).xyz, 1)) })
                 })
               })
             }).Else(() => { out.assign(vec4(n.mul(SELOUT_L / 255), 1)) })
@@ -495,10 +495,10 @@ export class PixelPass {
               const best = float(1e9).toVar()
               Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
                 If(float(i).lessThan(this.count), () => {
-                  const p = palLab.element(i)
+                  const p = palLab.element(i).xyz
                   const d = aim.sub(p)
                   const dd = dot(d, d)
-                  If(p.x.lessThan(a.x.mul(OWN_UNDER)).and(dd.lessThan(best)), () => { best.assign(dd); out.assign(vec4(palShown.element(i), 1)) })
+                  If(p.x.lessThan(a.x.mul(OWN_UNDER)).and(dd.lessThan(best)), () => { best.assign(dd); out.assign(vec4(palShown.element(i).xyz, 1)) })
                 })
               })
             }).Else(() => { out.assign(vec4(n.mul((1 - EDGE_DARK) / 255), 1)) })
@@ -550,12 +550,14 @@ export class PixelPass {
           }
           Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
             If(float(i).lessThan(this.count), () => {
-              const pl = palLab.element(i)
+              const pl = palLab.element(i).xyz
               const d = lab.sub(pl)
               const dd = dot(d, d)
-              If(dd.lessThan(best), () => { second.assign(best); best.assign(dd); pick.assign(float(i)) }).Else(() => { If(dd.lessThan(second), () => { second.assign(dd) }) })
+              // the sky (and a glow over it) takes only the palette's own colors, not its ramp
+              const own = float(i).lessThan(this.base)
+              If(here.solid.or(own).and(dd.lessThan(best)), () => { second.assign(best); best.assign(dd); pick.assign(float(i)) }).ElseIf(here.solid.or(own).and(dd.lessThan(second)), () => { second.assign(dd) })
               const ds = skyLab.sub(pl)
-              If(dot(ds, ds).lessThan(skyBest), () => { skyBest.assign(dot(ds, ds)); skyPick.assign(float(i)) })
+              If(own.and(dot(ds, ds).lessThan(skyBest)), () => { skyBest.assign(dot(ds, ds)); skyPick.assign(float(i)) })
               const allowed = length(vec2(pl.y, pl.z)).lessThan(HALO_GRAY).or(nearHue(pl, ownLab)).or(nearHue(pl, lightLab))
               If(halo.and(allowed).and(dd.lessThan(keptBest)), () => { keptBest.assign(dd); keptPick.assign(float(i)) })
               const w = wasLab.sub(pl)
@@ -590,12 +592,12 @@ export class PixelPass {
               If(ok.greaterThan(0.5).and(y0.sub(sum.div(24)).greaterThanEqual(SHINE_FROM)).and(hi.sub(lo).lessThanEqual(SHINE_SMOOTH)), () => { up.assign(1) })
             })
             If(up.greaterThan(0.5), () => {
-              const me = palLab.element(int(pick)).toVar()
+              const me = palLab.element(int(pick)).xyz.toVar()
               const cc = length(vec2(me.y, me.z))
               const stepBest = float(1e9).toVar(), stepPick = float(-1).toVar()
               Loop(MAX_PALETTE, ({ i }: { i: unknown }) => {
                 If(float(i).lessThan(this.count), () => {
-                  const pl = palLab.element(i)
+                  const pl = palLab.element(i).xyz
                   const pc = length(vec2(pl.y, pl.z))
                   const along = dot(vec2(pl.y, pl.z), vec2(me.y, me.z))
                   const hued = select(cc.greaterThanEqual(HALO_GRAY), pc.greaterThanEqual(HALO_GRAY).and(along.greaterThanEqual(pc.mul(cc).mul(HALO_HUE))),
@@ -605,15 +607,15 @@ export class PixelPass {
                   If(pl.x.greaterThanEqual(me.x.add(0.02)).and(hued).and(dd.lessThan(stepBest)), () => { stepBest.assign(dd); stepPick.assign(float(i)) })
                 })
               })
-              If(stepPick.greaterThanEqual(0), () => { pick.assign(stepPick); const d = lab.sub(palLab.element(int(stepPick))); best.assign(dot(d, d)) })
+              If(stepPick.greaterThanEqual(0), () => { pick.assign(stepPick); const d = lab.sub(palLab.element(int(stepPick)).xyz); best.assign(dot(d, d)) })
             })
           })
           // colors that cycle are left to move
-          const moves = this.memberU.element(int(pick)).add(this.memberU.element(int(wasPick)))
+          const moves = palShown.element(int(pick)).w.add(palShown.element(int(wasPick)).w)
           If(this.sticky.greaterThan(0).and(here.solid).and(was.a.greaterThan(0.5)).and(wasOff.lessThan(SAME * SAME)).and(moves.lessThan(0.5)).and(wasFar.lessThanEqual(second)).and(this.skied.lessThan(0.5).or(abs(wasPick.sub(skyPick)).greaterThan(0.5))).and(sqrt(wasFar).lessThanEqual(sqrt(best).add(this.sticky))), () => { pick.assign(wasPick) })
           // color cycling, on the scene's own pixels
-          const shownAs = select(here.solid, this.turnU.element(int(pick)), pick)
-          out.assign(vec4(palShown.element(int(shownAs)), 1))
+          const shownAs = select(here.solid, palLab.element(int(pick)).w, pick)
+          out.assign(vec4(palShown.element(int(shownAs)).xyz, 1))
         }).Else(() => {
           out.assign(vec4(color.div(255), 1))
         })
@@ -777,6 +779,8 @@ export class PixelPass {
         }
         const step = edgeAt(0, 0)
         const changed = float(0).toVar()
+        /** Texture `calm` keeps: the speck step leaves it too. */
+        const textured = float(0).toVar()
         If(step.greaterThanEqual(0), () => { out.assign(sideRaw(step, 0, 0)); changed.assign(1) }).ElseIf(here.solid.not(), () => {
           const solids = float(0).toVar()
           for (const [dx, dy] of SIDES) solids.addAssign(sol(dx, dy))
@@ -805,12 +809,20 @@ export class PixelPass {
             If(n.greaterThan(most), () => { most.assign(n); best.assign(a.rgb) })
           })
           const lum = (c: unknown) => dot(vec3(c), vec3(...LINE_LUMA))
+          // a pixel on a thread of its own color (mortar, a furrow) is detail, not speckle: `THREADS` in pixel.ts (change both)
+          const ownAt = (k: number) => counts[k].and(same(ns[k].rgb, here.rgb))
+          const thread = THREADS.map(([a, b]) => ownAt(a).and(ownAt(b))).reduce((p, q) => p.or(q))
+          // and so is a color that comes back in the ring two out, on its part (`RING2`, `TEXTURE_KEEP`; change both)
+          const seen = float(0).toVar()
+          for (const [dx, dy] of RING2) { const n = read(dx, dy); If(n.solid.and(partSame(n)).and(same(n.rgb, here.rgb)), () => { seen.addAssign(1) }) }
+          const kept = thread.or(seen.greaterThanEqual(TEXTURE_KEEP))
+          If(kept, () => { textured.assign(1) })
           // a pixel much lighter or darker than the patch round it is a highlight or a detail, not speckle
-          If(most.greaterThanEqual(CALM_MOST).and(most.greaterThan(own)).and(abs(lum(best).sub(lum(here.rgb))).lessThan(SPECK_KEEP)), () => { out.assign(vec4(best, 1)); changed.assign(1) })
+          If(kept.not().and(most.greaterThanEqual(CALM_MOST)).and(most.greaterThan(own)).and(abs(lum(best).sub(lum(here.rgb))).lessThan(SPECK_KEEP)), () => { out.assign(vec4(best, 1)); changed.assign(1) })
         })
         // a speck of one or two pixels on a part takes the color three or more of its neighbors there share, unless it is
         // much lighter or darker (a highlight, an eye): the speck step of `calmArt` in pixel.ts (change both)
-        If(changed.lessThan(0.5).and(here.solid), () => {
+        If(changed.lessThan(0.5).and(textured.lessThan(0.5)).and(here.solid), () => {
           const partOk = (n: { part: { x: unknown; y: unknown; z: unknown; w: unknown } }) =>
             this.calmParts.lessThan(0.5).or(float(n.part.w).lessThan(0.5).and(float(here.part.w).lessThan(0.5))).or(samePart(n.part, here.part))
           const likeMe = (ox: number, oy: number) => { const n = read(ox, oy); return n.solid.and(partOk(n)).and(same(n.rgb, here.rgb)) }
