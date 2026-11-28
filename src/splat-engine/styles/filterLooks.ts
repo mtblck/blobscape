@@ -199,8 +199,8 @@ export interface CutoutChoice {
   /** The palette the paper is cut from: 'none' keeps its own colors, 'own' is the scene's, else a shared one. */
   palette: string
 }
-/** Where paper cutout's settings start. */
-export const CUTOUT_START: CutoutChoice = { shadow: 6, soft: 0.5, light: 120, grain: 0.5, edge: 1, ragged: 0.4, fills: 2, sky: true, palette: 'none' }
+/** Where paper cutout's settings start: Matt's defaults (2026-11-28). */
+export const CUTOUT_START: CutoutChoice = { shadow: 5, soft: 0.5, light: 90, grain: 1, edge: 3, ragged: 0.3, fills: 3, sky: true, palette: 'none' }
 /** The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255). */
 export function cutoutLook(c: CutoutChoice, sky?: Sky255): CutoutLook {
   return { kind: 'cutout', shadow: c.shadow, soft: c.soft, light: c.light, grain: c.grain, edge: c.edge, ragged: c.ragged, sky: c.sky ? skyOf(sky, CUTOUT_CARD) : CUTOUT_CARD }
