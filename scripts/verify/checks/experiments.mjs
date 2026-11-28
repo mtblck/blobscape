@@ -265,7 +265,7 @@ export default [
     entries: ['src/blobscape/PixelDiorama.tsx'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       for (const q of ['', '&webgl=1']) {
-        const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&parts=1${q}`, { viewport: { width: 1280, height: 900 } })
+        const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&parts=1&pixel.palette=own${q}`, { viewport: { width: 1280, height: 900 } })
         await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
         const shot = (t) => d.page.evaluate(async (t) => {
           const { stage, look } = window.__diorama
@@ -443,7 +443,7 @@ export default [
   },
   {
     name: 'diorama-water',
-    about: 'Diorama, the koi pond on WebGPU and WebGL: the water moves with the rain, a moment drawn twice is the same, and the loop joins',
+    about: 'Diorama, the koi pond on WebGPU and WebGL: the water moves with the weather\'s rain, a moment drawn twice is the same, and the loop joins',
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['src/splat-engine/sceneWater.ts', 'src/splat-engine/water.ts', 'src/splat-engine/mirror.ts', 'src/blobscape/diorama/scenes/koi.ts'],
     async run({ shots, join, fails, ok, open }) {
@@ -467,7 +467,7 @@ export default [
           const pond = water()
           let most = 0
           for (const h of pond.water.h) most = Math.max(most, Math.abs(h))
-          return { art: Array.from(f.art.data), h: Array.from(pond.water.h), most, wet: pond.water.wetCount, drops: pond.plan.drops.length, bodies: pond.plan.bodies.length, backend: stage.backend, mirrored: window.__diorama.mirrored, cell: pond.plan.cell }
+          return { art: Array.from(f.art.data), h: Array.from(pond.water.h), most, wet: pond.water.wetCount, rain: pond.rain, bands: pond.bands.length, bodies: pond.plan.bodies.length, backend: stage.backend, mirrored: window.__diorama.mirrored, cell: pond.plan.cell }
         }, t)
         const differ = (a, b) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3]) n++; return n / (a.length / 4) }
         // steady pixels remember the frame before, so the moment and the same moment a loop later are each drawn after the same other one
@@ -480,12 +480,13 @@ export default [
         for (let k = 0; k < a.h.length; k++) moved = Math.max(moved, Math.abs(a.h[k] - later.h[k]))
         let joined = 0
         for (let k = 0; k < a.h.length; k++) joined = Math.max(joined, Math.abs(a.h[k] - round.h[k]))
-        const m = { wet: a.wet, drops: a.drops, bodies: a.bodies, most: a.most, moved, joined, same: differ(a.art, again.art), changed: differ(a.art, later.art), looped: differ(back.art, round.art), mirrored: a.mirrored }
-        // ripples are a few thousandths of a unit high: under a tenth of a cell, or something is pouring water in
-        const sound = m.wet > 2000 && m.drops > 20 && m.bodies > 0 && m.most > 2e-4 && m.most < a.cell && m.moved > 1e-4 && m.joined < 1e-9
+        const m = { wet: a.wet, rain: a.rain, bands: a.bands, bodies: a.bodies, most: a.most, moved, joined, same: differ(a.art, again.art), changed: differ(a.art, later.art), looped: differ(back.art, round.art), mirrored: a.mirrored }
+        // the pond's rain is the shared weather's (light rain), worked out on the water in bands of its swarm, not drops of
+        // the scene's own; ripples are a few thousandths of a unit high: under a tenth of a cell, or something is pouring water in
+        const sound = m.wet > 2000 && m.rain > 0 && m.bands > 0 && m.bodies > 0 && m.most > 2e-4 && m.most < a.cell && m.moved > 1e-4 && m.joined < 1e-9
           && m.same < 0.002 && m.changed > 0.01 && m.looped < 0.01 && m.mirrored === (a.backend === 'webgpu')
         if (!sound) fails.push(`${label}: ${JSON.stringify(m)}`)
-        else ok(`${label}: ${m.wet} cells of water take ${m.drops} raindrops a loop and ${m.bodies} swimming bodies, rings up to ${(m.most * 1000).toFixed(1)} thousandths high, ${(m.changed * 100).toFixed(0)}% of the picture changes in 2.5 s, a moment drawn twice differs in ${(m.same * 100).toFixed(2)}% and a loop later in ${(m.looped * 100).toFixed(2)}%${m.mirrored ? ', with the mirror on' : ''}`)
+        else ok(`${label}: ${m.wet} cells of water take the weather's rain (${m.bands} bands, ${Math.round(m.rain * 100)}% falling) and ${m.bodies} swimming bodies, rings up to ${(m.most * 1000).toFixed(1)} thousandths high, ${(m.changed * 100).toFixed(0)}% of the picture changes in 2.5 s, a moment drawn twice differs in ${(m.same * 100).toFixed(2)}% and a loop later in ${(m.looped * 100).toFixed(2)}%${m.mirrored ? ', with the mirror on' : ''}`)
         await d.ctx.close()
       }
     },
@@ -549,7 +550,9 @@ export default [
     entries: ['src/blobscape/PixelDiorama.tsx'],
     files: ['public/loops/'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
-      const d = await open('/experiments/diorama/?offscreen=1&style=pixel&scene=campfire', { viewport: { width: 1280, height: 900 } })
+      // in the scene's own palette (pixel art starts in Full color, which has no strip to change): picking another scene
+      // then goes to Full color, so the strip still changes only once the new scene arrives
+      const d = await open('/experiments/diorama/?offscreen=1&style=pixel&scene=campfire&pixel.palette=own', { viewport: { width: 1280, height: 900 } })
       await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).catch(() => {})
       // the details panel: one short line under the view, and Full details opens a dialog with the scene's numbers that Escape closes
       {
@@ -707,7 +710,7 @@ export default [
       async run({ shots, join, fails, ok, open, wants }) {
         for (const [id, name] of scenes) {
           if (!wants(id)) continue
-          const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&scene=${id}`, { viewport: { width: 1280, height: 900 } })
+          const d = await open(`/experiments/diorama/?offscreen=1&style=pixel&pixel.palette=own&scene=${id}`, { viewport: { width: 1280, height: 900 } })
           const label = `blobscape pixel diorama ${id}`
           if (!await d.page.waitForFunction(() => window.__diorama, null, { timeout: 90000 }).then(() => true, () => false)) {
             fails.push(`${label}: the scene never started`)
