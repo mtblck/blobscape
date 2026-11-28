@@ -314,6 +314,13 @@ export class Stage {
   get blobCount() { return this.actor?.blobs.count ?? 0 }
 
   /**
+   * The actors on show, the creature first and then its extras, each with its skeleton as last posed: for a dev tool
+   * that hands the same scene to another renderer (the Ink Studio comparison).
+   * @internal
+   */
+  get shownActors(): readonly Actor[] { return this.actor ? [this.actor, ...this.extras] : [] }
+
+  /**
    * Shows a creature, replacing the last one, and plays `clip` on it. `extras` are more actors drawn in the same
    * world, sorted blob by blob with the first: things that move on their own and not by its bones, such as the
    * surface of a pond (`reshape` sends one up again after its blobs were changed). Clips, posers, picking, tints and

@@ -1,4 +1,4 @@
-import { srgbToLinear } from './color.ts'
+import { fromOklab, srgbToLinear } from './color.ts'
 /**
  * The 2D half of Splat to Sprite: everything that happens after the splat has
  * been rendered. Pure functions on RGBA byte arrays so they can be unit tested
@@ -352,6 +352,11 @@ export function countColors(f: Frame): number {
 export interface PixelLook {
   /** The colors every pixel snaps to; empty keeps the scene's own colors. */
   palette: Rgb[]
+  /**
+   * How many of `palette`'s colors are the palette's own, the rest being its ramp (`rampPalette`): the sky snaps to
+   * these only, so its gradient dithers between the colors it was painted with. All of them when left out.
+   */
+  base?: number
   /** 0..1, as for `quantize`. */
   dither: number
   /** A 1-pixel line round the scene's silhouette, or none. */
@@ -597,6 +602,42 @@ export const STEADY = 0.04
 
 /** The most colors a look's palette can hold (the live pass keeps them in a fixed list). */
 export const MAX_PALETTE_SIZE = 32
+/** The most colors a palette with its ramps holds (`rampPalette`): the live pass keeps them in a texture. */
+export const MAX_RAMPED = 64
+/** How far a ramp's step lies from its color, in OKLab lightness (`rampPalette`). */
+export const RAMP_STEP = 0.07
+/** A step nearer than this (OKLab distance) to a color the palette has already is left out. */
+export const RAMP_NEAR = 0.035
+
+/**
+ * `colors` with a ramp: each color, then a step darker and a step lighter of each (`RAMP_STEP` in OKLab lightness,
+ * its hue and chroma kept, chroma eased off toward black and white), leaving out a step close to a color already
+ * there, at most `most` in all. A scene's palette holds the colors its parts are painted in, so the shades that
+ * texture lives in (mortar against brick, wool, furrows) fall between two of its colors or onto one; the ramp gives
+ * them somewhere to go. The palette's own colors keep their places, so cycles and indexes into it still hold, and
+ * `fixed` colors (a color cycle's) get no steps, so whatever takes them still cycles.
+ */
+export function rampPalette(colors: readonly Rgb[], most = MAX_RAMPED, fixed: readonly Rgb[] = []): Rgb[] {
+  const out = colors.slice(0, most).map((c) => [...c] as Rgb)
+  const labs = out.map((c) => oklab(...c))
+  for (const dir of [-1, 1]) {
+    for (const c of colors) {
+      if (out.length >= most) return out
+      if (fixed.some((f) => f[0] === c[0] && f[1] === c[1] && f[2] === c[2])) continue
+      const [l, a, b] = oklab(...c)
+      const L = l + dir * RAMP_STEP
+      if (L <= 0.02 || L >= 0.99) continue
+      const k = Math.min(1, Math.min(L, 1 - L) / Math.max(1e-6, Math.min(l, 1 - l)))
+      const lab: Rgb = [L, a * k, b * k]
+      if (labs.some((p) => Math.hypot(p[0] - lab[0], p[1] - lab[1], p[2] - lab[2]) < RAMP_NEAR)) continue
+      const rgb = fromOklab(lab).map((v) => Math.round(v * 255)) as Rgb
+      out.push(rgb)
+      labs.push(oklab(...rgb))
+    }
+  }
+  return out
+}
+
 /** Coverage at or over this is a solid pixel. */
 export const PIXEL_CUT = 0.5
 /** Where a neighbor's light is gathered from, in pixels: a small diamond. */
@@ -643,6 +684,8 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
   /** A glowing pixel, by the glow's own measure: what banded glow and heat haze start from. */
   const brightAt = (x: number, y: number) => { if (!solid(x, y)) return 0; const j = (y * w + x) * 4; return brightOf(f.data[j], f.data[j + 1], f.data[j + 2]) }
   const pl = look.palette.map((c) => oklab(...c))
+  // the sky takes only the palette's own colors (`base`), not its ramp
+  const plSky = pl.slice(0, Math.min(pl.length, look.base ?? pl.length))
   const amp = look.dither * 48
   const edges = look.edges ?? 0
   const map = look.parts && parts && parts.width === w && parts.height === h ? parts.data : undefined
@@ -755,7 +798,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
         const step = steps && solid(x, y) && steps[i + 3] >= 128 ? steps[i] : BAYER4[(y & 3) * 4 + (x0 & 3)]
         const off = spread > 0 ? (step / 16 - 0.5) * spread : 0
         const lab = oklab(Math.max(0, r + off), Math.max(0, gg + off), Math.max(0, b + off))
-        let k = nearest(lab, pl)
+        let k = nearest(lab, solid(x, y) ? pl : plSky)
         // flat: a pixel a glow lights snaps to a color of its own hue or the light's, never a third the mix lands near
         if (look.flat && solid(x, y) && Math.max(g[0], g[1], g[2]) > GLOW_SHOWS) {
           const own = oklab(f.data[i], f.data[i + 1], f.data[i + 2]), light = oklab(g[0], g[1], g[2])
@@ -782,7 +825,7 @@ export function pixelArt(f: Frame, look: PixelLook, before?: Frame, parts?: Fram
             const [top, low] = look.sky, reach = skyReach(look.sky), t = Math.min(1, (y + 0.5) / h / reach)
             const off = (BAYER4[(y & 3) * 4 + (x0 & 3)] / 16 - 0.5) * Math.max(look.dither, SKY_DITHER * (reach < 1 ? Math.min(1, (1 - t) * 4) : 1)) * 48
             const c = [0, 1, 2].map((q) => Math.max(0, Math.min(255, top[q] + (low[q] - top[q]) * t + g[q]) + off))
-            skyK = nearest(oklab(c[0], c[1], c[2]), pl)
+            skyK = nearest(oklab(c[0], c[1], c[2]), plSky)
           }
           if (was !== undefined && was !== k && was !== skyK && between && !member[was] && !member[k] && far(pl[was]) <= far(pl[k]) + steady) k = was
         }
@@ -891,6 +934,19 @@ export function seamed(fine: Frame, hard: Frame, map: Uint8ClampedArray | Uint8A
 
 /** How many of a pixel's eight neighbors (of its own part) must share a color for `calm` to give it that color. */
 export const CALM_MOST = 5
+/**
+ * The pairs of opposite neighbors (indices into `N8`: across, up and down, both diagonals). A pixel whose own color goes
+ * on to both sides of one of them is on a thread (mortar between bricks, a furrow, a plank's line), which `calm` keeps.
+ */
+export const THREADS = [[0, 1], [2, 3], [4, 7], [5, 6]] as const
+/**
+ * The ring two pixels out round a pixel (the five by five less the three by three). A color found this many times or
+ * more on the pixel's own part there comes back round about, so it is the part's texture (mortar, wool, furrows), and
+ * `calm` leaves it.
+ */
+export const TEXTURE_KEEP = 3
+export const RING2: readonly (readonly [number, number])[] = Array.from({ length: 25 }, (_, i) => [(i % 5) - 2, Math.floor(i / 5) - 2] as const)
+  .filter(([x, y]) => Math.max(Math.abs(x), Math.abs(y)) === 2)
 
 /**
  * `art` made calmer (see `PixelLook.calm`): `f` is the small frame it was drawn from (which pixels are scene), `map`
@@ -1036,6 +1092,16 @@ export function calmArt(art: Frame, f: Frame, map?: Uint8ClampedArray | Uint8Arr
       }
       let own = 0
       for (const c of near) if (c === mine) own++
+      // a pixel on a thread of its own color (a line one pixel wide: mortar, a furrow) is detail, not speckle
+      const ownAt = (k: number) => { const nx = x + N8[k][0], ny = y + N8[k][1]; return solid(nx, ny) && (!map || partAt(nx, ny) === part) && colorAt(nx, ny) === mine }
+      if (THREADS.some(([a, b]) => ownAt(a) && ownAt(b))) { line(x, y); continue }
+      // a color that comes back round about (`RING2`, on its part) is the part's texture, not speckle
+      let seen = 0
+      for (const [dx, dy] of RING2) {
+        const nx = x + dx, ny = y + dy
+        if (solid(nx, ny) && (!map || partAt(nx, ny) === part) && colorAt(nx, ny) === mine) seen++
+      }
+      if (seen >= TEXTURE_KEEP) { line(x, y); continue }
       let best = -1, most = 0
       for (const c of near) { let n = 0; for (const d of near) if (d === c) n++; if (n > most) { most = n; best = c } }
       // a pixel much lighter or darker than the patch round it is a highlight or a detail, not speckle

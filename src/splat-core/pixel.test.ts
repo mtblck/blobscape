@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, keptNearest, lighterStep, peakAt, rimStep, screenWay, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
+import { alphaCut, autoPalette, downsample, makeFrame, outline, pixelArt, quantize, lookColors, snapColors, removeStrays, countSolid, tidyLone, calmArt, calmEdge, lineFix, rampPalette, MAX_RAMPED, RAMP_STEP, RING2, TEXTURE_KEEP, keptNearest, lighterStep, peakAt, rimStep, screenWay, CALM_MOST, resolveFine, ditherRank, typicalSpacing, surfaceRanks, snapShift, cycleTurns, heatPace, heatShift, HALO_R, HEAT_UP, SELOUT_FROM, oklab, type Rgb, type PixelLook } from './pixel.ts'
 
 const solid = (w: number, h: number, on: (x: number, y: number) => boolean, rgb = [200, 40, 40]) => {
   const f = makeFrame(w, h)
@@ -261,6 +261,65 @@ test('calmArt: a pixel takes a color most of its own part share; specks, line ti
   for (let i = 0; i < w * h; i++) { map.data[i * 4] = 1; map.data[i * 4 + 3] = 255 }
   for (let y = 3; y <= 5; y++) for (let x = 3; x <= 5; x++) map.data[(y * w + x) * 4] = x === 4 && y === 4 ? 2 : 3
   assert.deepEqual(got(calmArt(art, solid, map.data), 4, 4), A)
+})
+
+test('calmArt keeps texture: a thread of one color and a color that comes back round about stay', () => {
+  const w = 11, h = 11
+  const solid = makeFrame(w, h), art = makeFrame(w, h)
+  const A: Rgb = [50, 70, 90], B: Rgb = [60, 80, 100]
+  const put = (x: number, y: number, c: Rgb) => { const i = (y * w + x) * 4; art.data[i] = c[0]; art.data[i + 1] = c[1]; art.data[i + 2] = c[2]; art.data[i + 3] = 255; solid.data[i + 3] = 255 }
+  const got = (f: ReturnType<typeof makeFrame>, x: number, y: number) => Array.from(f.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3))
+  const fill = () => { for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) put(x, y, B) }
+  // mortar: a row of A a pixel high through B; each pixel has six B neighbors, but A runs on to both sides
+  fill(); for (let x = 0; x < w; x++) put(x, 5, A)
+  const mortar = calmArt(art, solid)
+  for (let x = 1; x < w - 1; x++) assert.deepEqual(got(mortar, x, 5), A)
+  // wool: lone dots of A every other pixel two apart; the ring two out round each holds more of them
+  assert.equal(RING2.length, 16)
+  fill(); for (let y = 1; y < h; y += 2) for (let x = 1; x < w; x += 2) if ((x + y) % 4 === 2) put(x, y, A)
+  const wool = calmArt(art, solid)
+  assert.ok(TEXTURE_KEEP >= 2)
+  assert.deepEqual(got(wool, 5, 5), got(art, 5, 5))
+  assert.deepEqual(got(wool, 5, 5), A)
+  // one dot alone is still speckle
+  fill(); put(5, 5, A)
+  assert.deepEqual(got(calmArt(art, solid), 5, 5), B)
+})
+
+test('rampPalette: a step darker and lighter of each color after the colors themselves, none too near, at most MAX_RAMPED', () => {
+  const colors: Rgb[] = [[120, 120, 120], [200, 60, 40], [20, 140, 60]]
+  const ramp = rampPalette(colors)
+  assert.deepEqual(ramp.slice(0, 3), colors)
+  assert.equal(ramp.length, 9)
+  for (const c of ramp.slice(3)) {
+    const l = oklab(...c)[0]
+    assert.ok(colors.some((o) => Math.abs(Math.abs(oklab(...o)[0] - l) - RAMP_STEP) < 0.02), String(c))
+  }
+  // a step that lands on a color already there is left out: of a gray and its own lighter step, only the gray's darker
+  // step and the lighter one's lighter step are added
+  const [gray] = colors
+  const lighter = ramp[6]
+  assert.equal(rampPalette([gray, lighter]).length, 4)
+  // a color that cycles keeps its own place and gets no steps
+  assert.equal(rampPalette(colors, MAX_RAMPED, [colors[1]]).length, 7)
+  // never past the most a pass holds
+  const many = Array.from({ length: 40 }, (_, i) => [i * 6, 255 - i * 6, (i * 37) % 255] as Rgb)
+  assert.equal(rampPalette(many).length, MAX_RAMPED)
+})
+
+test('pixelArt: the sky snaps to the palette\'s own colors only, the scene to its ramp too', () => {
+  const w = 4, h = 4
+  const f = makeFrame(w, h)
+  for (let i = 0; i < w; i++) { const j = (3 * w + i) * 4; f.data[j] = 101; f.data[j + 1] = 101; f.data[j + 2] = 101; f.data[j + 3] = 255 }
+  const sky: [Rgb, Rgb] = [[100, 100, 100], [100, 100, 100]]
+  const look: PixelLook = { palette: [[0, 0, 0], [255, 255, 255], [100, 100, 100]], base: 2, dither: 0, outline: null, glow: 0, sky }
+  const art = pixelArt(f, look)
+  const at = (x: number, y: number) => Array.from(art.data.slice((y * w + x) * 4, (y * w + x) * 4 + 3))
+  for (let x = 0; x < w; x++) {
+    assert.deepEqual(at(x, 3), [100, 100, 100])
+    // the sky's gray lies on the ramp's step only, so it dithers between the palette's own black and white
+    for (let y = 0; y < 3; y++) assert.notDeepEqual(at(x, y), [100, 100, 100])
+  }
 })
 
 test('calmEdge: a bump on a wall is taken off and a notch filled; a speck, a line tip and a gap a pixel wide stay', () => {

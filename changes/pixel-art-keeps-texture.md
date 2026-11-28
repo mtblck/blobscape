@@ -1,0 +1,1 @@
+Pixel art: scenes keep more of their texture (bricks, wool, furrows, stones). The cleanup pass leaves colors that repeat, and each scene's own palette gains a lighter and a darker step of every color.
