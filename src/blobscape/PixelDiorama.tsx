@@ -326,7 +326,7 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
+  const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors: colors.length ? colors : palettes[1].colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {

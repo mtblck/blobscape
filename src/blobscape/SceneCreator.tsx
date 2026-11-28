@@ -658,7 +658,7 @@ export function SceneCreator() {
   const palette = useMemo(() => (creatureColors ? joinPalettes([shown.palette.map(hexOf), creatureColors.split(',')]) : shown.palette), [shown.palette, creatureColors])
   const palettes = useMemo(() => paletteChoices(weathered ? paletteUnder(palette, skyColors, skyTo) : palette), [palette, weathered, skyColors, skyTo])
   const colors = (palettes.find((p) => p.id === px.palette) ?? palettes[0]).colors
-  const look = useMemo<PixelLook>(() => pixelLookOf({ ...px, glow }, { colors, sky: skyShown, skyForced, finish: shown.finish, sun: shown.sun, start: shown.orbit, loop: shown.loop }, flags),
+  const look = useMemo<PixelLook>(() => pixelLookOf({ ...px, glow }, { colors: colors.length ? colors : palettes[1].colors, sky: skyShown, skyForced, finish: shown.finish, sun: shown.sun, start: shown.orbit, loop: shown.loop }, flags),
     [px, glow, colors, skyShown, skyForced, shown, flags])
   // pixel art shaded a pixel at a time: cel shading in the small picture, lit by the land's sun
   const pixelCel = useMemo(() => (pixelsNow && shadedNow ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixelsNow, shadedNow, shown.sun, shown.shade])

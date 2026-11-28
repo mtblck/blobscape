@@ -54,6 +54,9 @@ test('the pixel look follows the settings and the scene', () => {
   // full color rounds to even steps; a palette has none
   assert.equal(look.levels, undefined)
   assert.equal(pixelLookOf({ ...s, palette: 'none' }, { colors: [], finish: FINISH, loop: 12 }).levels, FULL_LEVELS)
+  // Full color is no palette whatever colors a page hands in, with the outline still the darkest of them
+  const full = pixelLookOf({ ...s, palette: 'none' }, { colors: own, finish: FINISH, loop: 12 })
+  assert.deepEqual([full.palette, full.levels, full.outline], [[], FULL_LEVELS, [10, 20, 30]])
   assert.deepEqual(look.sky, sky)
   assert.equal(look.edges, 1)
   assert.equal(look.parts, true)
