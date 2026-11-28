@@ -10897,6 +10897,12 @@
        "doc": "The colors every pixel snaps to; empty keeps the scene's own colors."
       },
       {
+       "name": "base",
+       "optional": true,
+       "type": "number",
+       "doc": "How many of `palette`'s colors are the palette's own, the rest being its ramp (`rampPalette`): the sky snaps to\nthese only, so its gradient dithers between the colors it was painted with. All of them when left out."
+      },
+      {
        "name": "dither",
        "type": "number",
        "doc": "0..1, as for `quantize`."
