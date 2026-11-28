@@ -260,3 +260,5 @@ et al.
 ## License
 
 [MIT](LICENSE) © Matt Black
+
+The code is MIT. The Blobscape name and logos, and everything in [`brand/`](brand/) (and its copies in `public/`, `.github/readme/` and `src/shared/logoPaths.ts`), are not; see [`brand/LICENSE`](brand/LICENSE) and [`brand/TRADEMARKS.md`](brand/TRADEMARKS.md).

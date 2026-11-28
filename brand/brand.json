@@ -1,0 +1,50 @@
+{
+  "name": "Blobscape",
+  "shortName": "Blobscape",
+  "tagline": "Small experiments with Gaussian splats.",
+  "about": "Blobscape is a home for small browser experiments with Gaussian splats: 3D scenes made of thousands of soft, see-through blobs, poked at until they do something new. Lessons, a sandbox, a scene creator and an engine of its own, all in the browser.\n\nThe mark is the Gaussian itself, a bell curve sitting on its own x-axis, that turned out to be a blob with eyes. The o in the wordmark is one splat.",
+  "version": "2.0",
+  "construction": "A Gaussian with σ = 52 and a peak 116 tall on a 256 grid, its tails ending in round caps of radius 10 that reach exactly ±2σ, sitting 8 above an axis 20 thick with round ends; the eyes are 26 × 38 ellipses at ±22 from μ.",
+  "website": "blobscape.dev",
+  "colors": [
+    { "name": "Deep", "hex": "#1d2440", "role": "primary", "usage": "The wordmark, the axis, headings and body text." },
+    { "name": "Blob", "hex": "#f2553a", "role": "accent", "usage": "The blob, and one highlight per layout; never small text." },
+    { "name": "Paper", "hex": "#fbf6ee", "role": "paper", "usage": "Light pages, and the word and axis on dark grounds." },
+    { "name": "Night", "hex": "#14161f", "role": "dark", "usage": "Dark pages and the dark theme." },
+    { "name": "Haze", "hex": "#fde4dc", "role": "support", "usage": "Soft panels and highlights behind content." }
+  ],
+  "type": {
+    "display": { "family": "Fredoka", "weight": 600 },
+    "text": { "family": "Figtree", "weight": 400 }
+  },
+  "logos": {
+    "mark": { "file": "mark.svg", "dark": "mark-dark.svg", "minWidth": 24, "construction": "mark-construction.svg" },
+    "horizontal": { "file": "horizontal.svg", "dark": "horizontal-dark.svg", "minWidth": 120 },
+    "stacked": { "file": "stacked.svg", "dark": "stacked-dark.svg", "minWidth": 72 },
+    "wordmark": { "file": "wordmark.svg", "dark": "wordmark-dark.svg", "minWidth": 96 }
+  },
+  "icon": {
+    "file": "mark-dark.svg",
+    "background": "#1d2440",
+    "favicon": "favicon.svg"
+  },
+  "clearSpace": 0.25,
+  "pngWidths": [256, 512, 1024, 2048],
+  "direction": {
+    "words": ["playful", "curious", "soft"],
+    "lives": "web",
+    "weirdness": 3
+  },
+  "legal": {
+    "owner": "Matt Black",
+    "contact": "https://blobscape.dev/contact/",
+    "codeLicense": "MIT"
+  },
+  "portfolio": {
+    "cover": "portfolio/cover.svg",
+    "mobile": "portfolio/cover-mobile.svg",
+    "alt": "A small landscape being built from soft overlapping blobs, a tree, a hill and a rock, with a few blobs still drifting down into place, while a coral bell-shaped blob with two eyes sits on the horizon in the middle and watches."
+  },
+  "exports": "all",
+  "out": "dist"
+}
