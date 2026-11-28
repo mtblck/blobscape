@@ -915,9 +915,9 @@ export default [
           else ok(`brush and ink on ${backend}: cel shading draws the fox in flat tones (${(c.flat * 100).toFixed(0)}% of its pixels match their neighbor, ${(c.flatBlobs * 100).toFixed(0)}% as blobs), a third tone changes ${(c.three * 100).toFixed(2)}% of the view, and a frame drawn twice is the same`)
           if (backend === 'webgpu') await k.page.screenshot({ path: join(shots, 'blobscape-brush-cel.png') })
         }
-        // neon, stained glass and watercolor: each its own picture, the same when drawn twice; neon's light moves, and the other two cover the view
+        // neon, stained glass, watercolor and halftone: each its own picture, the same when drawn twice; neon's light moves, and the other two cover the view
         const styles = {}
-        for (const [name, look, plain] of [['Neon', 'neon', true], ['Stained glass', 'glass', true], ['Watercolor', 'watercolor', false]]) {
+        for (const [name, look, plain] of [['Neon', 'neon', true], ['Stained glass', 'glass', true], ['Watercolor', 'watercolor', false], ['Halftone print', 'halftone', false]]) {
           await pick(k.page, name, look)
           const up = await k.page.waitForFunction(([look, plain]) => window.__brush?.look === look && window.__brush.plain === plain, [look, plain], { timeout: 120000 }).then(() => true, () => false)
           if (!up) { fails.push(`brush and ink on ${backend}: the fox was never cut for ${name.toLowerCase()}`); continue }
@@ -964,7 +964,7 @@ export default [
         const g = differ(pictures.webgpu.gouache, pictures.webgl.gouache, 90), h = differ(pictures.webgpu.hatch, pictures.webgl.hatch, 90), n = differ(pictures.webgpu.ink, pictures.webgl.ink, 90)
         if (!(g < 0.02 && h < 0.02 && n < 0.02)) fails.push(`brush and ink: WebGPU and WebGL differ at ${(g * 100).toFixed(2)}% of pixels in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash with its outlines`)
         else ok(`brush and ink: WebGPU and WebGL draw the same marks and outlines (${(g * 100).toFixed(2)}% of pixels differ in gouache, ${(h * 100).toFixed(2)}% hatched, ${(n * 100).toFixed(2)}% in ink and wash)`)
-        for (const look of ['neon', 'glass', 'watercolor']) {
+        for (const look of ['neon', 'glass', 'watercolor', 'halftone']) {
           const x = pictures.webgpu.styles[look], y = pictures.webgl.styles[look]
           if (!x || !y) continue
           const d = differ(x, y, 90)
@@ -1140,8 +1140,8 @@ export default [
   },
   {
     name: 'scan-studio',
-    about: 'Scan Studio: the sample is leveled and cleaned, cut blobs show red, a lamp relights, .ply round trip, hand-off to the sandbox',
-    entries: ['src/blobscape/ScanStudio.tsx', 'src/blobscape/handoff.ts'],
+    about: 'Scan Studio: the sample is leveled and cleaned, cut blobs show red, a lamp relights, the scanned light is taken out and the sun lights it, .ply round trip, hand-off to the sandbox',
+    entries: ['src/blobscape/ScanStudio.tsx', 'src/blobscape/handoff.ts', 'src/blobscape/scan/delight.worker.ts'],
     async run({ shots, join, fails, ok, open, tabClick, axe }) {
       const k = await open('/experiments/scan-studio/?offscreen=1', { viewport: { width: 1280, height: 900 } })
       await k.page.waitForFunction(() => window.__scan?.kept() > 0, null, { timeout: 90000 }).catch(() => {})
@@ -1177,6 +1177,14 @@ export default [
       const c = await look()
       if (!(b.red > 50000 && Math.abs(c.sum - a.sum) > a.sum * 0.03)) fails.push(`blobscape scan: cut/lamp ${JSON.stringify({ red: b.red, before: a.sum, lamp: c.sum })}`)
       else ok(`blobscape scan: cut blobs show red (${b.red} pixels) and the lamp relights the mug (brightness ${Math.round((100 * c.sum) / a.sum)}%)`)
+      // picking a light takes the scanned light out (#463), in a worker; then the shared sun and moon light the paint
+      const said = await k.page.waitForFunction(() => { const t = document.querySelector('[data-testid=scan-delight]')?.textContent ?? ''; return /^It was lit/.test(t) && t }, null, { timeout: 60000 }).then((h) => h.jsonValue(), () => '')
+      const paint = await look()
+      await tabClick(k.page.getByRole('button', { name: 'Sun and moon' }))
+      const sky = await look()
+      if (!(said && Math.abs(paint.sum - c.sum) > c.sum * 0.01 && Math.abs(sky.sum - paint.sum) > paint.sum * 0.02)) fails.push(`blobscape scan: taking the light out ${JSON.stringify({ said, lamp: c.sum, paint: paint.sum, sky: sky.sum })}`)
+      else ok(`blobscape scan: the scanned light is taken out ("${said}") and the sun lights the paint (brightness ${Math.round((100 * sky.sum) / paint.sum)}% of the lamp's)`)
+      await tabClick(k.page.getByRole('button', { name: 'Lamp' }))
       await k.page.screenshot({ path: join(shots, 'blobscape-scan.png') })
       await axe(k.page, 'blobscape scan')
       const [dl] = await Promise.all([k.page.waitForEvent('download'), k.page.getByRole('button', { name: 'Download .ply' }).click()])
@@ -1828,6 +1836,217 @@ export default [
       }
       if (sizes.size !== 1) fails.push(`layout: the columns differ between experiments (${[...sizes].join(', ')})`)
       else if (!bad) ok(`layout: all ${PAGES.length} experiments have their tabs beside a preview of the same size (${[...sizes][0]}), which stays in sight on a phone`)
+    },
+  },
+  {
+    name: 'glass-jellyfish',
+    about: 'Glass Jellyfish: the jellyfish draws, and a pulse lights the top of the bell as a beat starts and the tentacles a moment later',
+    entries: ['src/blobscape/GlassJellyfish.tsx', 'src/blobscape/jelly/jellyfish.ts'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/glass-jellyfish/?offscreen=1&detail=60k&lights=rainbow', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__jelly, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__jelly) return null
+        const { stage, jelly } = window.__jelly
+        const canvas = document.querySelector('[data-testid=jelly-view]')
+        // how much of the view is lit, and how many lights shine (each light blob's opacity follows its pulse)
+        const at = async (t) => {
+          await stage.frame(t)
+          const c = document.createElement('canvas')
+          c.width = 160; c.height = 120
+          const x = c.getContext('2d', { willReadFrequently: true })
+          x.drawImage(canvas, 0, 0, 160, 120)
+          const d = x.getImageData(0, 0, 160, 120).data
+          let lit = 0
+          for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 180) lit++
+          const o = jelly.lights.blobs.opacity, on = jelly.path.on
+          let top = 0, tails = 0
+          for (let i = 0; i < jelly.lights.blobs.count; i++) if (o[i] > 0.6) { if (on[i] < 0) top++; else tails++ }
+          return { lit: lit / (160 * 120), top, tails }
+        }
+        return { early: await at(0.3), later: await at(2.3) }
+      })
+      if (!got) fails.push('glass jellyfish: the page never started (no window.__jelly)')
+      else if (!(got.early.lit > 0.02 && got.early.top > 50 && got.later.tails > 50 && got.later.tails > got.early.tails)) fails.push(`glass jellyfish: ${JSON.stringify(got)}`)
+      else ok(`glass jellyfish: drawn (${Math.round(got.early.lit * 100)}% of the view lit); a beat lights ${got.early.top} lights in the bell, then ${got.later.tails} down the tentacles`)
+      await g.ctx.close()
+    },
+  },
+  {
+    name: 'snow-globe',
+    about: 'Snow Globe: the snow stays inside the glass, a shake lifts it off the ground and it settles again',
+    entries: ['src/blobscape/SnowGlobe.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/snow-globe/?offscreen=1&scene=snowman&detail=light', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__globe, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__globe) return null
+        const { stage, snow, globe, shake } = window.__globe
+        const inside = () => {
+          let worst = 0
+          for (let i = 0; i < snow.count; i++) {
+            const d = Math.hypot(snow.pos[i * 3] - globe.center[0], snow.pos[i * 3 + 1] - globe.center[1], snow.pos[i * 3 + 2] - globe.center[2])
+            worst = Math.max(worst, d / globe.radius)
+          }
+          return worst
+        }
+        let t = stage.time
+        // the snow is stepped on its own and the view drawn once a run: drawing every step took most of a quarter hour in software
+        const run = async (seconds) => { for (let k = 0; k < seconds * 10; k++) snow.step(0.1); t += seconds; await stage.frame(t) }
+        await run(30)
+        const rested = snow.settled / snow.count
+        shake(1)
+        await run(1.5)
+        const shaken = snow.settled / snow.count, worst = inside()
+        await run(40)
+        return { rested, shaken, settled: snow.settled / snow.count, worst }
+      })
+      if (!got) fails.push('snow globe: the page never started (no window.__globe)')
+      else if (!(got.worst <= 1 && got.shaken < got.rested * 0.5 && got.settled > 0.9)) fails.push(`snow globe: ${JSON.stringify(got)}`)
+      else ok(`snow globe: a shake lifts the snow (${Math.round(got.rested * 100)}% lying before, ${Math.round(got.shaken * 100)}% after) and it settles again (${Math.round(got.settled * 100)}%), never past the glass`)
+      await g.ctx.close()
+    },
+  },
+  {
+    name: 'style-morph',
+    about: 'Style Morph: the next style is drawn under the kept picture, which a wipe then takes away',
+    entries: ['src/blobscape/StyleMorph.tsx'],
+    async run({ fails, ok, open }) {
+      const p = await open('/experiments/style-morph/?offscreen=1&scene=windmill&detail=light&wipe=clock&slow=1&styles=blobs,cel,ascii', { viewport: { width: 1280, height: 900 } })
+      await p.page.waitForFunction(() => window.__morph, null, { timeout: 120000 }).catch(() => {})
+      const got = await p.page.evaluate(async () => {
+        const M = window.__morph
+        if (!M) return null
+        await M.stage.frame(1)
+        const from = M.look
+        M.next()
+        const wait = async (until, ms) => { for (let k = 0; k < ms / 100 && !until(); k++) await new Promise((r) => setTimeout(r, 100)) }
+        await wait(() => window.__morph && window.__morph.look !== from, 60000)
+        await wait(() => !document.querySelector('[data-testid=morph-wipe]')?.hidden, 20000)
+        const wiping = !document.querySelector('[data-testid=morph-wipe]')?.hidden
+        const s = window.__morph.stage
+        for (let t = 1.1; t < 3; t += 0.25) { await s.frame(t); await new Promise((r) => setTimeout(r, 120)) }
+        await wait(() => !window.__morph.passing(), 5000)
+        return { from, to: window.__morph.look, wiping, done: !window.__morph.passing(), name: document.querySelector('[data-testid=morph-name]')?.textContent }
+      })
+      if (!got) fails.push('style morph: the page never started (no window.__morph)')
+      else if (got.from !== 'blobs' || got.to !== 'cel' || !got.wiping || !got.done || got.name !== 'Cel shading') fails.push(`style morph: ${JSON.stringify(got)}`)
+      else ok(`style morph: blobs gave way to ${got.name.toLowerCase()} under a clock wipe`)
+      await p.ctx.close()
+    },
+  },
+  {
+    name: 'time-lapse',
+    about: 'Time-lapse: the year runs through the seasons, the light follows the hour, and the lamps come on in the dark',
+    entries: ['src/blobscape/TimeLapse.tsx'],
+    async run({ fails, ok, open }) {
+      const p = await open('/experiments/time-lapse/?offscreen=1&scene=windmill&detail=light', { viewport: { width: 1280, height: 900 } })
+      await p.page.waitForFunction(() => window.__timelapse, null, { timeout: 120000 }).catch(() => {})
+      const at = (u) => p.page.evaluate(async (u) => {
+        const T = window.__timelapse
+        if (!T) return null
+        await T.stage.frame(u * T.seconds)
+        await new Promise((r) => setTimeout(r, 1200))
+        const T2 = window.__timelapse
+        await T2.stage.frame(u * T2.seconds)
+        const m = T2.moment()
+        return { season: m.season, hour: Math.round(m.hour * 10) / 10, snow: m.snow, night: T2.night(), when: document.querySelector('[data-testid=timelapse-when]')?.textContent }
+      }, u)
+      const noon = await at(0.25 + 8 / 96), night = await at(0.25 + 21 / 96), winter = await at(0.75 + 23 / 96)
+      if (!noon || !night || !winter) fails.push('time-lapse: the page never started (no window.__timelapse)')
+      else if (noon.season !== 1 || noon.night || !night.night || winter.season !== 3 || winter.snow < 0.9 || !/^Summer, /.test(noon.when ?? '')) fails.push(`time-lapse: ${JSON.stringify({ noon, night, winter })}`)
+      else ok(`time-lapse: ${noon.when} by day, ${night.when} with the lamps on, ${winter.when} under snow`)
+      await p.ctx.close()
+    },
+  },
+  {
+    name: 'destructible-diorama',
+    about: 'Destructible Diorama: a prop breaks into its blobs, they land, and it builds itself back',
+    entries: ['src/blobscape/DestructibleDiorama.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/destructible-diorama/?offscreen=1&scene=windmill&detail=light', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__crumble, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__crumble) return null
+        const { stage, things, crumble, broken } = window.__crumble
+        let t = stage.time
+        const run = async (seconds) => { for (let k = 0; k < seconds * 10; k++) { t += 0.1; await stage.frame(t) } }
+        await run(0.5)
+        const struck = crumble('windmill')
+        await run(1)
+        const during = broken()
+        await run(6)
+        return { things, struck, during, after: broken() }
+      })
+      if (!got) fails.push('destructible diorama: the page never started (no window.__crumble)')
+      else if (!(got.things.includes('windmill') && got.struck && got.during.includes('windmill') && got.after.length === 0)) fails.push(`destructible diorama: ${JSON.stringify(got)}`)
+      else ok(`destructible diorama: the windmill broke and built itself back (${got.things.length} things to break)`)
+      await g.page.screenshot({ path: 'verify-shots/destructible-diorama.png' }).catch(() => {})
+      await g.ctx.close()
+    },
+  },
+  {
+    name: 'veggie-slayer',
+    about: 'Veggie Slayer: veggies thrown up as blocks, a tap bursts one into cubes and scores, the ones left fall and cost hearts until the end shows the tally',
+    entries: ['src/blobscape/VeggieSlayer.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/veggie-slayer/?offscreen=1&sound=0', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__veggies, null, { timeout: 120000 }).catch(() => {})
+      const got = await g.page.evaluate(async () => {
+        if (!window.__veggies) return null
+        const v = window.__veggies, s = v.stage
+        let t = s.time + 0.5
+        await s.frame(t)
+        const cubes = s.blockCount?.blocks ?? 0
+        v.start(3)
+        // the stage's clock drives the game, so stepping it plays the same game every run
+        const run = async (seconds) => { for (let k = 0; k < seconds * 10 && v.game().state === 'playing'; k++) { t += 0.1; await s.frame(t) } }
+        await run(4)
+        const flying = v.game().flying.length
+        const hit = []
+        for (const f of [...v.game().flying]) hit.push(...v.slash(f.x, f.y).map((e) => e.type))
+        t += 0.2
+        await s.frame(t)
+        const thrown = v.show.busy.cubes, score = v.game().score
+        await run(120)
+        return { cubes, flying, hit, thrown, score, state: v.game().state, hearts: v.game().hearts }
+      })
+      await g.page.waitForTimeout(200)
+      const tally = await g.page.getByTestId('veggie-tally').count()
+      if (!got) fails.push('veggie slayer: the page never started (no window.__veggies)')
+      else if (!(got.cubes > 5000 && got.flying > 0 && got.hit.includes('burst') && got.thrown > 0 && got.score > 0 && got.state === 'over' && got.hearts === 0 && tally > 0)) fails.push(`veggie slayer: ${JSON.stringify({ ...got, tally })}`)
+      else ok(`veggie slayer: ${got.cubes.toLocaleString()} cubes, a tap burst ${got.hit.filter((h) => h === 'burst').length} into ${got.thrown} flying cubes for ${got.score} points, and the end shows the tally`)
+      await g.page.screenshot({ path: 'verify-shots/veggie-slayer.png' }).catch(() => {})
+      await g.ctx.close()
+    },
+  },
+  {
+    name: 'lava-lamp',
+    about: 'Lava Lamp: the wax buds, rises and is cut into discs every frame; picking colors and a base one after another keeps the page answering',
+    entries: ['src/blobscape/LavaLamp.tsx'],
+    async run({ fails, ok, open }) {
+      const g = await open('/experiments/lava-lamp/?offscreen=1', { viewport: { width: 1280, height: 900 } })
+      await g.page.waitForFunction(() => window.__lava, null, { timeout: 120000 }).catch(() => {})
+      const step = (t) => g.page.evaluate(async (t) => { await window.__lava.frame(t); const f = window.__lava.wax(); return f && { count: f.count, blobs: f.blobs, ...f.events } }, t)
+      const early = await g.page.evaluate(() => !!window.__lava) ? await step(2) : null
+      const later = early ? await step(30) : null
+      // a color picked again and again repaints in place (each pick once rebuilt the stage and froze the page)
+      const chips = g.page.getByTestId('lava-colors').getByRole('button')
+      const picked = []
+      for (let k = 1; k <= 4 && later; k++) {
+        const t0 = Date.now()
+        await chips.nth(k).click({ timeout: 20000 })
+        await step(30 + k)
+        picked.push(Date.now() - t0)
+      }
+      await g.page.getByTestId('lava-bases').getByRole('button', { name: 'Coffee cup' }).click({ timeout: 20000 }).catch(() => {})
+      await g.page.waitForTimeout(3000)
+      const after = later ? await step(40) : null
+      if (!early || !later || !after) fails.push(`lava lamp: the page never drew (${JSON.stringify({ early, later, after })})`)
+      else if (!(later.count > 500 && later.buds > early.buds && after.count > 500 && picked.length === 4 && picked.every((ms) => ms < 15000))) fails.push(`lava lamp: ${JSON.stringify({ early, later, after, picked })}`)
+      else ok(`lava lamp: ${later.count.toLocaleString()} discs of wax, ${later.buds} buds risen and ${later.merges} run together by 30 s, four colors and a base picked in ${Math.max(...picked)} ms at most each`)
+      await g.page.screenshot({ path: 'verify-shots/lava-lamp.png' }).catch(() => {})
+      await g.ctx.close()
     },
   },
 ]

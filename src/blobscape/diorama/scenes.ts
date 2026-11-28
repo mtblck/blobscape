@@ -21,6 +21,7 @@ import { REEF, REEF_PROJECT } from './scenes/reef.ts'
 import { CROC, CROC_PROJECT } from './scenes/croc.ts'
 import { GROVE, GROVE_PROJECT } from './scenes/grove.ts'
 import { HARVEST, HARVEST_PROJECT } from './scenes/harvest.ts'
+import { CORNUCOPIA_PROJECT } from '../props/cornucopia.ts'
 import { LAB, LAB_PROJECT } from './scenes/lab.ts'
 import { HUT, HUT_PROJECT } from './scenes/hut.ts'
 import { SNAIL, SNAIL_PROJECT } from './scenes/snail.ts'
@@ -319,6 +320,7 @@ export const DIORAMAS: Diorama[] = [
   described('owl', OWL, 'A great owl in a starry wizard hat perched on a stump, turning its head to watch a cauldron of glowing pink potion that stirs itself over a fire, among candles, bottles, books and mushrooms', { project: OWL_PROJECT }),
   described('isles', ISLES, 'Snowy islands of rock adrift in a night sky, joined by rope bridges: a cabin with lit windows and a smoking chimney among pines, a frozen waterfall, a crown of glowing ice crystals, a beacon, and falling snow', { project: ISLES_PROJECT, weather: 'snow', overhead: false }),
   described('harvest', HARVEST, 'A pumpkin patch under a huge moon, kept by a scarecrow with a carved pumpkin head and a lantern, with crows on its arm, a wind pump turning behind, corn and drifting leaves.', { project: HARVEST_PROJECT }),
+  described('cornucopia', composeScene(CORNUCOPIA_PROJECT, madeProp), 'A giant woven cornucopia on an autumn green on a golden afternoon, spilling pumpkins, squash, gourds, apples, pears and grapes, with wheat and corn standing out of its mouth; a squirrel scurries in to nibble an acorn, a cardinal flutters down to peck the grapes, and a fox trots out to sniff the gourds and nudge one, each looking it over before it goes', { project: CORNUCOPIA_PROJECT, byDay: true }),
   described('lab', LAB, 'A laboratory at night where sprouts grow in three tall jars of glowing liquid, with rising bubbles, a steaming flask, blinking dials, a swaying lamp and a cat keeping watch.', { project: LAB_PROJECT }),
   described('croc', CROC, 'A crocodile basking on a sandbar in a sunny pond, yawning, with flowers growing along its back, a small bird riding on it and butterflies overhead.', { project: CROC_PROJECT }),
   described('grove', GROVE, 'A grove of birches in the snow at night, their faces lit from inside like lanterns, with paper lamps on the branches, a fox asleep below and ribbons of light in the sky.', { project: GROVE_PROJECT, weather: 'snow', overhead: false, skyEffect: 'aurora' }),

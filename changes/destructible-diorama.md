@@ -1,0 +1,1 @@
+New experiment, Destructible Diorama (unlisted for now): tap anything in a Diorama scene and it falls apart into its own blobs, which land on the ground, lie there a moment, then fly back and build it again.

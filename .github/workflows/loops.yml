@@ -7,7 +7,8 @@ name: Loops
 # gallery's list (src/blobscape/diorama/loops.ts) with no loop in public/loops/
 # (scripts/loops-missing.mjs). A change to a scene that already has a loop, or to something
 # every scene shares (the cutter, the pixel pass), starts nothing: run it by hand then
-# (Actions, Loops, Run workflow), with the scenes' ids or `all`, when the pictures changed.
+# (Actions, Loops, Run workflow), with the scenes' ids or `all`, when the pictures changed, and
+# optionally Diorama settings as in its address (style=blocks&detail=finest&block=1) for every scene.
 #
 # The pull request holds only the new .webp and .png files. The 3× MP4s for posting are
 # kept with the run for two weeks (the `loops` download). Nothing is merged by this
@@ -25,6 +26,10 @@ on:
         description: Scene ids with spaces between (koi windmill), or all
         type: string
         default: all
+      settings:
+        description: Diorama settings for every scene, as in its address (style=blocks&detail=finest&block=1). Empty is pixel art as the page starts.
+        type: string
+        default: ''
 
 concurrency:
   group: loops
@@ -40,6 +45,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       scenes: ${{ steps.plan.outputs.scenes }}
+      settings: ${{ steps.plan.outputs.settings }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -54,7 +60,12 @@ jobs:
         id: plan
         env:
           ASKED: ${{ inputs.scenes }}
+          SETTINGS: ${{ inputs.settings }}
         run: |
+          # only an address's own characters, so nothing typed into the box reaches a command line as anything else
+          if ! printf '%s' "$SETTINGS" | grep -Eq '^[A-Za-z0-9=&._,%-]*$'; then echo "settings: letters, digits and = & . _ , - % only" >&2; exit 1; fi
+          echo "settings=$SETTINGS" >> "$GITHUB_OUTPUT"
+          [ -z "$SETTINGS" ] || echo "Settings: $SETTINGS" >> "$GITHUB_STEP_SUMMARY"
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             ids=$(node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/loops-missing.mjs "$GITHUB_SHA")
           else
@@ -112,7 +123,8 @@ jobs:
       - name: Record
         env:
           SCENE: ${{ matrix.scene }}
-        run: npm run loops -- recorded "$SCENE" --lanes=1
+          SETTINGS: ${{ needs.build.outputs.settings }}
+        run: npm run loops -- recorded "$SCENE" --lanes=1 "--settings=$SETTINGS"
       - uses: actions/upload-artifact@v4
         with:
           name: loop-${{ matrix.scene }}
@@ -150,6 +162,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SCENES: ${{ needs.build.outputs.scenes }}
           RECORDED: ${{ needs.record.result }}
+          SETTINGS: ${{ needs.build.outputs.settings }}
         run: |
           shopt -s nullglob
           for f in recorded/*.webp recorded/*.png; do cp "$f" public/loops/; done
@@ -169,6 +182,9 @@ jobs:
           body="Recorded again by the Loops workflow ([run $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)), from main at ${GITHUB_SHA:0:7}: $names.
 
           Only the gallery's .webp and .png files change. The 3× MP4s for posting are the run's \`loops\` download. Checks do not run on a pull request a workflow opens, so look at the pictures before merging."
+          [ -z "$SETTINGS" ] || body="$body
+
+          Recorded with the settings \`$SETTINGS\`."
           [ "$RECORDED" = success ] || body="$body
 
           Some scenes did not record (asked for: $SCENES); theirs are left as they were. See the run."

@@ -44,7 +44,7 @@ import { meshBounds } from '../splat-engine/meshShape.ts'
 import { readSkinnedGlb } from '../splat-engine/skinnedModel.ts'
 import { budget, clock, lampAdded, lampLights, lampRemoved, lit, liveSky, liveSkyColors, overheadPicked, rgbOf, shadeNow, sunNow, timeIn, weatherPicked, windPicked } from './creator/lighting.ts'
 import { castBy, glowGain } from './diorama/glow.ts'
-import { DEFAULT_STYLE, STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
+import { DEFAULT_STYLE, PICKED_STYLES, STYLES, isPixelStyle, styleAsked, styleWords, type Style } from './diorama/styles.ts'
 import { useDrawnLook, useHeld } from './drawnLook.tsx'
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { useExport } from './diorama/useExport.tsx'
@@ -658,7 +658,7 @@ export function SceneCreator() {
   const palette = useMemo(() => (creatureColors ? joinPalettes([shown.palette.map(hexOf), creatureColors.split(',')]) : shown.palette), [shown.palette, creatureColors])
   const palettes = useMemo(() => paletteChoices(weathered ? paletteUnder(palette, skyColors, skyTo) : palette), [palette, weathered, skyColors, skyTo])
   const colors = (palettes.find((p) => p.id === px.palette) ?? palettes[0]).colors
-  const look = useMemo<PixelLook>(() => pixelLookOf({ ...px, glow }, { colors, sky: skyShown, skyForced, finish: shown.finish, sun: shown.sun, start: shown.orbit, loop: shown.loop }, flags),
+  const look = useMemo<PixelLook>(() => pixelLookOf({ ...px, glow }, { colors: colors.length ? colors : palettes[1].colors, sky: skyShown, skyForced, finish: shown.finish, sun: shown.sun, start: shown.orbit, loop: shown.loop }, flags),
     [px, glow, colors, skyShown, skyForced, shown, flags])
   // pixel art shaded a pixel at a time: cel shading in the small picture, lit by the land's sun
   const pixelCel = useMemo(() => (pixelsNow && shadedNow ? pixelCelLook(shown.sun, shown.shade ?? 0.5) : undefined), [pixelsNow, shadedNow, shown.sun, shown.shade])
@@ -905,7 +905,7 @@ export function SceneCreator() {
       say(`${f.name} could not be opened.`)
     }
   }
-  /** A splat scan opened as the land of a new scene (#381): leveled and cleaned, drawn as captured. */
+  /** A splat scan opened as the land of a new scene (#381): leveled and cleaned, its scanned light taken out so the scene's own lights it (#463). */
   const openScanLand = async (f: File, sh = shelf) => {
     setFileProblems([])
     say(`Opening ${f.name}: leveling and cleaning it…`)
@@ -920,7 +920,7 @@ export function SceneCreator() {
       const bare = cleanName(f.name.replace(/\.[^.]*$/, ''))
       openSaved({ id: newId(), updated: Date.now(), project: scanProject(m.id, bare ? bare[0].toUpperCase() + bare.slice(1) : 'Your scan') })
       keptText.current = ''
-      say(`Opened ${f.name} as the land: ${m.rest.count.toLocaleString('en-US')} blobs. Its light is the light it was captured in, so live light adds to it.`)
+      say(`Opened ${f.name} as the land: ${m.rest.count.toLocaleString('en-US')} blobs. The light it was scanned in is taken out, so this scene's sun, moon and lamps light it.`)
     } catch (e) {
       setFileProblems([`file: ${e instanceof ImportError || e instanceof MeshFileError ? e.message : 'not a splat scan this page can read'}`])
       say(`${f.name} could not be opened.`)
@@ -1384,8 +1384,8 @@ export function SceneCreator() {
       setLight(change, 'Light changed.')
       return `Light changed${ask.sun || ask.hour !== undefined || ask.weather !== undefined || ask.haze !== undefined ? '; the scene is cut again in a moment' : ''}.`
     },
-    styles: () => STYLES.map((x) => x.id),
-    setStyle: (id) => { const st = STYLES.find((x) => x.id === id); if (!st) return `Not done: there is no style "${id}".`; drawStyle(st.id); return `Drawn as ${st.label.toLowerCase()} now.` },
+    styles: () => PICKED_STYLES.map((x) => x.id),
+    setStyle: (id) => { const st = PICKED_STYLES.find((x) => x.id === id); if (!st) return `Not done: there is no style "${id}".`; drawStyle(st.id); return `Drawn as ${st.label.toLowerCase()} now.` },
     undo: () => { if (!hist?.past.length) return 'Nothing to take back.'; doUndo(); return 'Took back the last change.' },
   }
   // registered once, always reaching this render's page
@@ -1537,7 +1537,7 @@ export function SceneCreator() {
                       {linking && (/^https?:/.test(linking)
                         ? <input readOnly value={linking} aria-label="Link to this scene" onFocus={(e) => e.currentTarget.select()} className="w-full rounded-lg border border-rule bg-paper px-2 py-1 text-xs" data-testid="creator-link" />
                         : <p className="text-xs text-ink-soft" data-testid="creator-link">{linking}</p>)}
-                      <p className="mt-1 text-xs text-ink-soft">A link holds the whole scene in the address after its #, which browsers never send to a server, so nothing is stored anywhere; your own models need a file. Open a file takes a file saved here; a scene description (.json) as Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf; or a splat scan (.ply, .spz, .splat, .ksplat) as the land, leveled and cleaned, in the light it was captured in.</p>
+                      <p className="mt-1 text-xs text-ink-soft">A link holds the whole scene in the address after its #, which browsers never send to a server, so nothing is stored anywhere; your own models need a file. Open a file takes a file saved here; a scene description (.json) as Diorama opens, the things it marks (or else what stands on bones of its own) coming in as props; a model of a whole scene (.glb), each thing at the top of its tree a prop, on a round of turf; or a splat scan (.ply, .spz, .splat, .ksplat) as the land, leveled and cleaned, with the light it was scanned in taken out so this scene's light falls on it.</p>
                       {fileProblems.length > 0 && (
                         <div role="alert" className="mt-2 rounded-lg border border-rule bg-paper p-2 text-xs" data-testid="creator-file-problems">
                           <p className="font-semibold">That file is not a scene this page can open:</p>

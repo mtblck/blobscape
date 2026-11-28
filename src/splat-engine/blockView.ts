@@ -1,6 +1,6 @@
-import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Group, Mesh, NoBlending, NodeMaterial, QuadMesh, RenderTarget, Vector2, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
+import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Group, Mesh, NoBlending, NodeMaterial, PerspectiveCamera, QuadMesh, RenderTarget, Vector2, Vector3, Vector4, type Camera, type Object3D, type WebGPURenderer } from 'three/webgpu'
 import * as TSLTyped from 'three/tsl'
-import { buildBlocks, flowMesh, lampSight, lampsOf, planFlow, shapeFlow, type BlockLook, type BlockPiece, type BlockSource, type FlowMesh, type FlowPlan, type SolidCells } from './blocks.ts'
+import { FAR_LEVELS, chunkFaces, farChunk, farLevel, flowMesh, holed, keptBlocks, lampSight, lampsOf, planFlow, shapeFlow, type BlockLook, type BlockPiece, type BlockSource, type FlowMesh, type FlowPlan, type SolidCells } from './blocks.ts'
 import type { Light } from './engine.ts'
 
 // As in engine.ts: the shader builders use TSL untyped.
@@ -26,7 +26,8 @@ export type BlockActor = BlockSource & { skeleton: { matrix: Float32Array; scale
  * is and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line
  * round each face. A surface that moves by itself (an actor with `flows`: a pond) is columns whose tops follow its
  * blobs (`reshape` after they change), drawn after the cubes and as see-through as its blobs are. It draws into a target with four samples a pixel and copies that out, since a cube's edges want
- * smoothing that soft blobs never did.
+ * smoothing that soft blobs never did. An actor as big as a world (`far`) is cut into squares at each of its levels,
+ * and each frame every square is drawn at the level its distance asks for (`farLevel`).
  */
 export class BlockView extends Group {
   /** How many cubes it holds. */
@@ -35,12 +36,14 @@ export class BlockView extends Group {
   faces: number
   private readonly material = new NodeMaterial()
   private readonly liquid = new NodeMaterial()
-  private readonly pieces: { mesh: Mesh; actor: number; bone: number; built?: BlockPiece }[] = []
+  /** The meshes of one bone's cubes at one level (one mesh, or one a square for a far actor, sharing its corners); `built` and `solid` where its faces can see lamps. */
+  private readonly pieces: { meshes: Mesh[]; actor: number; bone: number; built?: BlockPiece; solid?: SolidCells }[] = []
+  /** A far actor's squares, a bone at a time: each square's mesh at every level it has faces at, and the level it is drawn at. */
+  private readonly chunks: { actor: number; bone: number; middle: [number, number, number]; reach: number; cell: number; at: (Mesh | undefined)[]; level: number }[] = []
   /** Which of the first four lights cast block shadows (lamps that stay put, by the first actor's `seen`), and where each stood when its shadows were last worked out. */
   private readonly casts: boolean[]
   private readonly baked: (string | undefined)[] = [undefined, undefined, undefined, undefined]
   private readonly shadowed = uniform(new Vector4(0, 0, 0, 0))
-  private readonly solid?: SolidCells
   private readonly flows: { mesh: Mesh; actor: number; plan: FlowPlan; shape: FlowMesh }[] = []
   private readonly pos = uniformArray(Array.from({ length: BLOCK_LIGHTS }, () => new Vector4(0, 0, 0, 1)), 'vec4')
   private readonly col = uniformArray(Array.from({ length: BLOCK_LIGHTS }, () => new Vector4()), 'vec4')
@@ -65,12 +68,23 @@ export class BlockView extends Group {
     this.out.depthWrite = false
     this.quad = new QuadMesh(this.out)
     this.edge.value = look.edge ?? 0.3
-    const built = buildBlocks(actors, look)
+    // each source alone (none shades or joins another), so one whose cubes are kept (`keepCubes`) is not made again;
+    // a far source at each of its levels too, every level cut into the same squares
+    const levels = actors.map((a) => {
+      if (!a.far || a.flows) return [keptBlocks(a, look)]
+      const cell = a.blockCell ?? look.cell, walls = farChunk(cell)
+      return Array.from({ length: FAR_LEVELS + 1 }, (_, k) => keptBlocks({ ...a, blockCell: cell * 2 ** k, walls }, look))
+    })
     this.casts = look.shadows === false ? [false, false, false, false] : lampsOf(actors[0]?.seen)
-    this.solid = built.solids[0]
-    this.blocks = built.blocks
-    this.faces = built.faces
-    for (const p of built.pieces) {
+    this.blocks = 0
+    this.faces = 0
+    for (const l of levels) this.blocks += l[0].blocks
+    const squares = new Map<string, (typeof this.chunks)[number]>()
+    for (const [actor, built] of levels.entries()) for (const [level, b] of built.entries()) for (const one of b.pieces) {
+      const p = { ...one, actor }, indices = holed(p, actors[actor].hole)
+      // a bone whose cubes all stand in the hole draws nothing
+      if (!indices.length) continue
+      if (!level) this.faces += indices.length / 6
       const g = new BufferGeometry()
       g.setAttribute('position', new BufferAttribute(p.positions, 3))
       g.setAttribute('normal', new BufferAttribute(p.normals, 3))
@@ -78,13 +92,35 @@ export class BlockView extends Group {
       g.setAttribute('blockLight', new BufferAttribute(p.light, 3))
       g.setAttribute('lampSeen', new BufferAttribute(new Float32Array((p.positions.length / 3) * 4).fill(1), 4))
       g.setAttribute('uv', new BufferAttribute(p.uvs, 2))
-      g.setIndex(new BufferAttribute(p.indices, 1))
-      const mesh = new Mesh(g, this.material)
-      mesh.matrixAutoUpdate = false
-      // a bone can carry its cubes anywhere, so the rest pose's bounds say nothing
-      mesh.frustumCulled = false
-      this.add(mesh)
-      this.pieces.push({ mesh, actor: p.actor, bone: p.bone, built: p })
+      const mesh = (index: Uint32Array) => {
+        // a square's mesh shares its level's corners and has only its own triangles
+        const geo = built.length > 1 ? new BufferGeometry() : g
+        if (geo !== g) for (const name of Object.keys(g.attributes)) geo.setAttribute(name, g.getAttribute(name))
+        geo.setIndex(new BufferAttribute(index, 1))
+        const m = new Mesh(geo, this.material)
+        m.matrixAutoUpdate = false
+        // a bone can carry its cubes anywhere, so the rest pose's bounds say nothing
+        m.frustumCulled = false
+        this.add(m)
+        return m
+      }
+      if (built.length === 1) {
+        this.pieces.push({ meshes: [mesh(indices)], actor, bone: p.bone, built: p, solid: b.solids[0] })
+        continue
+      }
+      const meshes: Mesh[] = []
+      for (const c of chunkFaces(p, indices, farChunk(actors[actor].blockCell ?? look.cell))) {
+        const id = `${actor}:${p.bone}:${c.key}`
+        let square = squares.get(id)
+        if (!square) {
+          squares.set(id, (square = { actor, bone: p.bone, middle: c.middle, reach: c.reach, cell: actors[actor].blockCell ?? look.cell, at: [], level: 0 }))
+          this.chunks.push(square)
+        }
+        const m = mesh(c.indices)
+        square.at[level] = m
+        meshes.push(m)
+      }
+      this.pieces.push({ meshes, actor, bone: p.bone, built: p, solid: b.solids[0] })
     }
     actors.forEach((a, actor) => {
       if (!a.flows) return
@@ -104,7 +140,7 @@ export class BlockView extends Group {
       mesh.renderOrder = 1
       this.add(mesh)
       this.flows.push({ mesh, actor, plan, shape })
-      this.pieces.push({ mesh, actor, bone: 0 })
+      this.pieces.push({ meshes: [mesh], actor, bone: 0 })
       this.blocks += plan.count
       this.faces += plan.count * 5
     })
@@ -184,15 +220,16 @@ export class BlockView extends Group {
     for (let k = 0; k < 4; k++) {
       const l = lights[k], on = this.casts[k] && !!l && !('direction' in l)
       this.shadowed.value.setComponent(k, on ? 1 : 0)
-      if (!on || !this.solid) continue
+      if (!on) continue
       const p = (l as { position: readonly [number, number, number]; range: number })
       const key = `${p.position.map((v) => v.toFixed(3)).join(',')},${p.range.toFixed(2)}`
       if (this.baked[k] === key) continue
       this.baked[k] = key
       for (const piece of this.pieces) {
-        if (piece.actor !== 0 || !piece.built) continue
-        const sight = lampSight(piece.built, this.solid, p.position, p.range)
-        const a = piece.mesh.geometry.getAttribute('lampSeen') as BufferAttribute
+        if (piece.actor !== 0 || !piece.built || !piece.solid) continue
+        const sight = lampSight(piece.built, piece.solid, p.position, p.range)
+        // the squares of a far actor's level share one set of corners
+        const a = piece.meshes[0].geometry.getAttribute('lampSeen') as BufferAttribute
         for (let f = 0; f < sight.length; f++) for (let c = 0; c < 4; c++) (a.array as Float32Array)[(f * 4 + c) * 4 + k] = sight[f]
         a.needsUpdate = true
       }
@@ -202,11 +239,42 @@ export class BlockView extends Group {
   /** Puts every piece where its bone is now. */
   pose() {
     for (const p of this.pieces) {
-      const sk = this.actors[p.actor].skeleton
-      p.mesh.visible = sk.scale[p.bone] > 0
-      if (!p.mesh.visible) continue
-      p.mesh.matrix.fromArray(sk.matrix, p.bone * 16)
-      p.mesh.matrixWorldNeedsUpdate = true
+      const sk = this.actors[p.actor].skeleton, shown = sk.scale[p.bone] > 0
+      for (const mesh of p.meshes) {
+        mesh.visible = shown
+        if (!shown) continue
+        mesh.matrix.fromArray(sk.matrix, p.bone * 16)
+        mesh.matrixWorldNeedsUpdate = true
+      }
+    }
+  }
+
+  /** How many of a far actor's squares are drawn at each level now: its own cubes first. */
+  levels(): number[] {
+    const n = Array.from({ length: FAR_LEVELS + 1 }, () => 0)
+    for (const c of this.chunks) if (this.actors[c.actor].skeleton.scale[c.bone] > 0) n[c.level]++
+    return n
+  }
+
+  /** Each square of a far actor at the level its distance from `camera` asks for, `height` device pixels tall (after `pose`). */
+  private choose(camera: Camera, height: number) {
+    if (!this.chunks.length) return
+    const eye = new Vector3(), at = new Vector3(), m = new Vector3()
+    camera.updateMatrixWorld()
+    eye.setFromMatrixPosition(camera.matrixWorld)
+    // pixels a unit is across at a unit away
+    const per = camera instanceof PerspectiveCamera ? height / (2 * Math.tan((camera.fov * Math.PI) / 360)) : 0
+    for (const c of this.chunks) {
+      const sk = this.actors[c.actor].skeleton
+      if (!(sk.scale[c.bone] > 0)) continue
+      const e = sk.matrix, o = c.bone * 16
+      m.set(c.middle[0], c.middle[1], c.middle[2])
+      at.set(e[o] * m.x + e[o + 4] * m.y + e[o + 8] * m.z + e[o + 12], e[o + 1] * m.x + e[o + 5] * m.y + e[o + 9] * m.z + e[o + 13], e[o + 2] * m.x + e[o + 6] * m.y + e[o + 10] * m.z + e[o + 14])
+      const size = Math.hypot(e[o], e[o + 1], e[o + 2])
+      // its nearest point, for the biggest its cubes come anywhere in it
+      const away = Math.max(at.distanceTo(eye) - c.reach * size, 1e-3)
+      c.level = per ? farLevel((c.cell * size * per) / away, c.level, c.at.length - 1) : 0
+      for (const [k, mesh] of c.at.entries()) if (mesh) mesh.visible = k === c.level
     }
   }
 
@@ -214,6 +282,7 @@ export class BlockView extends Group {
   render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, width: number, height: number) {
     if (this.picture.width !== width || this.picture.height !== height) this.picture.setSize(width, height)
     this.pose()
+    this.choose(camera, height)
     const to = renderer.getRenderTarget()
     renderer.setRenderTarget(this.picture)
     renderer.clear()
@@ -224,7 +293,7 @@ export class BlockView extends Group {
 
   /** Frees the meshes and the target. */
   dispose() {
-    for (const p of this.pieces) p.mesh.geometry.dispose()
+    for (const p of this.pieces) for (const mesh of p.meshes) mesh.geometry.dispose()
     this.material.dispose()
     this.liquid.dispose()
     this.out.dispose()

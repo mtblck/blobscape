@@ -1,8 +1,8 @@
 /**
  * A splat scan as the land (#381): leveled and cleaned as Scan Studio does on opening (its table found and turned
  * level, faint, huge and floating blobs dropped, the table kept, since here it is the ground), set across the land's
- * usual width, with a ground props stand on read from its blobs. Its light is its own, baked into its colors: live
- * light adds to it. Pure, tested.
+ * usual width, with a ground props stand on read from its blobs. The cut takes its scanned light out and lights it
+ * with the scene's (scan/delight.ts, #463). Pure, tested.
  */
 import { Blobs, type Vec3 } from '../../splat-core/blobs.ts'
 import type { SceneProject } from '../../splat-engine/project.ts'

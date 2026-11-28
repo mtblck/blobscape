@@ -92,7 +92,7 @@ export const DOORS = [
 ] as const
 
 /** Ids of the experiments (site.ts) drawn by the engine: each links here, and this page lists them. */
-export const ENGINE_BUILT: readonly string[] = ['bouquet', 'fourways', 'daynight', 'pond', 'brush', 'flow', 'shift', 'diorama', 'scan', 'dungeon', 'clockwork', 'forest', 'creature']
+export const ENGINE_BUILT: readonly string[] = ['jelly', 'lava', 'bouquet', 'fourways', 'daynight', 'pond', 'brush', 'flow', 'shift', 'diorama', 'scan', 'dungeon', 'clockwork', 'forest', 'creature']
 
 /** The link an engine experiment's page carries. */
 export const BUILT_ON = 'Built on the Blobscape engine'

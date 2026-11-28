@@ -1,0 +1,14 @@
+{
+  "inkLook": 1,
+  "label": "Stipple",
+  "look": {
+    "tone": {
+      "preset": "stipple",
+      "cutoff": 0.2,
+      "stops": [[0, "#000000"], [0.22, "#176bfa"], [0.8, "#ff8d27"], [1, "#fff1cd"]],
+      "pattern": "blue-noise",
+      "seed": 17,
+      "amount": 0.85
+    }
+  }
+}

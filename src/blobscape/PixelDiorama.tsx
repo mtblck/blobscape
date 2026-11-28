@@ -16,7 +16,7 @@ import { ZoomBar, beginOrbitDrag, dragOrbit, orbitKey, useWheelZoom, type OrbitD
 import { href } from './routes.ts'
 import type { CreatureStage } from './creature/stage.ts'
 import { TAB_SECTIONS, ViewPopup, Workbench } from '../shared/Workbench.tsx'
-import { DETAIL, PALETTES } from './diorama/scene.ts'
+import { DETAIL, FULL_COLOR, PALETTES } from './diorama/scene.ts'
 import { DIORAMAS, described, sceneOf, type Diorama } from './diorama/scenes.ts'
 import { SceneDetails, kilobytes, type SceneFacts } from './diorama/SceneDetails.tsx'
 import type { Skeleton } from '../splat-engine/rig.ts'
@@ -32,9 +32,11 @@ import { DEFAULT_STYLE, isPixelStyle, styleAsked, styleWords, type Style } from 
 import { GLITCH_START, glitchLook, type GlitchChoice } from './glitchLooks.ts'
 import { StyleControls, FinishControls } from './StyleControls.tsx'
 import { TimeControls, WeatherControls } from './styles/SceneControls.tsx'
-import { drawnStart, sceneStart, type DrawnSettings, type SceneSettings } from './styles/catalog.ts'
-import { detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
+import { CATALOG, GLITCH_DEF, drawnFrom, drawnStart, keysOf, sceneStart, settingsFrom, type DrawnSettings, type SceneSettings } from './styles/catalog.ts'
+import { PIXEL_RATES, PIXEL_SIZES, detailStart, pixelCelLook, pixelFlags, pixelFor, pixelLookOf, pixelSizeAt, pixelStart, pixelZoomAsked, type PixelSettings } from './styleSettings.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
+import { ShareDialog } from './diorama/ShareDialog.tsx'
+import { choiceEntries, choiceFrom, linkWith, orbitFrom, orbitText, type Entry } from './diorama/shareLink.ts'
 import { useDrawnLook, useHeld, wantsPlain } from './drawnLook.tsx'
 import { timeOf, type TimeId } from './timeOfDay.ts'
 import { SkyEase, gloomy, isClear, skyState, windAt, type CloudId, type WeatherId, type WindId } from '../splat-engine/skyRecipes.ts'
@@ -56,7 +58,7 @@ import { recordClip, writeRiggedMeshGlb } from '../splat-engine/glb.ts'
 import { Skeleton as Bones } from '../splat-engine/rig.ts'
 
 declare global {
-  interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; style: Style; water: () => SceneWater | undefined; mirrored: boolean; finish: (set: { bands?: number; heat?: number; selout?: boolean; exact?: boolean }) => void } }
+  interface Window { __diorama?: { stage: CreatureStage; blobs: () => number; bones: () => number; look: () => PixelLook; style: Style; water: () => SceneWater | undefined; mirrored: boolean; finish: (set: { bands?: number; heat?: number; selout?: boolean; exact?: boolean }) => void; picture: (w: number, h: number) => ImageData | undefined } }
 }
 
 /** The view `orbit`, rocked `swing` degrees to either side once every `loop` seconds, as it is at `t`. */
@@ -75,6 +77,10 @@ const KEEP_EVERY = 250
 /** What one blob holds: a center, three sizes, a facing, a color and an opacity, each number four bytes. */
 const BLOB_BYTES = (3 + 3 + 4 + 3 + 1) * 4
 
+/** The drawn looks' settings, each under its catalog name in a shared link (`cel.turn=`, `blocks.size=` …). */
+const DRAWN_KEYS = (Object.keys(CATALOG) as (keyof typeof CATALOG)[]).filter((k): k is keyof DrawnSettings => k !== 'pixel' && k !== 'glitch')
+/** Every short address the catalog reads (`?px=`, `?block=`, `?tones=` …), which a shared link drops for the full forms. */
+const SHORT_KEYS = [...new Set(Object.values(CATALOG).flatMap((d) => (d.settings as readonly { address?: string }[]).flatMap((x) => (x.address ? [x.address] : []))))]
 
 /** Where the eye is for a view. */
 const eyeOf = (o: Orbit): [number, number, number] => { const a = (o.azimuth * Math.PI) / 180, e = (o.elevation * Math.PI) / 180; return [o.target[0] + o.distance * Math.sin(a) * Math.cos(e), o.target[1] + o.distance * Math.sin(e), o.target[2] + o.distance * Math.cos(a) * Math.cos(e)] }
@@ -157,9 +163,13 @@ export function PixelDiorama() {
   const setChosen = (id: string) => setSceneSet((c) => ({ ...c, detail: id }))
   /** How the scene is drawn: as pixel art, or as one of Brush and Ink's looks. `?style=oil` opens on that one. */
   const [style, setStyle] = useState<Style>(() => { const q = new URLSearchParams(location.search); return styleAsked(q.get('style'), q.get('chars')) })
-  const [glitch, setGlitch] = useState<GlitchChoice>(GLITCH_START)
+  // a shared link gives each style's settings in full (`glitch.strength=`, `cel.turn=`, `blocks.size=` …), read through the catalog
+  const [glitch, setGlitch] = useState<GlitchChoice>(() => settingsFrom(GLITCH_DEF, GLITCH_START, choiceFrom('glitch', GLITCH_START, new URLSearchParams(location.search))))
   // every other style's settings (styles/catalog.ts): the page holds them, as it holds pixel art's
-  const drawnKept = useState<DrawnSettings>(() => drawnStart(new URLSearchParams(location.search), { coarse }))
+  const drawnKept = useState<DrawnSettings>(() => {
+    const q = new URLSearchParams(location.search), start = drawnStart(q, { coarse })
+    return drawnFrom(start, Object.fromEntries(DRAWN_KEYS.map((k) => [k, choiceFrom(k, start[k], q)])))
+  })
   /**
    * Light worked out a pixel at a time (`?shade=1`): pixel art made from a picture cel shading lit, so light and shade
    * fall in bands that follow each form, not blob by blob as the baked light does.
@@ -168,7 +178,18 @@ export function PixelDiorama() {
    * Pixel art's settings and the finish (styleSettings.ts, shared with Scene Creator): the scene's own finish unless
    * the address says (`?px=`, `?glow=`, `?texel=`, `?shade=1`, `?steps=`, `?heat=`, …).
    */
-  const [fin, setFin] = useState<PixelSettings>(() => pixelStart(diorama.finish, new URLSearchParams(location.search)))
+  const [fin, setFin] = useState<PixelSettings>(() => {
+    // a shared link gives every setting in full (`pixel.dither=` …), over the short keys `pixelStart` reads
+    const q = new URLSearchParams(location.search), start = pixelStart(diorama.finish, q), c = { ...start, ...choiceFrom('pixel', start, q) }
+    return {
+      ...c,
+      palette: c.palette === 'own' || PALETTES.some((p) => p.id === c.palette) ? c.palette : 'none',
+      size: PIXEL_SIZES.includes(c.size) ? c.size : start.size,
+      rate: PIXEL_RATES.includes(c.rate) ? c.rate : start.rate,
+      dither: Math.max(0, Math.min(1, c.dither)),
+      glow: Math.max(0, Math.min(4, c.glow)),
+    }
+  })
   const setPixel = useCallback((change: Partial<PixelSettings>) => setFin((f) => ({ ...f, ...change })), [])
   const { palette, texel, glow, outline, rock, steps, rate, exact, shade: shaded } = fin
   /** Switches only the address turns off (`?steady=0`, `?calm=0`, …). */
@@ -182,8 +203,12 @@ export function PixelDiorama() {
   /** Glow as the poser reads it: it scales the light the scene's lamps and fires cast, as well as the shine round bright pixels. */
   const glowNow = useRef(glow)
   glowNow.current = glow
-  const [view, setView] = useState(diorama.views[0].id)
-  const [orbit, setOrbit] = useState<Orbit>(diorama.views[0].orbit)
+  // the view as a shared link gives it: one of the scene's views, turned and zoomed from there (`?view=`, `?orbit=`)
+  const [view, setView] = useState(() => diorama.views.find((v) => v.id === new URLSearchParams(location.search).get('view'))?.id ?? diorama.views[0].id)
+  const [orbit, setOrbit] = useState<Orbit>(() => {
+    const o = orbitFrom(new URLSearchParams(location.search).get('orbit'))
+    return o ? { ...o, target: [...o.target] } : (diorama.views.find((v) => v.id === view) ?? diorama.views[0]).orbit
+  })
   const [art, setArt] = useState<{ width: number; height: number }>()
   /** The 3D model export: blocks on the scene's grid (and how many grid cells a block is) or a smooth surface. */
   const [modelShape, setModelShape] = useState<'blocks' | 'smooth'>('blocks')
@@ -261,7 +286,7 @@ export function PixelDiorama() {
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => {
         t = setTimeout(() => {
-          if (!settled) setPixel({ palette: 'own', steps: diorama.finish.steps })
+          if (!settled) setPixel({ palette: 'none', steps: diorama.finish.steps })
           // a scene with water works one loop of its ripples out here too, while the waiting mark shows
           diorama.water?.()
           // and one with a fire burning, one loop of that
@@ -299,8 +324,8 @@ export function PixelDiorama() {
     return () => { gone = true; live?.dispose() }
   }, [offscreen, webgl])
 
-  // the scene's own palette first, then the shared ones
-  const palettes = useMemo(() => [{ id: 'own', ...shown.palette, colors: withEffect(paletteUnder(shown.palette.colors, shown.sky, skyState(weather, clouds, wind)), skyEffect) }, ...PALETTES.slice(1)], [shown, weather, clouds, wind, skyEffect])
+  // full color first (the default, Matt 2026-11-28), then the scene's own palette, then the shared ones
+  const palettes = useMemo(() => [FULL_COLOR, { id: 'own', ...shown.palette, colors: withEffect(paletteUnder(shown.palette.colors, shown.sky, skyState(weather, clouds, wind)), skyEffect) }, ...PALETTES.slice(1).filter((p) => p !== FULL_COLOR)], [shown, weather, clouds, wind, skyEffect])
   const picked = palettes.find((p) => p.id === palette) ?? palettes[0]
   const colors = picked.colors
   /** How it's made: which step of the walk-through is showing, or none. */
@@ -313,7 +338,7 @@ export function PixelDiorama() {
   const closeTour = () => { setTour(null); setStyle(styleBefore.current); requestAnimationFrame(() => tourOpener.current?.focus()) }
   // a step of the walk-through says how the scene is drawn, whatever the switch says
   const asPixels = touring ? touring.pixels : pixels
-  const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
+  const look = useMemo<PixelLook>(() => pixelLookOf(fin, { colors: colors.length ? colors : palettes[1].colors, sky: shown.sky, skyForced: !!shown.at || weathered, finish: shown.finish, sun: shown.sun, start: shown.views[0].orbit, loop: shown.loop }, flags), [fin, colors, shown, weathered, flags])
 
   // a new level of detail keeps the moment it was showing
   useEffect(() => {
@@ -547,6 +572,27 @@ export function PixelDiorama() {
   // back costs a little, so it is measured every few seconds, not every frame, and not while the tab is hidden
   const [png, setPng] = useState<{ bytes: number; used: number }>()
   const [details, setDetails] = useState(false)
+  /** The link the Share dialog offers, made as it opens: every setting changed from how the page starts. */
+  const [sharing, setSharing] = useState<string>()
+  const shareLink = () => {
+    const px = isPixelStyle(style), first = shown.views[0], at = shown.views.find((v) => v.id === view) ?? first
+    // pixel art's settings as the scene starts them; with another style only glow, rocking and the exact sort still count
+    const start = pixelStart(shown.finish)
+    // each drawn look's settings as a bare address starts them; the blocks' sun stands at the time of day's height
+    const bare = drawnStart(new URLSearchParams(), { coarse }), drawn = drawnKept[0], used = keysOf(style)
+    bare.blocks = { ...bare.blocks, height: timeNow?.height ?? bare.blocks.height }
+    const e: Entry[] = [
+      // the short forms the catalog reads (`?px=`, `?block=`, `?tones=` …): the link gives every setting in full instead
+      ...SHORT_KEYS.map((k) => [k, undefined] as const),
+      ...choiceEntries('pixel', fin, px ? start : { ...fin, glow: start.glow, rock: start.rock, exact: start.exact }),
+      ...choiceEntries('glitch', glitch, style === 'glitch' ? GLITCH_START : glitch),
+      // only the drawn look on show: another's settings would only lengthen the link
+      ...DRAWN_KEYS.flatMap((k) => choiceEntries(k, drawn[k], used.includes(k) ? bare[k] : drawn[k])),
+      ['view', at.id !== first.id ? at.id : undefined],
+      ['orbit', orbitText(orbit) !== orbitText(at.orbit) ? orbitText(orbit) : undefined],
+    ]
+    setSharing(linkWith(location.href, e))
+  }
   useEffect(() => {
     setPng(undefined)
     if (!stage || !scene || !pixels) return
@@ -579,7 +625,18 @@ export function PixelDiorama() {
     if (!stage || !scene) return
     window.__diorama = { stage, blobs: () => stage.blobCount, bones: () => scene.built.skeleton.count, look: () => look, style, water: () => scene.of.water?.(), mirrored,
       // what the Finish tab no longer shows, for verify: the art-pixel effects and the exact sort
-      finish: ({ bands: b, heat: hz, selout: so, exact: ex }) => setFin((f) => ({ ...f, ...(b !== undefined && { bands: b }), ...(hz !== undefined && { heat: hz }), ...(so !== undefined && { selout: so }), ...(ex !== undefined && { exact: ex }) })) }
+      finish: ({ bands: b, heat: hz, selout: so, exact: ex }) => setFin((f) => ({ ...f, ...(b !== undefined && { bands: b }), ...(hz !== undefined && { heat: hz }), ...(so !== undefined && { selout: so }), ...(ex !== undefined && { exact: ex }) })),
+      // for the loop recorder in a style other than pixel art: the view as Export draws it (an offscreen stage keeps its last frame on the page's canvas)
+      picture: (w, h) => {
+        const cv = canvas.current
+        if (!cv?.parentElement) return undefined
+        const sheet = document.createElement('canvas')
+        sheet.width = w
+        sheet.height = h
+        const ctx = sheet.getContext('2d', { alpha: false, willReadFrequently: true })!
+        paintView(ctx, cv.parentElement, w, h, (el) => el)
+        return ctx.getImageData(0, 0, w, h)
+      } }
     return () => { delete window.__diorama }
   }, [stage, scene, look, style, mirrored])
 
@@ -820,6 +877,7 @@ export function PixelDiorama() {
         </p>
       </header>
       {facts && <SceneDetails open={details} onClose={() => setDetails(false)} facts={facts} />}
+      <ShareDialog link={sharing} title={`${shown.label} on Blobscape`} note={model ? 'A model you opened stays on your device, so the link opens the first scene with these settings.' : undefined} onClose={() => setSharing(undefined)} />
       <Workbench
         viewLabel="The scene"
         fullTools={
@@ -828,6 +886,7 @@ export function PixelDiorama() {
             <div className="grid gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button small disabled={cantExport} onClick={record} data-testid="diorama-full-record">{exportLabel}</Button>
+                <Button small onClick={shareLink} data-testid="diorama-full-share">Share</Button>
                 <Button small disabled={cantExport} onClick={save}>{saving ? 'Saving…' : 'Save this frame'}</Button>
               </div>
               <p role="status" className="text-xs text-ink-faint empty:hidden">{exportNote}</p>
@@ -976,7 +1035,10 @@ export function PixelDiorama() {
           {
             id: 'export', label: 'Export', content: (
               <div className={TAB_SECTIONS}>
-                <p className="text-sm text-ink-muted">Saves the scene in the style it is drawn in now. A loop is drawn one frame at a time from start to end, so it joins up when it repeats and no frame is dropped, however slow the device.</p>
+                <div className="grid gap-2">
+                  <p className="text-sm text-ink-muted">Share a link to the scene with every setting you changed, or save it in the style it is drawn in now: a frame, the loop or a 3D model. A loop is drawn one frame at a time from start to end, so it joins up when it repeats and no frame is dropped, however slow the device.</p>
+                  <div><Button small onClick={shareLink} data-testid="diorama-share-open">Share</Button></div>
+                </div>
                 {exportChoices(false)}
                 <div className="grid gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">

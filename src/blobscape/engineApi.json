@@ -23,7 +23,7 @@
   {
    "id": "pixels",
    "title": "Pixels and sprites",
-   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, knitted, as blocks or glitching, and baking a creature into a sprite sheet."
+   "doc": "Drawing a stage as pixel art, as brush and ink marks, as characters, cel shaded, in neon, as stained glass, in watercolor, as a halftone print, knitted, for 3D glasses, as clay, a blueprint, a thermal camera, cut paper, a mosaic or an old television, as blocks or glitching, and baking a creature into a sprite sheet."
   },
   {
    "id": "styles",
@@ -38,7 +38,7 @@
   {
    "id": "extras",
    "title": "Picking, detail and edits",
-   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, a lens with glow and focus blur, and solid shapes to stand on."
+   "doc": "Finding what a tap hit, drawing fewer blobs far away, cutting and painting live, depth for effects after the draw, what a mirror shows, a lens with glow and focus blur, see-through blobs put in order where they cross, and solid shapes to stand on."
   },
   {
    "id": "files",
@@ -126,6 +126,24 @@
        "optional": true,
        "type": "number",
        "doc": "The side of its cubes while the stage draws blocks (`setBlocks`), where it was cut on a grid of its own; left out, the look's `cell`."
+      },
+      {
+       "name": "hole",
+       "optional": true,
+       "type": "BlockHole",
+       "doc": "While the stage draws blocks, the square (x and z, rest units) whose cubes are not drawn, where a finer cut is laid in (blocks.ts `BlockSource.hole`)."
+      },
+      {
+       "name": "keepCubes",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Its blobs never change in place, so while the stage draws blocks its cubes are made once and kept (blocks.ts `BlockSource.keepCubes`)."
+      },
+      {
+       "name": "far",
+       "optional": true,
+       "type": "boolean",
+       "doc": "As big as a world: while the stage draws blocks, its squares far away are drawn with cubes two or four times as big (blocks.ts `BlockSource.far`)."
       }
      ]
     },
@@ -191,6 +209,46 @@
        "optional": true,
        "type": "boolean",
        "doc": "Builds each world so cuts (`setEdits`) have a clean edge, tested per pixel (`setCleanCuts` turns it off and on)."
+      },
+      {
+       "name": "exactShapes",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Builds each world to draw blobs in their true shape on screen (`EngineOptions.exactShapes`; `setExactShapes` turns it off and on)."
+      },
+      {
+       "name": "peel",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Builds each world so see-through blobs can be put in order where they cross (`setPeel`; `EngineOptions.peel`)."
+      },
+      {
+       "name": "timer",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Asks the GPU to time its own work, so `gpuTimes` can say how long a frame takes on the GPU alone. Where the\nbrowser offers no timer (WebGL without `EXT_disjoint_timer_query_webgl2`, WebGPU without `timestamp-query`) it\ndoes nothing. Off by default: each pass then writes two timestamps."
+      }
+     ]
+    },
+    {
+     "name": "GpuTimes",
+     "kind": "interface",
+     "doc": "How long the GPU spent on one frame, in milliseconds (`Stage.gpuTimes`).",
+     "props": [
+      {
+       "name": "compute",
+       "type": "number",
+       "doc": "Compute passes: posing, projecting, sorting, lighting. WebGL has none, so 0 there."
+      },
+      {
+       "name": "render",
+       "type": "number",
+       "doc": "Render passes: drawing the blobs and every pass after them (pixel art, outlines, the lens)."
+      },
+      {
+       "name": "cpu",
+       "type": "number",
+       "doc": "The CPU's share: posing and handing the frame to the GPU (on WebGL, sorting too). The two overlap, so a frame takes about the larger of this and the GPU's."
       }
      ]
     },
@@ -251,7 +309,7 @@
       {
        "name": "blockCount",
        "readonly": true,
-       "type": "{ blocks: number; faces: number } | undefined",
+       "type": "{ blocks: number; faces: number; levels: number[] } | undefined",
        "doc": "How many cubes and faces are on show while the scene is drawn as blocks."
       },
       {
@@ -277,6 +335,12 @@
        "readonly": true,
        "type": "{ width: number; height: number } | undefined",
        "doc": "Pixel mode's art size in pixels, once a frame has been drawn."
+      },
+      {
+       "name": "timesGpu",
+       "readonly": true,
+       "type": "boolean",
+       "doc": "Whether `gpuTimes` can answer: the stage was started with `timer` and the browser lets the GPU time its work."
       }
      ],
      "methods": [
@@ -332,6 +396,15 @@
        "signatures": [
         {
          "code": "tint(paint?: (color: readonly [number, number, number], blob: number) => readonly number[]): void"
+        }
+       ]
+      },
+      {
+       "name": "setFarDetail",
+       "doc": "Level of detail by distance (lod.ts `FarRule`), kept for every world from now on: past `from` fewer blobs are drawn\nthe further off they are, each grown to cover for the rest, so a world as big as an island draws far ground with\nfewer, bigger blobs. Leave it out for every blob. The soft actors drawn among blocks keep every blob.",
+       "signatures": [
+        {
+         "code": "setFarDetail(rule?: FarRule): void"
         }
        ]
       },
@@ -489,6 +562,15 @@
        ]
       },
       {
+       "name": "setExactShapes",
+       "doc": "On a stage made with `exactShapes`: whether blobs are drawn in their true shape (the default) or flattened from their middles.",
+       "signatures": [
+        {
+         "code": "setExactShapes(on: boolean): void"
+        }
+       ]
+      },
+      {
        "name": "setCleanCuts",
        "doc": "On a stage made with `cleanCuts`: whether cuts have the clean edge (the default) or drop whole blobs.",
        "signatures": [
@@ -534,11 +616,38 @@
        ]
       },
       {
+       "name": "setHalftone",
+       "doc": "Halftone screen print (splat-core/halftone.ts): the picture printed in the look's few see-through inks, each as\ndots on its own turned screen fixed on the paper, the dots growing and running together where the picture is\ndark in that ink, the plates a little off true and the ink taking unevenly; the subject's sky is printed behind\nit, or the paper left bare. The paper covers the canvas. Every blob is drawn flat in its own color while it is\non, under the stage's own lights. Leave the look out to stop. Kept for the next actor too. Not in pixel mode;\nASCII, cel shading, neon, stained glass and watercolor come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setHalftone(look?: HalftoneLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setFilter",
+       "doc": "One of the looks laid over the whole picture (splat-core/filters.ts): a thermal camera, an old CRT or tape, a\nblueprint, a mosaic, paper cutouts or claymation. The look covers the canvas. The blueprint and paper cutouts draw\nevery blob flat in its own color with no lights; the thermal camera draws what gives its own light over white so\nit runs hot; claymation moves in held frames (`ClayLook.fps`) unless the stage holds its own. Leave the look out to\nstop. Kept for the next actor too. Not in pixel mode; the other looks come first if set, and outlines and the\nlens wait.",
+       "signatures": [
+        {
+         "code": "setFilter(look?: FilterLook): void"
+        }
+       ]
+      },
+      {
        "name": "setKnit",
        "doc": "Knitting (splat-core/knit.ts): the picture as a sweater, a grid of stitches fixed on the screen, each a V of\nyarn in the look's yarn nearest what it shows, with the sweater's own pattern of bands and snow dots knitted\nround the subject. The knitting covers the canvas. Every blob is drawn flat in its own color while it is on, with\nthe stage's lights put by, so it suits blobs in flat colors with no light baked into them. Leave the look out to\nstop. Kept for the next actor too. Not in pixel mode; ASCII, cel shading, neon, stained glass and watercolor\ncome first if set, and outlines and the lens wait.",
        "signatures": [
         {
          "code": "setKnit(look?: KnitLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setAnaglyph",
+       "doc": "3D glasses (splat-core/anaglyph.ts): the frame drawn from a left and a right eye either side of the camera and\nlaid over each other in red and cyan, so that through red and cyan glasses the scene stands in depth. What the\nview looks at sits at the screen (unless the look's `pop` pushes the screen back), the backdrop behind it. The\nblobs are drawn as they are (marks, lights), sorted once for each eye. Leave the look out to stop. Kept for the\nnext actor too. Not in pixel mode; the other looks come first if set, and outlines and the lens wait.",
+       "signatures": [
+        {
+         "code": "setAnaglyph(look?: AnaglyphLook): void"
         }
        ]
       },
@@ -575,6 +684,15 @@
        "signatures": [
         {
          "code": "setLens(look?: OpticsLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setPeel",
+       "doc": "On a stage made with `peel`: takes the nearest `layers` blobs (1 to `MAX_PEEL`) off the front of each pixel one at\na time (peel.ts), so see-through blobs that cross are each in front on their own side; 0 stops. Everything that is\nnot blobs is drawn under them all. Costs a draw of the blobs a layer and one more. Not in pixel mode, and any\nother look comes first.",
+       "signatures": [
+        {
+         "code": "setPeel(layers: number): void"
         }
        ]
       },
@@ -714,6 +832,15 @@
        ]
       },
       {
+       "name": "gpuTimes",
+       "doc": "Poses and draws the frame as it stands `frames` times over and asks the GPU how long it spent: per frame, in\nmilliseconds. Unlike `timed`, the GPU's own clock, so the browser's late and wandering report of work done does\nnot come into it, and the time is split between compute and drawing. Null where the stage can't time the GPU\n(`timesGpu`): start it with `timer` and use `timed` as the fallback.",
+       "signatures": [
+        {
+         "code": "gpuTimes(frames?: number): Promise<GpuTimes | null>"
+        }
+       ]
+      },
+      {
        "name": "frame",
        "doc": "Offscreen only: draws the frame `t` seconds into the clip and copies it to the page.",
        "signatures": [
@@ -829,6 +956,18 @@
        "optional": true,
        "type": "number",
        "doc": "The side of its cubes while the stage draws blocks, where it was cut on a grid of its own; left out, the look's `cell`."
+      },
+      {
+       "name": "levels",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "Each blob's level of detail, a byte a blob (merge.ts `levelCode`), with `levelCell`: an actor made by `mergeLevels`\ncarries coarser copies of its blobs, and a blob is drawn only while its level suits its distance (`levelWeight`).\nLeft out, every blob is drawn at every distance."
+      },
+      {
+       "name": "levelCell",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of the grid the finest of `levels` was cut on, in the actor's own units."
       }
      ]
     },
@@ -884,6 +1023,18 @@
        "optional": true,
        "type": "boolean",
        "doc": "Cuts with a clean edge: a blob a cut passes through is kept and each of its pixels is tested against the cut,\nso the edge is the shape's own line and not a row of whole blobs. Costs the draw a test per pixel while there are\nedits; `cleanCuts` on the world turns it off and on again."
+      },
+      {
+       "name": "exactShapes",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Draws each blob in its true shape on screen (`exactShapes` on the world turns it off and on): each pixel is\nshaded by the most of the blob along its own line of sight, where otherwise a blob is flattened onto the screen\nas seen from its middle, which bends blobs close to the camera, large ones and ones seen at a slant out of shape.\nCosts the draw a little per pixel, the quads of close blobs some size, and on WebGPU the same two buffers clean\ncuts bind."
+      },
+      {
+       "name": "peel",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Lets `SplatPeel` (peel.ts) take the nearest blobs off the front of each pixel one at a time, so see-through blobs\nthat cross are each in front on their own side. Costs nothing until a peel draws; the world binds one more texture."
       }
      ]
     },
@@ -1119,6 +1270,21 @@
        "doc": "How dark what stands in a casting light's way makes it (`EngineOptions.shadowDensity`): a world made without lights has none."
       },
       {
+       "name": "peelMode",
+       "type": "number",
+       "doc": "Set by `SplatPeel` while it draws (0 when not): 1 keeps only each pixel's nearest blob behind the last layer, 2 lays all that lies behind it as usual. Needs a world made with `peel`."
+      },
+      {
+       "name": "peelFirst",
+       "type": "boolean",
+       "doc": "Set by `SplatPeel`: whether the layer being drawn is the first, with nothing in front of it."
+      },
+      {
+       "name": "exactShapes",
+       "type": "boolean",
+       "doc": "Whether blobs are drawn in their true shape now (`EngineOptions.exactShapes`). Only a world made with `exactShapes` can."
+      },
+      {
        "name": "cleanCuts",
        "type": "boolean",
        "doc": "Whether cuts have a clean edge now. Only a world made with `cleanCuts` can; setting it there switches between the clean edge and whole blobs."
@@ -1128,6 +1294,16 @@
        "readonly": true,
        "type": "number[]",
        "doc": "The share of each actor's blobs being drawn."
+      },
+      {
+       "name": "cull",
+       "type": "boolean",
+       "doc": "Whether blobs with nothing to draw (off screen, behind the camera or the clip plane, and on WebGPU also cut away\nor dropped by the level of detail) are left out of the sort and the draw, which leaves the picture as it was.\nOn by default; for comparing. The radix sort (`sort: 'radix'`) always sorts and draws every blob."
+      },
+      {
+       "name": "farDetail",
+       "type": "false | FarRule",
+       "doc": "Level of detail for blobs too small to see, blob by blob (lod.ts `FarRule`): where blobs would come under about\n`pixels` on screen, fewer are drawn the smaller they get, each grown to cover for the rest, so a world as big as\nan island draws its far ground with fewer, bigger blobs. On both backends, worked out where blobs are projected,\nso it follows the camera with no deform; on WebGPU a blob left out is left out of the sort and the draw, on WebGL\nit is drawn with no size. Off (false) unless asked for. Exact shapes and clean cuts read a blob's own covariance\nand do not see it grow."
       },
       {
        "name": "clip",
@@ -1181,6 +1357,24 @@
        "signatures": [
         {
          "code": "setEdits(edits: readonly ShapeEdit[]): void"
+        }
+       ]
+      },
+      {
+       "name": "buildFor",
+       "doc": "Builds the draw's shaders for the renderer's backend now, rather than as the world is first drawn: for a pass that draws it with a material of its own made from them (`SplatPeel`).",
+       "signatures": [
+        {
+         "code": "buildFor(renderer: Renderer): void"
+        }
+       ]
+      },
+      {
+       "name": "peelBehind",
+       "doc": "Set by `SplatPeel`: the depth of the layer before, which this layer lies behind.",
+       "signatures": [
+        {
+         "code": "peelBehind(depth: DepthTexture): void"
         }
        ]
       },
@@ -1240,10 +1434,10 @@
       },
       {
        "name": "posedBox",
-       "doc": "The box that holds every blob as the bones stand now, in the world: closer than `bounds`, which is a ball round\nthe bones' reaches. What a light's view of the scene is fitted to.",
+       "doc": "The box that holds every blob as the bones stand now, in the world: closer than `bounds`, which is a ball round\nthe bones' reaches. What a light's view of the scene is fitted to. With `subject`, only the first actor's, leaving\nout its loose things in the air (bones named `~…`: the sky's sun, moon and stars, specks): the box a blueprint's\ndimension lines are drawn round.",
        "signatures": [
         {
-         "code": "posedBox(): { lo: [number, number, number]; hi: [number, number, number] }"
+         "code": "posedBox(subject?: boolean): { lo: [number, number, number]; hi: [number, number, number] }"
         }
        ]
       },
@@ -1297,7 +1491,7 @@
        "doc": "Reads the sorted order back from the GPU and counts what is wrong with it: blobs missing, out of order, or in\nbins left unsettled. For tests.",
        "signatures": [
         {
-         "code": "checkSort(renderer: Renderer): Promise<{ missing: number; outOfOrder: number; unsettled: number; biggest: number }>"
+         "code": "checkSort(renderer: Renderer): Promise<{ missing: number; outOfOrder: number; unsettled: number; biggest: number; culled: number }>"
         }
        ]
       },
@@ -1311,6 +1505,12 @@
        ]
       }
      ]
+    },
+    {
+     "name": "PEEL_GAP",
+     "kind": "const",
+     "doc": "How far behind the last layer's depth (in the depth buffer's 0 to 1) a pixel must be to be in the next: past the same blob, and past rounding.",
+     "type": "1e-7"
     }
    ]
   },
@@ -3208,6 +3408,12 @@
        "optional": true,
        "type": "Uint8Array<ArrayBufferLike>",
        "doc": "Blobs of a face laid over another part (voxel.ts `laid`: a pane on its frame), a byte a blob: drawn as blocks, a cell takes their color before the color of what they lie on."
+      },
+      {
+       "name": "grid",
+       "optional": true,
+       "type": "number",
+       "doc": "The side of the grid it was cut on (voxel.ts), so a look that snaps blobs to cells (Blocks) snaps them to the same grid."
       }
      ]
     },
@@ -10691,6 +10897,12 @@
        "doc": "The colors every pixel snaps to; empty keeps the scene's own colors."
       },
       {
+       "name": "base",
+       "optional": true,
+       "type": "number",
+       "doc": "How many of `palette`'s colors are the palette's own, the rest being its ramp (`rampPalette`): the sky snaps to\nthese only, so its gradient dithers between the colors it was painted with. All of them when left out."
+      },
+      {
        "name": "dither",
        "type": "number",
        "doc": "0..1, as for `quantize`."
@@ -10752,6 +10964,12 @@
        "optional": true,
        "type": "number",
        "doc": "Steady pixels: a pixel keeps the palette color it had in the frame before unless another is closer by more than this (an OKLab distance; 0 or left out is off).\nWithout it, a pixel that sits between two colors flips back and forth as lights flicker and the view turns."
+      },
+      {
+       "name": "levels",
+       "optional": true,
+       "type": "number",
+       "doc": "Full color (a look with no palette): each channel is rounded to this many even steps instead of snapped to a\npalette, so neighbors of one shade are one color and the cleanup and steady pixels still have colors to match;\ndither checkers between two steps. Left out, a look with no palette passes colors through as drawn."
       },
       {
        "name": "tidy",
@@ -12199,7 +12417,7 @@
     {
      "name": "BlockView",
      "kind": "class",
-     "doc": "A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes\nnever bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it\nis and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line\nround each face. A surface that moves by itself (an actor with `flows`: a pond) is columns whose tops follow its\nblobs (`reshape` after they change), drawn after the cubes and as see-through as its blobs are. It draws into a target with four samples a pixel and copies that out, since a cube's edges want\nsmoothing that soft blobs never did.",
+     "doc": "A scene drawn as blocks (blocks.ts): one mesh for each bone that carries cubes, moved by that bone whole, so cubes\nnever bend. The look's own light is in the corners already; this adds the stage's lamps to each face by where it\nis and which way it faces now, keeps a block that gives its own light at its own color, and draws a thin line\nround each face. A surface that moves by itself (an actor with `flows`: a pond) is columns whose tops follow its\nblobs (`reshape` after they change), drawn after the cubes and as see-through as its blobs are. It draws into a target with four samples a pixel and copies that out, since a cube's edges want\nsmoothing that soft blobs never did. An actor as big as a world (`far`) is cut into squares at each of its levels,\nand each frame every square is drawn at the level its distance asks for (`farLevel`).",
      "extends": [
       "Group"
      ],
@@ -12254,6 +12472,15 @@
        "signatures": [
         {
          "code": "pose(): void"
+        }
+       ]
+      },
+      {
+       "name": "levels",
+       "doc": "How many of a far actor's squares are drawn at each level now: its own cubes first.",
+       "signatures": [
+        {
+         "code": "levels(): number[]"
         }
        ]
       },
@@ -12466,6 +12693,47 @@
        "optional": true,
        "type": "number",
        "doc": "The side of this source's blocks, where it was cut on a grid of its own (a finer cut of the place underfoot); left out, the look's `cell`."
+      },
+      {
+       "name": "hole",
+       "optional": true,
+       "type": "BlockHole",
+       "doc": "Cubes whose middles stand in this square (x and z, in the source's rest units) are not drawn: where a finer cut of\nthe same ground is laid in their place (a patch round the place looked at). The cubes are still made, and nothing\nelse changes, so moving the square only picks other faces to draw (`holed`)."
+      },
+      {
+       "name": "keepCubes",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Its blobs never change in place, so its cubes are kept with them and made once (`keptBlocks`): a stage that makes\nits cubes again for a new actor beside it (a patch moved underfoot) takes these as they were, not over a second's\nwork again. A source whose colors are changed in place (weather shaded under the sky) must leave it out."
+      },
+      {
+       "name": "far",
+       "optional": true,
+       "type": "boolean",
+       "doc": "A source as big as a world (an island a hundred and fifty meters across): its cubes are also made twice and four\ntimes as big (`FAR_LEVELS`), every level cut into the same squares (`farChunk`), and a square far enough away\nthat its own cubes would come under `FAR_BLOCK` pixels on screen is drawn with the bigger ones (`farLevel`), so\nthe far side of it costs a fraction of its faces. Each square keeps the faces along its edges (`walls`), so\nsquares of different sizes beside each other leave no slit between them."
+      },
+      {
+       "name": "walls",
+       "optional": true,
+       "type": "number",
+       "doc": "Faces between two cubes in different squares of this size (x and z, the source's rest units, from the origin)\nare kept, so each square is closed on its sides: what a far source's levels are made with (`farChunk`)."
+      }
+     ]
+    },
+    {
+     "name": "BlockHole",
+     "kind": "interface",
+     "doc": "A square of ground, x and z, in a source's rest units.",
+     "props": [
+      {
+       "name": "min",
+       "type": "readonly [number, number]",
+       "doc": "Its least x and z."
+      },
+      {
+       "name": "max",
+       "type": "readonly [number, number]",
+       "doc": "Its most x and z."
       }
      ]
     },
@@ -12584,6 +12852,107 @@
      "signatures": [
       {
        "code": "buildBlocks(sources: readonly BlockSource[], look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] }"
+      }
+     ]
+    },
+    {
+     "name": "holed",
+     "kind": "function",
+     "doc": "A piece's triangles, leaving out every face of a cube whose middle stands in `hole`: all of them when there is none.",
+     "signatures": [
+      {
+       "code": "holed(piece: BlockPiece, hole?: BlockHole): Uint32Array"
+      }
+     ]
+    },
+    {
+     "name": "keptBlocks",
+     "kind": "function",
+     "doc": "One source's cubes (`buildBlocks` of it alone, which gives the same cubes as among others, since no source shades or\njoins another), kept with its blobs when it says they never change (`keepCubes`) and asked for again with the same\nlook (its ambient aside), the same grid and the same skin, glow and lamps.",
+     "signatures": [
+      {
+       "code": "keptBlocks(source: BlockSource, look: BlockLook): { pieces: BlockPiece[]; blocks: number; faces: number; solids: SolidCells[] }"
+      }
+     ]
+    },
+    {
+     "name": "FAR_LEVELS",
+     "kind": "const",
+     "doc": "How many levels of bigger cubes a far source (`BlockSource.far`) has beside its own: twice and four times as big.",
+     "type": "2"
+    },
+    {
+     "name": "FAR_BLOCK",
+     "kind": "const",
+     "doc": "A square of a far source whose cubes would be drawn smaller than this many device pixels across takes the next bigger cubes, where there are any.",
+     "type": "1.5"
+    },
+    {
+     "name": "FAR_CHUNK",
+     "kind": "const",
+     "doc": "How many of a far source's biggest cubes a square is across.",
+     "type": "16"
+    },
+    {
+     "name": "FAR_HOLD",
+     "kind": "const",
+     "doc": "How far past `FAR_BLOCK`, as a share of it, a square's cubes must come before it changes level again, so a square at the line does not flicker between two.",
+     "type": "0.15"
+    },
+    {
+     "name": "farChunk",
+     "kind": "function",
+     "doc": "The side of a far source's squares for its own cube side `cell` (x and z, rest units): `FAR_CHUNK` of its biggest cubes.",
+     "signatures": [
+      {
+       "code": "farChunk(cell: number): number"
+      }
+     ]
+    },
+    {
+     "name": "farLevel",
+     "kind": "function",
+     "doc": "Which level a square of a far source is drawn at (0 its own cubes, 1 twice as big, up to `most`), for `px`, how many\npixels across its own cubes would be on screen, and `now`, the level it is drawn at: the first whose cubes come to\n`FAR_BLOCK` pixels, held within `FAR_HOLD` of the line either way.",
+     "signatures": [
+      {
+       "code": "farLevel(px: number, now: number, most?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "BlockChunk",
+     "kind": "interface",
+     "doc": "The faces of one square of a piece: their triangles, and the middle and reach (half the box's diagonal) of their corners, in the rest pose.",
+     "props": [
+      {
+       "name": "key",
+       "type": "string",
+       "doc": "The square, as its place along x and z in squares (`\"x,z\"`), the same for every level of one source."
+      },
+      {
+       "name": "indices",
+       "type": "Uint32Array",
+       "doc": "Three corners a triangle."
+      },
+      {
+       "name": "middle",
+       "type": "[number, number, number]",
+       "doc": "The middle of its corners' box."
+      },
+      {
+       "name": "reach",
+       "type": "number",
+       "doc": "Half that box's diagonal."
+      }
+     ]
+    },
+    {
+     "name": "chunkFaces",
+     "kind": "function",
+     "doc": "Cuts a piece's triangles (`indices`, as `holed` leaves them) into squares of side `chunk` from the origin (x and z),\nby each face's cube (a loose speck's by its own corners), so every face is in exactly one.",
+     "signatures": [
+      {
+       "code": "chunkFaces(piece: BlockPiece, indices: Uint32Array, chunk: number): BlockChunk[]"
       }
      ]
     },
@@ -13250,6 +13619,1351 @@
    ]
   },
   {
+   "id": "halftonePass",
+   "title": "Halftone print",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "HalftonePass",
+     "kind": "class",
+     "doc": "Halftone screen print (splat-core/halftone.ts is the CPU twin: change one, change both). The frame is drawn once,\nevery blob flat in its own color under the stage's lights. A small pass then works out every cell of every ink's\nscreen (a texel a cell, one block of rows an ink): the picture read round the cell's middle, over the sky or the\npaper, separated into the inks (`separate`), keeping that ink's share. A second pass prints: each pixel finds its\ncell on each ink's turned screen, cuts that cell's dot to its share (`dotCover`) and lays the inks over the paper\n(`printed`). The print covers the canvas.\n\nThe world should be drawing flat marks (`Stage.setHalftone` sets them).",
+     "ctor": [
+      {
+       "code": "new HalftonePass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture: every blob flat in its own color."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, and how many device pixels a CSS pixel is.",
+       "signatures": [
+        {
+         "code": "setLook(look: HalftoneLook, ratio: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Prints the scene in halftone into the renderer's current target, or onto the screen when it has none.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "halftone",
+   "title": "Halftone print: the arithmetic",
+   "group": "pixels",
+   "doc": "Halftone screen print (Matt asked for our own, 2026-11-25): the picture printed in a few inks, each laid through\nits own screen of dots. A screen is a grid of cells fixed on the paper (so on the screen), turned to the ink's own\nangle; each cell holds one dot whose area is how much of that ink the picture wants there, read at the cell's\nmiddle, so a light place is small dots and a dark one dots that run together into a field with small holes. Inks\nare see-through and print over one another, so where dots of two inks overlap the paper shows through both. Each\nink's plate can sit a little off the others (misregistration), and the ink takes unevenly. The arithmetic here is\npure; `splat-engine/halftonePass.ts` is its shader twin (change both).",
+   "entries": [
+    {
+     "name": "Rgb01",
+     "kind": "type",
+     "doc": "An sRGB color, 0–1.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "HalftoneInk",
+     "kind": "interface",
+     "doc": "One ink and its screen.",
+     "props": [
+      {
+       "name": "color",
+       "type": "Rgb01",
+       "doc": "The ink's color as printed full on white paper (sRGB 0–1)."
+      },
+      {
+       "name": "angle",
+       "type": "number",
+       "doc": "The screen's angle, in degrees."
+      },
+      {
+       "name": "key",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The key ink (black): it takes over the gray the other inks share, as a printer's black does (one a set, at most)."
+      }
+     ]
+    },
+    {
+     "name": "HalftoneLook",
+     "kind": "interface",
+     "doc": "How a stage prints in halftone (`Stage.setHalftone`).",
+     "props": [
+      {
+       "name": "inks",
+       "type": "readonly HalftoneInk[]",
+       "doc": "The inks, printed in this order; at most `HALFTONE_INKS`."
+      },
+      {
+       "name": "paper",
+       "optional": true,
+       "type": "Rgb01",
+       "doc": "The paper (sRGB 0–1)."
+      },
+      {
+       "name": "cell",
+       "optional": true,
+       "type": "number",
+       "doc": "A cell of the screen, in CSS pixels (7)."
+      },
+      {
+       "name": "shift",
+       "optional": true,
+       "type": "number",
+       "doc": "How far each plate sits off true, in CSS pixels (1)."
+      },
+      {
+       "name": "texture",
+       "optional": true,
+       "type": "number",
+       "doc": "How unevenly the ink takes, 0 to 1 (0.4)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "readonly [Rgb01, Rgb01]",
+       "doc": "The sky printed behind the subject, top and bottom (sRGB 0–1). Left out, the paper is bare there."
+      }
+     ]
+    },
+    {
+     "name": "HALFTONE_INKS",
+     "kind": "const",
+     "doc": "The most inks a print has.",
+     "type": "4"
+    },
+    {
+     "name": "HALFTONE_PAPER",
+     "kind": "const",
+     "doc": "The paper (sRGB 0–1): a bright white with a little warmth.",
+     "type": "Rgb01"
+    },
+    {
+     "name": "SEPARATE_PASSES",
+     "kind": "const",
+     "doc": "How many times the separation goes round the inks.",
+     "type": "8"
+    },
+    {
+     "name": "KEY_TAKES",
+     "kind": "const",
+     "doc": "How much of the gray the colored inks share a key ink (black) takes over (`separate`).",
+     "type": "0.9"
+    },
+    {
+     "name": "KEY_FROM",
+     "kind": "const",
+     "doc": "Black starts only past this much gray, as a printer's skeleton black: small black dots in a light gray read as\ndirt, so the lightest grays stay in the colored inks.",
+     "type": "0.3"
+    },
+    {
+     "name": "SPOT_FIT",
+     "kind": "const",
+     "doc": "The dot's spot function is (cos 2πu + cos 2πv) / 2 over a cell (u, v from -½ to ½ about its middle): round dots\nwhen small, a checkerboard at half, round holes when large. These turn a dot's area into the level the spot\nfunction is cut at, as an odd polynomial in 1 − 2·area (fitted to the spot's own areas, within 0.7%).",
+     "type": "readonly number[]"
+    },
+    {
+     "name": "SHIFT_WAYS",
+     "kind": "const",
+     "doc": "Each plate's direction off true, by its place in the print (radians): spread so no two lie the same way.",
+     "type": "readonly number[]"
+    },
+    {
+     "name": "INK_GRAIN",
+     "kind": "const",
+     "doc": "How wide a patch of unevenly taken ink is, in CSS pixels.",
+     "type": "6"
+    },
+    {
+     "name": "INK_UNEVEN",
+     "kind": "const",
+     "doc": "How much darker or lighter ink takes from place to place at full texture.",
+     "type": "0.35"
+    },
+    {
+     "name": "inkLinear",
+     "kind": "const",
+     "doc": "An ink's color in linear light.",
+     "type": "(c: Rgb01) => [number, number, number]"
+    },
+    {
+     "name": "separate",
+     "kind": "function",
+     "doc": "How much of each ink a color wants (each 0 to 1), for a print on `paper` (both linear). Dots of inks on different\nscreens fall over one another as if at random, so a place with shares a of each ink reflects, on average,\npaper · Π (1 − aᵢ·(1 − inkᵢ)) in each channel. The shares are found ink by ink with the others held, each step a\nGauss–Newton step on the error in log light, again and again. A `key` ink (black) is left out at first; then it\ntakes `KEY_TAKES` of the gray the other inks have in common (the least of their shares) past `KEY_FROM`, as a\nprinter replaces three inks' gray with black, and the others are found again round it. Let in at the start, black took the dark\nchannel of every color and greens came out gray.",
+     "signatures": [
+      {
+       "code": "separate(color: readonly number[], paper: readonly number[], inks: readonly (readonly number[])[], key?: number): number[]"
+      }
+     ]
+    },
+    {
+     "name": "spotLevel",
+     "kind": "function",
+     "doc": "The level the spot function is cut at for a dot of this area (0 to 1): 1 for none, −1 for a full field.",
+     "signatures": [
+      {
+       "code": "spotLevel(area: number): number"
+      }
+     ]
+    },
+    {
+     "name": "spotAt",
+     "kind": "const",
+     "doc": "The spot function at a place in a cell (u, v from -½ to ½ about its middle).",
+     "type": "(u: number, v: number) => number"
+    },
+    {
+     "name": "screenAt",
+     "kind": "function",
+     "doc": "Where a point of the paper (in device pixels) falls on a plate's screen: which cell (counted from the one at the\nscreen's turning point, `about`), the cell's middle on the paper, and the point's place in its cell. `cell` is in\ndevice pixels, `angle` in degrees, `off` where the plate sits off true. Screens turn about the picture's middle.",
+     "signatures": [
+      {
+       "code": "screenAt(x: number, y: number, cell: number, angle: number, off?: readonly [number, number], about?: readonly [number, number]): { at: [number, number]; mid: [number, number]; u: number; v: number }"
+      }
+     ]
+    },
+    {
+     "name": "CELL_TAPS",
+     "kind": "const",
+     "doc": "Where a cell's color is read, round its middle, along the screen's own two ways: shares of a cell (the middle and four more).",
+     "type": "readonly [number, number][]"
+    },
+    {
+     "name": "cellShare",
+     "kind": "function",
+     "doc": "How much of ink `i` a plate's cell holds: the picture read round the cell's middle (`mid`, device pixels; `t` from\n0 at the top to 1 at the bottom, for the sky), over the sky or the paper, separated into the look's inks.",
+     "signatures": [
+      {
+       "code": "cellShare(i: number, mid: readonly [number, number], angle: number, cell: number, height: number, picture: (x: number, y: number) => readonly number[], look: HalftoneLook): number"
+      }
+     ]
+    },
+    {
+     "name": "dotCover",
+     "kind": "function",
+     "doc": "How much of a pixel a dot of `area` covers at (u, v) in its cell, softened over one pixel (`soft`: a device pixel in cell units).",
+     "signatures": [
+      {
+       "code": "dotCover(u: number, v: number, area: number, soft: number): number"
+      }
+     ]
+    },
+    {
+     "name": "plateOff",
+     "kind": "const",
+     "doc": "Where plate `i` sits off true, in device pixels, for a look's `shift` in device pixels.",
+     "type": "(i: number, shift: number) => [number, number]"
+    },
+    {
+     "name": "printed",
+     "kind": "function",
+     "doc": "The paper with inks on it: `cover` is how much of the pixel each ink's dot covers, `thick` how heavily it took there (1 as printed). Linear in, linear out.",
+     "signatures": [
+      {
+       "code": "printed(paper: readonly number[], inks: readonly (readonly number[])[], cover: readonly number[], thick?: readonly number[]): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "inkNoise",
+     "kind": "function",
+     "doc": "A small, smooth noise over the paper (0 to 1), in CSS pixels, for how unevenly ink takes: the shader's twin.",
+     "signatures": [
+      {
+       "code": "inkNoise(x: number, y: number): number"
+      }
+     ]
+    },
+    {
+     "name": "halftoneAt",
+     "kind": "function",
+     "doc": "One device pixel of the print. `picture(x, y)` is the picture there, linear and premultiplied (r, g, b, a), with y\ncounted from the top; `width` and `height` are the picture's, `ratio` device pixels a CSS pixel.",
+     "signatures": [
+      {
+       "code": "halftoneAt(x: number, y: number, picture: (x: number, y: number) => readonly number[], width: number, height: number, look: HalftoneLook, ratio?: number): [number, number, number]"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "filterPass",
+   "title": "Claymation, blueprint, thermal, paper cutout, mosaic and CRT",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "FilterPass",
+     "kind": "class",
+     "doc": "The six looks laid over the whole picture (splat-core/filters.ts is the CPU twin: change one, change both): a\nthermal camera, an old CRT or tape, a blueprint, a mosaic, paper cutouts and claymation. The frame is drawn once\nas the world is set to draw it, and, where the look asks, a map of depth and one of parts with the same moved and\nsorted blobs (as outlines are, inkLines.ts); then one full-screen pass draws the look over the whole canvas.\n\n`Stage.setFilter` sets the world for each: the blueprint and paper cutouts draw flat marks with no lights; the\nthermal camera draws what gives its own light over white (`THERMAL_EMIT`), so it can tell a lamp from a pale thing;\nclaymation moves in held frames. The frame's camera must be a perspective camera.",
+     "ctor": [
+      {
+       "code": "new FilterPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "picture",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The picture, as the world draws it (half floats, so what glows can go over white)."
+      },
+      {
+       "name": "ids",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>",
+       "doc": "The map of parts, for the looks that want one."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look, and how many device pixels a CSS pixel is; `size` is the scene's size in the world, `time` the stage's clock.",
+       "signatures": [
+        {
+         "code": "setLook(look: FilterLook, ratio: number, size: number, time: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the pass's targets, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene in the look into the renderer's current target, or onto the screen when it has none. `box` is the\nsubject's box in the world (the blueprint's dimension lines are drawn round it).",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera, box?: { lo: readonly number[]; hi: readonly number[] }): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "filters",
+   "title": "Six filter looks: the arithmetic",
+   "group": "pixels",
+   "doc": "Six looks laid over the whole picture (Matt picked them, 2026-11-25): a thermal camera, an old CRT or tape, a\nblueprint, a mosaic, paper cutouts and claymation. Each is drawn by `splat-engine/filterPass.ts` from the frame as\nthe blobs draw it (and, where a look asks, a map of depth and one of parts), one full-screen pass a look. The\narithmetic here is pure and is the shader's CPU twin: change one, change both.\n\nPlaces on the screen are device pixels with y counted down from the top; `ratio` is device pixels a CSS pixel, so\na look's sizes (lines, tiles, shadows) are the same size to the eye on every screen.",
+   "entries": [
+    {
+     "name": "Sky01",
+     "kind": "type",
+     "doc": "A sky, top and bottom (sRGB 0–1).",
+     "type": "readonly [Rgb01, Rgb01]"
+    },
+    {
+     "name": "fract",
+     "kind": "const",
+     "doc": "The fractional part.",
+     "type": "(v: number) => number"
+    },
+    {
+     "name": "hash2",
+     "kind": "const",
+     "doc": "A number from 0 to 1 for a place (the shader's `hash`; change both).",
+     "type": "(x: number, y: number) => number"
+    },
+    {
+     "name": "noise2",
+     "kind": "function",
+     "doc": "Smooth value noise from 0 to 1 over whole-number cells (the shader's `noise`; change both).",
+     "signatures": [
+      {
+       "code": "noise2(x: number, y: number): number"
+      }
+     ]
+    },
+    {
+     "name": "luma",
+     "kind": "const",
+     "doc": "A color's luminance (linear in, linear out).",
+     "type": "(c: readonly number[]) => number"
+    },
+    {
+     "name": "toLinear",
+     "kind": "const",
+     "doc": "sRGB 0–1 to linear light.",
+     "type": "(c: Rgb01) => [number, number, number]"
+    },
+    {
+     "name": "skyAt",
+     "kind": "const",
+     "doc": "The sky at `t`, from 0 at the top of the picture to 1 at the bottom (linear in, linear out).",
+     "type": "(top: readonly number[], bottom: readonly number[], t: number) => [number, number, number]"
+    },
+    {
+     "name": "Picture",
+     "kind": "type",
+     "doc": "A picture read at a device pixel: linear light, premultiplied (r, g, b, a).",
+     "type": "(x: number, y: number) => readonly number[]"
+    },
+    {
+     "name": "ThermalLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as a thermal camera sees it (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"thermal\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "ramp",
+       "type": "readonly Rgb01[]",
+       "doc": "The heat colors from cold to hot (sRGB 0–1), 2 to `THERMAL_STOPS` of them, evenly spread."
+      },
+      {
+       "name": "stepped",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Each heat takes the nearest of the ramp's colors, not a mix of two (a palette's colors stay its own)."
+      },
+      {
+       "name": "hot",
+       "optional": true,
+       "type": "number",
+       "doc": "How hot what gives its own light runs (a lamp, a fire, breath), 0 to 1.5 (1)."
+      },
+      {
+       "name": "spread",
+       "optional": true,
+       "type": "number",
+       "doc": "How far heat spreads round what gives its own light, in CSS pixels (20)."
+      },
+      {
+       "name": "warm",
+       "optional": true,
+       "type": "number",
+       "doc": "How warm lit things are, by how bright they are, 0 to 1 (0.8)."
+      },
+      {
+       "name": "noise",
+       "optional": true,
+       "type": "number",
+       "doc": "The sensor's grain, 0 to 1 (0.3)."
+      },
+      {
+       "name": "still",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The grain holds still (reduced motion, or a frame that must not change by the clock)."
+      }
+     ]
+    },
+    {
+     "name": "THERMAL_EMIT",
+     "kind": "const",
+     "doc": "What gives its own light is drawn this many times its color for the thermal camera, so it can be told from a pale thing (as neon's lamps).",
+     "type": "4"
+    },
+    {
+     "name": "THERMAL_STOPS",
+     "kind": "const",
+     "doc": "The most colors a heat ramp has.",
+     "type": "8"
+    },
+    {
+     "name": "THERMAL_TAPS",
+     "kind": "const",
+     "doc": "Where heat is looked for round each pixel, as shares of the look's spread (eight at the full reach, four at half).",
+     "type": "readonly [number, number][]"
+    },
+    {
+     "name": "THERMAL_SPREAD_GAIN",
+     "kind": "const",
+     "doc": "How much of what glows nearby a pixel takes as its own heat.",
+     "type": "0.6"
+    },
+    {
+     "name": "THERMAL_SKY",
+     "kind": "const",
+     "doc": "How hot the empty sky reads at its top and at the horizon.",
+     "type": "readonly [number, number]"
+    },
+    {
+     "name": "THERMAL_FPS",
+     "kind": "const",
+     "doc": "How often the grain changes, a second.",
+     "type": "15"
+    },
+    {
+     "name": "emitted",
+     "kind": "const",
+     "doc": "How much of its color a pixel gives off by itself (linear, not premultiplied): 0 for anything at or under white, 1 at `THERMAL_EMIT` times.",
+     "type": "(c: readonly number[]) => number"
+    },
+    {
+     "name": "hotShare",
+     "kind": "const",
+     "doc": "How much of what glows there counts as hot, by how colored it is: a lamp, a flame or the sun is warm-colored and\nhot, while a glowing cloud, the moon or a star is white and reads cold, as the sky does to a heat camera.",
+     "type": "(c: readonly number[]) => number"
+    },
+    {
+     "name": "THERMAL_WHITE",
+     "kind": "const",
+     "doc": "How much cooler a white thing reads than a dark one in the same light: white throws the sun back (clouds, snow, white walls).",
+     "type": "0.55"
+    },
+    {
+     "name": "heatOf",
+     "kind": "function",
+     "doc": "A pixel's own heat, 0 to about 1.5, from its color (linear, not premultiplied): warmth by how bright it is lit, and the heat of what glows.",
+     "signatures": [
+      {
+       "code": "heatOf(c: readonly number[], look: ThermalLook): number"
+      }
+     ]
+    },
+    {
+     "name": "rampAt",
+     "kind": "function",
+     "doc": "The color for a heat (0 to 1) along a ramp of linear colors, evenly spread; `stepped` takes the nearest one.",
+     "signatures": [
+      {
+       "code": "rampAt(ramp: readonly (readonly number[])[], h: number, stepped?: boolean): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "paletteRamp",
+     "kind": "function",
+     "doc": "A palette (sRGB 0–255) as a heat ramp: its colors from darkest to lightest, at most `THERMAL_STOPS`, spread evenly over it.",
+     "signatures": [
+      {
+       "code": "paletteRamp(colors: readonly (readonly number[])[]): Rgb01[]"
+      }
+     ]
+    },
+    {
+     "name": "grainFrame",
+     "kind": "const",
+     "doc": "The grain's frame at a time.",
+     "type": "(time: number, still?: boolean) => number"
+    },
+    {
+     "name": "thermalAt",
+     "kind": "function",
+     "doc": "One device pixel as the thermal camera sees it (linear out).",
+     "signatures": [
+      {
+       "code": "thermalAt(x: number, y: number, picture: Picture, height: number, look: ThermalLook, ratio?: number, time?: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "CrtLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as an old television playing a tape (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"crt\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "scan",
+       "optional": true,
+       "type": "number",
+       "doc": "How dark the gaps between scanlines are, 0 to 1 (0.5)."
+      },
+      {
+       "name": "every",
+       "optional": true,
+       "type": "number",
+       "doc": "How tall a scanline is, in CSS pixels (3)."
+      },
+      {
+       "name": "bleed",
+       "optional": true,
+       "type": "number",
+       "doc": "How far color smears to the right of where it belongs, 0 to 1 (0.5)."
+      },
+      {
+       "name": "wobble",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the picture's rows wander and a tracking band rolls up the screen, 0 to 1 (0.4)."
+      },
+      {
+       "name": "noise",
+       "optional": true,
+       "type": "number",
+       "doc": "Tape noise, 0 to 1 (0.3)."
+      },
+      {
+       "name": "curve",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the glass bulges, with darker corners, 0 to 1 (0.4)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "Sky01",
+       "doc": "What stands behind the subject, top and bottom (sRGB 0–1)."
+      },
+      {
+       "name": "period",
+       "optional": true,
+       "type": "number",
+       "doc": "Seconds the scene takes to come round again: the wobble goes a whole number of times into it, so a recording joins (12)."
+      },
+      {
+       "name": "still",
+       "optional": true,
+       "type": "boolean",
+       "doc": "The wobble and noise hold still."
+      }
+     ]
+    },
+    {
+     "name": "CRT_BACK",
+     "kind": "const",
+     "doc": "Behind a subject with no sky of its own (sRGB 0–1): a dim studio blue.",
+     "type": "Sky01"
+    },
+    {
+     "name": "CRT_BLEED_PX",
+     "kind": "const",
+     "doc": "How many CSS pixels color smears at full bleed.",
+     "type": "6"
+    },
+    {
+     "name": "CRT_BLEED_TAPS",
+     "kind": "const",
+     "doc": "How many taps the smear is read with.",
+     "type": "6"
+    },
+    {
+     "name": "CRT_BAND_PX",
+     "kind": "const",
+     "doc": "How far the tracking band throws rows aside at full wobble, in CSS pixels.",
+     "type": "14"
+    },
+    {
+     "name": "CRT_BAND",
+     "kind": "const",
+     "doc": "How tall the tracking band is, as a share of the picture.",
+     "type": "0.06"
+    },
+    {
+     "name": "CRT_ROLLS",
+     "kind": "const",
+     "doc": "How many times a loop the tracking band rolls up the screen.",
+     "type": "2"
+    },
+    {
+     "name": "CRT_WANDERS",
+     "kind": "const",
+     "doc": "How many times a loop the slow wander of the rows goes round.",
+     "type": "3"
+    },
+    {
+     "name": "CRT_FPS",
+     "kind": "const",
+     "doc": "How often the tape noise changes, a second.",
+     "type": "30"
+    },
+    {
+     "name": "yiq",
+     "kind": "const",
+     "doc": "YIQ from linear-ish RGB (the television's own split of brightness and color).",
+     "type": "(c: readonly number[]) => [number, number, number]"
+    },
+    {
+     "name": "fromYiq",
+     "kind": "const",
+     "doc": "RGB from YIQ.",
+     "type": "(c: readonly number[]) => [number, number, number]"
+    },
+    {
+     "name": "crtCurve",
+     "kind": "function",
+     "doc": "Where a point of the screen (u, v from 0 to 1) reads the picture through the bulging glass, or undefined off its edge.",
+     "signatures": [
+      {
+       "code": "crtCurve(u: number, v: number, curve: number): [number, number] | undefined"
+      }
+     ]
+    },
+    {
+     "name": "scanShade",
+     "kind": "const",
+     "doc": "How bright a place within a scanline is (`f` from 0 to 1 down the line): bright in its middle, dark between lines.",
+     "type": "(f: number, scan: number) => number"
+    },
+    {
+     "name": "wobbleAt",
+     "kind": "function",
+     "doc": "How far the rows at `v` (0 top, 1 bottom; `y` in CSS pixels) are thrown aside at a time, in CSS pixels.",
+     "signatures": [
+      {
+       "code": "wobbleAt(v: number, yCss: number, time: number, look: CrtLook): number"
+      }
+     ]
+    },
+    {
+     "name": "crtAt",
+     "kind": "function",
+     "doc": "One device pixel of the television (linear out). `picture` is linear and premultiplied.",
+     "signatures": [
+      {
+       "code": "crtAt(x: number, y: number, picture: Picture, width: number, height: number, look: CrtLook, ratio?: number, time?: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "BlueprintLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as a blueprint (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"blueprint\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "paper",
+       "optional": true,
+       "type": "Rgb01",
+       "doc": "The paper (sRGB 0–1)."
+      },
+      {
+       "name": "ink",
+       "optional": true,
+       "type": "Rgb01",
+       "doc": "The lines (sRGB 0–1)."
+      },
+      {
+       "name": "line",
+       "optional": true,
+       "type": "number",
+       "doc": "The outline's width, in CSS pixels (1.5)."
+      },
+      {
+       "name": "inner",
+       "optional": true,
+       "type": "number",
+       "doc": "How strong the lines between a thing's parts are beside its outline, 0 to 1 (0.6)."
+      },
+      {
+       "name": "grid",
+       "optional": true,
+       "type": "number",
+       "doc": "How far apart the grid's lines are, in CSS pixels; 0 draws none (16)."
+      },
+      {
+       "name": "dims",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Whether dimension lines are drawn across the subject's width and height (true)."
+      },
+      {
+       "name": "fill",
+       "optional": true,
+       "type": "number",
+       "doc": "How strongly the subject is washed in the line color, 0 to 1 (0.25)."
+      }
+     ]
+    },
+    {
+     "name": "BLUEPRINT_PAPER",
+     "kind": "const",
+     "doc": "A blueprint's paper (sRGB 0–1).",
+     "type": "Rgb01"
+    },
+    {
+     "name": "BLUEPRINT_INK",
+     "kind": "const",
+     "doc": "A blueprint's lines (sRGB 0–1).",
+     "type": "Rgb01"
+    },
+    {
+     "name": "GRID_MINOR",
+     "kind": "const",
+     "doc": "How strong the grid's lines are.",
+     "type": "0.16"
+    },
+    {
+     "name": "GRID_MAJOR",
+     "kind": "const",
+     "doc": "How strong every fifth line of the grid is.",
+     "type": "0.32"
+    },
+    {
+     "name": "DIM_GAP",
+     "kind": "const",
+     "doc": "How far the dimension lines stand off the subject, in CSS pixels.",
+     "type": "16"
+    },
+    {
+     "name": "DIM_ARROW",
+     "kind": "const",
+     "doc": "How long the dimension lines' arrowheads are, in CSS pixels.",
+     "type": "7"
+    },
+    {
+     "name": "DIM_TICKS",
+     "kind": "const",
+     "doc": "How many marks divide a dimension line.",
+     "type": "10"
+    },
+    {
+     "name": "gridAt",
+     "kind": "function",
+     "doc": "How much of the grid's lines cover a pixel (0 to 1); `x`, `y` and `every` in device pixels, `ratio` for the line's width.",
+     "signatures": [
+      {
+       "code": "gridAt(x: number, y: number, every: number, ratio?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "ScreenBox",
+     "kind": "type",
+     "doc": "A box on the screen, in device pixels: left, top, right, bottom.",
+     "type": "readonly [number, number, number, number]"
+    },
+    {
+     "name": "dimPlaces",
+     "kind": "function",
+     "doc": "Where a box's dimension lines go (device pixels): the line under it (`yd`) and beside it (`xd`), each moved over or to the left where there is no room, and where their extension lines run; none for a box too small or off the picture.",
+     "signatures": [
+      {
+       "code": "dimPlaces(box: ScreenBox, width: number, height: number, ratio?: number): { yd: number; xd: number; fromY: number; toY: number; fromX: number; toX: number } | undefined"
+      }
+     ]
+    },
+    {
+     "name": "dimsAt",
+     "kind": "function",
+     "doc": "Dimension lines round a box (device pixels, y down): one under it across its width and one beside it down its\nheight (over it and to its left where there is no room), each with extension lines to the box, an arrowhead at each\nend and `DIM_TICKS` marks along it. How much of them covers (x, y), 0 to 1.",
+     "signatures": [
+      {
+       "code": "dimsAt(x: number, y: number, box: ScreenBox, width: number, height: number, ratio?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "MosaicLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as a mosaic (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"mosaic\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "tile",
+       "optional": true,
+       "type": "number",
+       "doc": "A tile's side, in CSS pixels (10)."
+      },
+      {
+       "name": "grout",
+       "optional": true,
+       "type": "number",
+       "doc": "The grout between tiles, in CSS pixels (1.5)."
+      },
+      {
+       "name": "groutColor",
+       "optional": true,
+       "type": "Rgb01",
+       "doc": "The grout's color (sRGB 0–1)."
+      },
+      {
+       "name": "vary",
+       "optional": true,
+       "type": "number",
+       "doc": "How much tiles differ in color from one to the next, 0 to 1 (0.5)."
+      },
+      {
+       "name": "bevel",
+       "optional": true,
+       "type": "number",
+       "doc": "How much each tile's edges catch light and shade, 0 to 1 (0.5)."
+      },
+      {
+       "name": "brick",
+       "optional": true,
+       "type": "boolean",
+       "doc": "Rows set over one another like bricks, half a tile along."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "Sky01",
+       "doc": "What stands behind the subject, top and bottom (sRGB 0–1): tiles in its colors. Left out, plain tiles of `MOSAIC_GROUND`."
+      }
+     ]
+    },
+    {
+     "name": "MOSAIC_GROUT",
+     "kind": "const",
+     "doc": "The grout (sRGB 0–1): a pale mortar.",
+     "type": "Rgb01"
+    },
+    {
+     "name": "MOSAIC_GROUND",
+     "kind": "const",
+     "doc": "Tiles behind a subject when no sky is laid (sRGB 0–1): a warm stone.",
+     "type": "Rgb01"
+    },
+    {
+     "name": "MOSAIC_TAPS",
+     "kind": "const",
+     "doc": "Where a tile's color is read, as shares of the tile about its middle (the middle first).",
+     "type": "readonly [number, number][]"
+    },
+    {
+     "name": "tileAt",
+     "kind": "function",
+     "doc": "The tile a device pixel lies in: its column and row, its middle, and the pixel's place in it (u, v from −½ to ½).",
+     "signatures": [
+      {
+       "code": "tileAt(x: number, y: number, side: number, brick?: boolean): { cell: [number, number]; mid: [number, number]; u: number; v: number }"
+      }
+     ]
+    },
+    {
+     "name": "tileCover",
+     "kind": "function",
+     "doc": "How much of a pixel a tile covers (0 to 1): a rounded square inset by half the grout, a little smaller or larger\nby its own hash so the grout lines wander. `side` and `grout` in device pixels.",
+     "signatures": [
+      {
+       "code": "tileCover(u: number, v: number, cell: readonly [number, number], side: number, grout: number): number"
+      }
+     ]
+    },
+    {
+     "name": "tileTint",
+     "kind": "function",
+     "doc": "A tile's own change of color: how much lighter or darker, and a small shift of each channel.",
+     "signatures": [
+      {
+       "code": "tileTint(cell: readonly [number, number], vary: number): [number, number, number]"
+      }
+     ]
+    },
+    {
+     "name": "bevelAt",
+     "kind": "function",
+     "doc": "How a tile's face is lit by its bevel at (u, v): lighter toward its top left edge, darker toward its bottom right.",
+     "signatures": [
+      {
+       "code": "bevelAt(u: number, v: number, bevel: number): number"
+      }
+     ]
+    },
+    {
+     "name": "CutoutLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as layered cut paper (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"cutout\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "shadow",
+       "optional": true,
+       "type": "number",
+       "doc": "How far a layer's shadow falls on what is behind it, in CSS pixels (6)."
+      },
+      {
+       "name": "soft",
+       "optional": true,
+       "type": "number",
+       "doc": "How soft the shadow's edge is, 0 to 1 (0.5)."
+      },
+      {
+       "name": "light",
+       "optional": true,
+       "type": "number",
+       "doc": "Where the light comes from on the screen, in degrees (0 from the right, 90 from above; 120)."
+      },
+      {
+       "name": "grain",
+       "optional": true,
+       "type": "number",
+       "doc": "The paper's fibers, 0 to 1 (0.5)."
+      },
+      {
+       "name": "edge",
+       "optional": true,
+       "type": "number",
+       "doc": "The pale cut edge on the side toward the light, in CSS pixels (1)."
+      },
+      {
+       "name": "ragged",
+       "optional": true,
+       "type": "number",
+       "doc": "How ragged the cut edges are, 0 to 1 (0.4)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "Sky01",
+       "doc": "The card behind everything, top and bottom (sRGB 0–1)."
+      }
+     ]
+    },
+    {
+     "name": "CUTOUT_CARD",
+     "kind": "const",
+     "doc": "The card behind a subject with no sky of its own (sRGB 0–1).",
+     "type": "Sky01"
+    },
+    {
+     "name": "CUTOUT_SHADE",
+     "kind": "const",
+     "doc": "How dark a shadow is at full.",
+     "type": "0.42"
+    },
+    {
+     "name": "CUTOUT_LAYER",
+     "kind": "const",
+     "doc": "How much a layer must be nearer than the one under it to cast on it, as a share of the depth.",
+     "type": "0.01"
+    },
+    {
+     "name": "CUTOUT_TAPS",
+     "kind": "const",
+     "doc": "Where a soft shadow's edge is read, as shares of its softness, across the light's way.",
+     "type": "readonly number[]"
+    },
+    {
+     "name": "RAGGED_PX",
+     "kind": "const",
+     "doc": "How far a ragged edge wanders at full, in CSS pixels.",
+     "type": "1.6"
+    },
+    {
+     "name": "RAGGED_GRAIN",
+     "kind": "const",
+     "doc": "How far apart a ragged edge's turns are, in CSS pixels.",
+     "type": "9"
+    },
+    {
+     "name": "lightWay",
+     "kind": "const",
+     "doc": "The way toward the light on the screen (device y down), for a light from `deg` (0 from the right, 90 from above).",
+     "type": "(deg: number) => [number, number]"
+    },
+    {
+     "name": "raggedAt",
+     "kind": "function",
+     "doc": "Where a pixel reads the picture so cut edges wander a little: an offset in device pixels.",
+     "signatures": [
+      {
+       "code": "raggedAt(x: number, y: number, ragged: number, ratio?: number): [number, number]"
+      }
+     ]
+    },
+    {
+     "name": "grainAt",
+     "kind": "function",
+     "doc": "The paper's fibers at a pixel: a brightness from about 0.94 to 1.06 at full grain.",
+     "signatures": [
+      {
+       "code": "grainAt(x: number, y: number, grain: number, ratio?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "shadowAt",
+     "kind": "function",
+     "doc": "How much shadow falls on a pixel (0 to 1): where, a shadow's length toward the light, there is a layer nearer than\nthis one (or anything at all, where this pixel is the card), read at a few places across the light's way for a\nsoft edge. `at(x, y)` says whether something is there and its depth (0 for nothing) and part.",
+     "signatures": [
+      {
+       "code": "shadowAt(x: number, y: number, at: (x: number, y: number) => { depth: number; part: number }, look: CutoutLook, ratio?: number): number"
+      }
+     ]
+    },
+    {
+     "name": "ClayLook",
+     "kind": "interface",
+     "doc": "How a stage is drawn as stop-motion clay (`Stage.setFilter`).",
+     "props": [
+      {
+       "name": "kind",
+       "type": "\"clay\"",
+       "doc": "Which look this is."
+      },
+      {
+       "name": "fps",
+       "optional": true,
+       "type": "number",
+       "doc": "Frames a second the scene moves at, as stop motion; 0 moves every frame (12)."
+      },
+      {
+       "name": "prints",
+       "optional": true,
+       "type": "number",
+       "doc": "How deep the thumbprints are, 0 to 1 (0.6)."
+      },
+      {
+       "name": "size",
+       "optional": true,
+       "type": "number",
+       "doc": "How big a thumbprint is, as a share of the scene's size (0.05)."
+      },
+      {
+       "name": "smooth",
+       "optional": true,
+       "type": "number",
+       "doc": "How smooth the clay is: each thing's own colors softened together, 0 to 1 (0.5)."
+      },
+      {
+       "name": "sheen",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the clay shines, 0 to 1 (0.3)."
+      },
+      {
+       "name": "boil",
+       "optional": true,
+       "type": "number",
+       "doc": "How much the thumbprints shift from one frame to the next, as an animator's hands leave them (0.4)."
+      },
+      {
+       "name": "sky",
+       "optional": true,
+       "type": "Sky01",
+       "doc": "What stands behind the subject, top and bottom (sRGB 0–1)."
+      }
+     ]
+    },
+    {
+     "name": "CLAY_BACK",
+     "kind": "const",
+     "doc": "Behind a subject with no sky of its own (sRGB 0–1): a painted studio backdrop.",
+     "type": "Sky01"
+    },
+    {
+     "name": "CLAY_KEY",
+     "kind": "const",
+     "doc": "The clay's key light in the view's own frame (x right, y up, z toward the viewer): from the top left, in front.",
+     "type": "readonly [number, number, number]"
+    },
+    {
+     "name": "PRINT_R",
+     "kind": "const",
+     "doc": "How far a thumbprint reaches from its middle, in the prints' own size (a cell of the world is 1).",
+     "type": "0.42"
+    },
+    {
+     "name": "PRINT_TILT",
+     "kind": "const",
+     "doc": "How steeply a thumbprint's walls tip the clay's facing at full depth (its slope per unit of `printAt`'s gradient).",
+     "type": "0.7"
+    },
+    {
+     "name": "PRINT_LIP",
+     "kind": "const",
+     "doc": "How high the clay pushed out of a thumbprint stands round its edge, as a share of the dent's depth.",
+     "type": "0.3"
+    },
+    {
+     "name": "PRINT_LIP_W",
+     "kind": "const",
+     "doc": "How wide that lip is, as a share of the print's reach.",
+     "type": "0.2"
+    },
+    {
+     "name": "PRINT_SHUT",
+     "kind": "const",
+     "doc": "How much darker the bottom of a thumbprint is at full depth, shut in by its own walls.",
+     "type": "0.16"
+    },
+    {
+     "name": "PRINT_LIGHT",
+     "kind": "const",
+     "doc": "How much more a thumbprint's tipped walls turn toward or away from the light than the clay's soft key alone shows.",
+     "type": "0.55"
+    },
+    {
+     "name": "PRINT_SHARE",
+     "kind": "const",
+     "doc": "The share of the clay's cells that hold a thumbprint.",
+     "type": "0.55"
+    },
+    {
+     "name": "CLAY_SMOOTH_PX",
+     "kind": "const",
+     "doc": "How far round each pixel the clay is softened, in CSS pixels at full smoothness.",
+     "type": "6"
+    },
+    {
+     "name": "CLAY_TAPS",
+     "kind": "const",
+     "doc": "Where it is softened, as shares of that reach (eight ways at the full reach, eight between them at half).",
+     "type": "readonly [number, number][]"
+    },
+    {
+     "name": "CLAY_SHADE_PX",
+     "kind": "const",
+     "doc": "How far round each pixel the clay looks for nearer clay that shades it, in CSS pixels.",
+     "type": "10"
+    },
+    {
+     "name": "CLAY_HOLLOW",
+     "kind": "const",
+     "doc": "How dark a pixel shut in on every side by nearer clay gets.",
+     "type": "0.4"
+    },
+    {
+     "name": "CLAY_DEEP",
+     "kind": "const",
+     "doc": "How much nearer than a pixel its neighbor must be, as a share of its depth, to shade it fully.",
+     "type": "0.03"
+    },
+    {
+     "name": "hollowOf",
+     "kind": "function",
+     "doc": "How shut in a pixel is (0 open to 1 shut in), from its own depth and its neighbors' round it (0 for nothing there): soft shade in the creases between lumps of clay.",
+     "signatures": [
+      {
+       "code": "hollowOf(depth: number, round: readonly number[]): number"
+      }
+     ]
+    },
+    {
+     "name": "printHash",
+     "kind": "const",
+     "doc": "A number from 0 to 1 for a cell of the world (the shader's `cellHash` in filterPass.ts; change both).",
+     "type": "(x: number, y: number, z: number, salt: number) => number"
+    },
+    {
+     "name": "clayFrame",
+     "kind": "const",
+     "doc": "The stop-motion frame a time falls in, which the thumbprints shift by.",
+     "type": "(time: number, fps: number) => number"
+    },
+    {
+     "name": "Print",
+     "kind": "interface",
+     "doc": "A thumbprint at a point: its height (−1 at the bottom of the dent up to `PRINT_LIP` on its lip, 0 elsewhere) and that height's slope, per unit of the prints' own size, in the world's frame.",
+     "props": [
+      {
+       "name": "h",
+       "type": "number",
+       "doc": "The height: −1 at the bottom of the dent, up to `PRINT_LIP` on its lip, 0 away from any print."
+      },
+      {
+       "name": "g",
+       "type": "[number, number, number]",
+       "doc": "How fast the height rises, each way of the world, per unit of the prints' own size."
+      }
+     ]
+    },
+    {
+     "name": "printProfile",
+     "kind": "function",
+     "doc": "A thumbprint's height across it, from its middle (0) out (`PRINT_R` is 1), and how fast that changes outward.",
+     "signatures": [
+      {
+       "code": "printProfile(u: number): [number, number]"
+      }
+     ]
+    },
+    {
+     "name": "printAt",
+     "kind": "function",
+     "doc": "The thumbprints at a point of the world, in the prints' own size (the world divided by a print's size). A print is\na round dent pressed into the clay with a little clay pushed up round its edge; each cell of the world holds one or\nnone, and each frame shifts it a little (`boil`), as hands do. The dent is lit by tipping the clay's facing\n(`pressed`), so its wall toward the light falls in shade and the far wall catches it.",
+     "signatures": [
+      {
+       "code": "printAt(p: readonly [number, number, number], frame: number, boil: number): Print"
+      }
+     ]
+    },
+    {
+     "name": "pressed",
+     "kind": "function",
+     "doc": "Clay facing `n` (the view's frame, unit length) with a thumbprint pressed in, its slope `g` already turned into the\nview's frame: the facing tipped by the print's walls, and how much the light there changes beyond what `clayShade`\ngives that facing (deeper shade on the wall toward the light, the bottom shut in).",
+     "signatures": [
+      {
+       "code": "pressed(n: readonly [number, number, number], g: readonly [number, number, number], h: number, prints: number): { n: [number, number, number]; light: number }"
+      }
+     ]
+    },
+    {
+     "name": "clayShade",
+     "kind": "function",
+     "doc": "The clay's own shading for a surface facing `n` (the view's frame, unit length): a soft wrapped key light and a little sheen.",
+     "signatures": [
+      {
+       "code": "clayShade(n: readonly [number, number, number], sheen: number): { shade: number; shine: number }"
+      }
+     ]
+    },
+    {
+     "name": "FilterLook",
+     "kind": "type",
+     "doc": "Any of the looks laid over the whole picture.",
+     "type": "ThermalLook | CrtLook | BlueprintLook | MosaicLook | CutoutLook | ClayLook"
+    },
+    {
+     "name": "FilterKind",
+     "kind": "type",
+     "doc": "Which of them.",
+     "type": "FilterLook[\"kind\"]"
+    }
+   ]
+  },
+  {
    "id": "knitPass",
    "title": "Knitting",
    "group": "pixels",
@@ -13540,6 +15254,185 @@
      "signatures": [
       {
        "code": "knitCell(cover: number, color: readonly number[], beside: boolean, chart: number, yarns: readonly Rgb3[], was?: number, steady?: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "anaglyphPass",
+   "title": "3D glasses",
+   "group": "pixels",
+   "doc": "",
+   "entries": [
+    {
+     "name": "AnaglyphPass",
+     "kind": "class",
+     "doc": "3D glasses (splat-core/anaglyph.ts): the frame drawn twice, from a left and a right eye a little either side of the\ncamera, each looking the same way with its picture slid so that the screen (`eyesFor`) lands in the same place for\nboth, then one pass lays them over each other in red and cyan (`mixEyes`, the CPU twin: change both). Each eye's\npicture sits over the look's backdrop, which is the same for both, so it stands at the screen.\n\nEach eye is its own view, so the blobs are sorted for each: two sorts and two draws a frame. Lines and points are\ndrawn in both pictures, as anything else is.",
+     "ctor": [
+      {
+       "code": "new AnaglyphPass()"
+      }
+     ],
+     "props": [
+      {
+       "name": "eyes",
+       "readonly": true,
+       "type": "RenderTarget<Texture<unknown, TextureEventMap>, RenderTargetEventMap>[]",
+       "doc": "The left eye's picture and the right's: linear color times cover, and cover."
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLook",
+       "doc": "The look: how deep, where the screen stands, how the pictures are mixed and what is behind.",
+       "signatures": [
+        {
+         "code": "setLook(look: AnaglyphLook): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the eyes' pictures, in device pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws the scene for both eyes and lays them over each other into the renderer's current target, or onto the screen when it has none. `distance` is how far the camera is from what it looks at.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: PerspectiveCamera, distance: number): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its pictures.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "anaglyph",
+   "title": "3D glasses: the arithmetic",
+   "group": "pixels",
+   "doc": "3D glasses (Matt's idea, 2026-11-25): the scene drawn twice, from two eyes a little apart, and the two pictures laid\none over the other in red and cyan. Without glasses things stand doubled, a red ghost to one side and a cyan one to\nthe other; through red and cyan glasses each eye sees only its own picture and the scene comes together in depth.\n\nPure: the eyes' geometry and how the two pictures are mixed, which `AnaglyphPass` (splat-engine/anaglyphPass.ts)\nrepeats in its shader. Change both.",
+   "entries": [
+    {
+     "name": "AnaglyphMix",
+     "kind": "type",
+     "doc": "How the two pictures are mixed into one.",
+     "type": "\"optimized\" | \"color\" | \"half\" | \"gray\""
+    },
+    {
+     "name": "AnaglyphLook",
+     "kind": "interface",
+     "doc": "How the eyes are set and the pictures mixed. Glasses are red over the left eye and cyan over the right, the\nusual pair.",
+     "props": [
+      {
+       "name": "depth",
+       "optional": true,
+       "type": "number",
+       "doc": "How far apart the eyes are, as a share of the usual (`EYE_SHARE` of the distance to what the view looks at): 0 is flat, 1 the usual, 2 twice as deep."
+      },
+      {
+       "name": "pop",
+       "optional": true,
+       "type": "number",
+       "doc": "Where the screen stands, past what the view looks at, as a share of the distance to it: 0 puts that at the screen, 0.5 puts the screen half as far again behind it, so more comes out toward you."
+      },
+      {
+       "name": "mix",
+       "optional": true,
+       "type": "AnaglyphMix",
+       "doc": "How the two pictures are mixed."
+      },
+      {
+       "name": "back",
+       "optional": true,
+       "type": "readonly [Rgb3, Rgb3]",
+       "doc": "What is behind the scene, top and bottom (sRGB 0–1), the same in both eyes so it sits at the screen."
+      }
+     ]
+    },
+    {
+     "name": "EYE_SHARE",
+     "kind": "const",
+     "doc": "The usual eyes: a thirtieth of the distance to what the view looks at, a stereo photographer's rule of thumb.",
+     "type": "number"
+    },
+    {
+     "name": "ANAGLYPH_BACK",
+     "kind": "const",
+     "doc": "What is behind a scene with no sky of its own (sRGB): a dark gray, which shows the least ghosting through either lens.",
+     "type": "readonly [Rgb3, Rgb3]"
+    },
+    {
+     "name": "eyesFor",
+     "kind": "function",
+     "doc": "The two eyes for a view looking at something `distance` away: how far each stands to the side of the camera\n(`half`, the left eye at −half along the camera's right, the right at +half), and how far away the screen is\n(`screen`), where a thing is drawn in the same place for both eyes.",
+     "signatures": [
+      {
+       "code": "eyesFor(distance: number, look: AnaglyphLook): { half: number; screen: number }"
+      }
+     ]
+    },
+    {
+     "name": "eyeSlide",
+     "kind": "const",
+     "doc": "How far an eye's picture is slid across (in clip space, per unit of w) so that a point `screen` away, straight\nahead of the camera, lands in the middle of both: `side` is the eye's place along the camera's right, `p00` the\nprojection's x scale. Add it to the projection matrix's element 8 (x from z) negated, as `eyeProjection` does.",
+     "type": "(side: number, p00: number, screen: number) => number"
+    },
+    {
+     "name": "eyeProjection",
+     "kind": "function",
+     "doc": "An eye's projection matrix (column-major, as three.js keeps it): the camera's own with x slid by `eyeSlide`.",
+     "signatures": [
+      {
+       "code": "eyeProjection(p: ArrayLike<number>, side: number, screen: number): number[]"
+      }
+     ]
+    },
+    {
+     "name": "eyeX",
+     "kind": "function",
+     "doc": "Where a point in the camera's own frame (x right, y up, looking down −z) lands across the picture for an eye,\nin normalized device coordinates: that eye stands at `side` along x and uses `eyeProjection`. The CPU check of\nwhat the shader is given.",
+     "signatures": [
+      {
+       "code": "eyeX(p: ArrayLike<number>, side: number, screen: number, at: readonly [number, number, number]): number"
+      }
+     ]
+    },
+    {
+     "name": "EYE_MIX",
+     "kind": "const",
+     "doc": "Each mix as two 3×3 matrices, rows for red, green and blue of the result, columns for the left and right\npictures' red, green and blue (linear). `optimized` is Eric Dubois's least-squares red–cyan projection, which\nkeeps most color while each lens passes little of the other eye's picture; `color` hands the left eye's red and\nthe right eye's green and blue over as they are (bright, but reds ghost); `half` gives the left eye its gray and\nthe right its color; `gray` gives both their gray (no color, least ghosting).",
+     "type": "Record<AnaglyphMix, { left: readonly Rgb3[]; right: readonly Rgb3[] }>"
+    },
+    {
+     "name": "ANAGLYPH_MIXES",
+     "kind": "const",
+     "doc": "The mixes in the order the page offers them.",
+     "type": "readonly AnaglyphMix[]"
+    },
+    {
+     "name": "mixEyes",
+     "kind": "function",
+     "doc": "One pixel of the finished picture (linear, 0–1) from the two eyes' pixels there (linear, over the backdrop).",
+     "signatures": [
+      {
+       "code": "mixEyes(left: Rgb3, right: Rgb3, mix?: AnaglyphMix): [number, number, number]"
       }
      ]
     }
@@ -13839,12 +15732,30 @@
      "name": "Style",
      "kind": "type",
      "doc": "How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks.",
-     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof LOOKS[number][\"id\"]"
+     "type": "typeof PIXEL.id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof id | typeof FILTERS[number][\"id\"] | typeof LOOKS[number][\"id\"]"
     },
     {
      "name": "STYLES",
      "kind": "const",
      "doc": "Blocks first, then pixel art and tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last).",
+     "type": "{ id: Style; label: string; note: string }[]"
+    },
+    {
+     "name": "HIDDEN_STYLES",
+     "kind": "const",
+     "doc": "Styles kept in the code, the address and kept scenes but offered in no picker (Matt, 2026-11-25: claymation is not ready yet).",
+     "type": "readonly Style[]"
+    },
+    {
+     "name": "offered",
+     "kind": "const",
+     "doc": "Whether a style is offered in a picker.",
+     "type": "(style: string) => boolean"
+    },
+    {
+     "name": "PICKED_STYLES",
+     "kind": "const",
+     "doc": "The styles a picker offers: `STYLES` without the hidden ones.",
      "type": "{ id: Style; label: string; note: string }[]"
     },
     {
@@ -13882,7 +15793,7 @@
     {
      "name": "lightsItself",
      "kind": "const",
-     "doc": "Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass, blocks and knitting (which wants each thing in its own flat colors).",
+     "doc": "Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass, blocks, knitting and paper cutout (which want each thing in its own flat colors).",
      "type": "(style: Style | undefined) => boolean"
     }
    ]
@@ -14501,10 +16412,58 @@
      "type": "StyleDef<WashChoice>"
     },
     {
+     "name": "HALFTONE_DEF",
+     "kind": "const",
+     "doc": "Halftone screen print's settings.",
+     "type": "StyleDef<HalftoneChoice>"
+    },
+    {
+     "name": "CLAY_DEF",
+     "kind": "const",
+     "doc": "Claymation's settings.",
+     "type": "StyleDef<ClayChoice>"
+    },
+    {
+     "name": "BLUEPRINT_DEF",
+     "kind": "const",
+     "doc": "The blueprint's settings.",
+     "type": "StyleDef<BlueprintChoice>"
+    },
+    {
+     "name": "THERMAL_DEF",
+     "kind": "const",
+     "doc": "The thermal camera's settings.",
+     "type": "StyleDef<ThermalChoice>"
+    },
+    {
+     "name": "CUTOUT_DEF",
+     "kind": "const",
+     "doc": "Paper cutout's settings.",
+     "type": "StyleDef<CutoutChoice>"
+    },
+    {
+     "name": "MOSAIC_DEF",
+     "kind": "const",
+     "doc": "The mosaic's settings.",
+     "type": "StyleDef<MosaicChoice>"
+    },
+    {
+     "name": "CRT_DEF",
+     "kind": "const",
+     "doc": "CRT / VHS's settings.",
+     "type": "StyleDef<CrtChoice>"
+    },
+    {
      "name": "KNIT_DEF",
      "kind": "const",
      "doc": "Knitting's settings.",
      "type": "StyleDef<KnitChoice>"
+    },
+    {
+     "name": "ANAGLYPH_DEF",
+     "kind": "const",
+     "doc": "3D glasses' settings.",
+     "type": "StyleDef<AnaglyphChoice>"
     },
     {
      "name": "SceneSettings",
@@ -14564,7 +16523,7 @@
      "name": "CATALOG",
      "kind": "const",
      "doc": "Every style's settings, by the name they are kept under.",
-     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice> }"
+     "type": "{ pixel: StyleDef<PixelSettings>; glitch: StyleDef<GlitchChoice>; marks: StyleDef<MarkSettings>; ascii: StyleDef<AsciiSettings>; boxart: StyleDef<BoxArtSettings>; cel: StyleDef<CelSettings>; blocks: StyleDef<BlockChoice>; neon: StyleDef<NeonChoice>; glass: StyleDef<GlassChoice>; watercolor: StyleDef<WashChoice>; knit: StyleDef<KnitChoice>; anaglyph: StyleDef<AnaglyphChoice>; halftone: StyleDef<HalftoneChoice>; clay: StyleDef<ClayChoice>; blueprint: StyleDef<BlueprintChoice>; thermal: StyleDef<ThermalChoice>; cutout: StyleDef<CutoutChoice>; mosaic: StyleDef<MosaicChoice>; crt: StyleDef<CrtChoice> }"
     },
     {
      "name": "StyleKey",
@@ -14628,9 +16587,49 @@
        "doc": "Watercolor's."
       },
       {
+       "name": "halftone",
+       "type": "HalftoneChoice",
+       "doc": "Halftone screen print's."
+      },
+      {
        "name": "knit",
        "type": "KnitChoice",
        "doc": "Knitting's."
+      },
+      {
+       "name": "anaglyph",
+       "type": "AnaglyphChoice",
+       "doc": "3D glasses'."
+      },
+      {
+       "name": "clay",
+       "type": "ClayChoice",
+       "doc": "Claymation's."
+      },
+      {
+       "name": "blueprint",
+       "type": "BlueprintChoice",
+       "doc": "The blueprint's."
+      },
+      {
+       "name": "thermal",
+       "type": "ThermalChoice",
+       "doc": "The thermal camera's."
+      },
+      {
+       "name": "cutout",
+       "type": "CutoutChoice",
+       "doc": "Paper cutout's."
+      },
+      {
+       "name": "mosaic",
+       "type": "MosaicChoice",
+       "doc": "The mosaic's."
+      },
+      {
+       "name": "crt",
+       "type": "CrtChoice",
+       "doc": "CRT / VHS's."
       }
      ]
     },
@@ -15083,10 +17082,10 @@
     {
      "name": "gridOf",
      "kind": "function",
-     "doc": "The side of one cell for a subject: the grid it was cut on, or a share of its longest side.",
+     "doc": "The side of one cell for a subject: the grid the page says it was cut on, else the grid the cut records (`Built.grid`,\nfrom voxel.ts), else a share of its longest side. A guessed cell that is not the cut's own grid falls between the\nblobs' rows and leaves rows of empty cells, so blocks drawn from a cut always snap to its grid.",
      "signatures": [
       {
-       "code": "gridOf(spacing: number | undefined, centers: ArrayLike<number>, count: number): number"
+       "code": "gridOf(spacing: number | undefined, centers: ArrayLike<number>, count: number, own?: number): number"
       }
      ]
     },
@@ -15367,6 +17366,598 @@
    ]
   },
   {
+   "id": "styles-halftoneLooks",
+   "title": "Halftone print, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "HALFTONE",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"halftone\"; label: string; note: string }"
+    },
+    {
+     "name": "HALFTONE_SETS",
+     "kind": "const",
+     "doc": "The sets of inks a print can be made in. Black takes the grays first where a set has it.",
+     "type": "{ id: string; label: string; about: string; inks: HalftoneInk[] }[]"
+    },
+    {
+     "name": "HALFTONE_PAPERS",
+     "kind": "const",
+     "doc": "The papers a print can be pulled on (sRGB 0–1). All light: ink only darkens what is under it.",
+     "type": "{ id: string; label: string; paper: Rgb01 }[]"
+    },
+    {
+     "name": "HalftoneChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "inks",
+       "type": "string",
+       "doc": "The inks, an id of `HALFTONE_SETS`."
+      },
+      {
+       "name": "cell",
+       "type": "number",
+       "doc": "A cell of the screen, in CSS pixels."
+      },
+      {
+       "name": "shift",
+       "type": "number",
+       "doc": "How far each plate sits off true, in CSS pixels."
+      },
+      {
+       "name": "texture",
+       "type": "number",
+       "doc": "How unevenly the ink takes, 0 to 1."
+      },
+      {
+       "name": "paper",
+       "type": "string",
+       "doc": "The paper, an id of `HALFTONE_PAPERS`."
+      },
+      {
+       "name": "sky",
+       "type": "boolean",
+       "doc": "Whether the subject's sky is printed behind it, or the paper left bare there."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is printed: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "HALFTONE_START",
+     "kind": "const",
+     "doc": "Where halftone's settings start.",
+     "type": "HalftoneChoice"
+    },
+    {
+     "name": "halftoneGround",
+     "kind": "const",
+     "doc": "The color to put behind the canvas before the print is drawn.",
+     "type": "(c: HalftoneChoice) => string"
+    },
+    {
+     "name": "HALFTONE_SKY",
+     "kind": "const",
+     "doc": "The sky printed behind a subject with no sky of its own, top and bottom (sRGB 0–1): a pale blue going warm toward the ground.",
+     "type": "readonly [Rgb01, Rgb01]"
+    },
+    {
+     "name": "halftoneLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), or `HALFTONE_SKY` where it has none.",
+     "signatures": [
+      {
+       "code": "halftoneLook(c: HalftoneChoice, sky?: readonly [readonly number[], readonly number[]]): HalftoneLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-filterLooks",
+   "title": "The six filter looks, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "CLAY",
+     "kind": "const",
+     "doc": "Claymation's chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"clay\"; label: string; note: string }"
+    },
+    {
+     "name": "BLUEPRINT",
+     "kind": "const",
+     "doc": "The blueprint's chip.",
+     "type": "{ id: \"blueprint\"; label: string; note: string }"
+    },
+    {
+     "name": "THERMAL",
+     "kind": "const",
+     "doc": "The thermal camera's chip.",
+     "type": "{ id: \"thermal\"; label: string; note: string }"
+    },
+    {
+     "name": "CUTOUT",
+     "kind": "const",
+     "doc": "Paper cutout's chip.",
+     "type": "{ id: \"cutout\"; label: string; note: string }"
+    },
+    {
+     "name": "MOSAIC",
+     "kind": "const",
+     "doc": "The mosaic's chip.",
+     "type": "{ id: \"mosaic\"; label: string; note: string }"
+    },
+    {
+     "name": "CRT",
+     "kind": "const",
+     "doc": "CRT / VHS's chip.",
+     "type": "{ id: \"crt\"; label: string; note: string }"
+    },
+    {
+     "name": "FILTERS",
+     "kind": "const",
+     "doc": "All six, in the order the Style tab lists them.",
+     "type": "readonly [{ id: \"clay\"; label: string; note: string }, { id: \"blueprint\"; label: string; note: string }, { id: \"thermal\"; label: string; note: string }, { id: \"cutout\"; label: string; note: string }, { id: \"mosaic\"; label: string; note: string }, { id: \"crt\"; label: string; note: string }]"
+    },
+    {
+     "name": "FilterId",
+     "kind": "type",
+     "doc": "Which of them.",
+     "type": "typeof FILTERS[number][\"id\"]"
+    },
+    {
+     "name": "isFilter",
+     "kind": "const",
+     "doc": "Whether a style is one of them.",
+     "type": "(id: string | undefined) => id is FilterId"
+    },
+    {
+     "name": "THERMAL_RAMPS",
+     "kind": "const",
+     "doc": "The heat colors a thermal camera can show, cold to hot (sRGB 0–1).",
+     "type": "{ id: string; label: string; about: string; ramp: Rgb01[] }[]"
+    },
+    {
+     "name": "ThermalChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "colors",
+       "type": "string",
+       "doc": "The heat colors, an id of `THERMAL_RAMPS`."
+      },
+      {
+       "name": "hot",
+       "type": "number",
+       "doc": "How hot what gives its own light runs, 0 to 1.5."
+      },
+      {
+       "name": "spread",
+       "type": "number",
+       "doc": "How far its heat spreads, in CSS pixels."
+      },
+      {
+       "name": "warm",
+       "type": "number",
+       "doc": "How warm lit things are."
+      },
+      {
+       "name": "noise",
+       "type": "number",
+       "doc": "The sensor's grain."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "A palette whose colors, darkest to lightest, are the heat colors in place of `colors`: 'none' keeps the camera's own."
+      }
+     ]
+    },
+    {
+     "name": "THERMAL_START",
+     "kind": "const",
+     "doc": "Where the thermal camera's settings start.",
+     "type": "ThermalChoice"
+    },
+    {
+     "name": "thermalLook",
+     "kind": "function",
+     "doc": "The look for the stage; `palette` is the palette picked (sRGB 0–255), if any.",
+     "signatures": [
+      {
+       "code": "thermalLook(c: ThermalChoice, palette?: readonly (readonly number[])[], still?: boolean): ThermalLook"
+      }
+     ]
+    },
+    {
+     "name": "thermalGround",
+     "kind": "const",
+     "doc": "The color behind the canvas before the camera's picture is drawn.",
+     "type": "(c: ThermalChoice) => string"
+    },
+    {
+     "name": "CrtChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "scan",
+       "type": "number",
+       "doc": "How dark the gaps between scanlines are."
+      },
+      {
+       "name": "every",
+       "type": "number",
+       "doc": "How tall a scanline is, in CSS pixels."
+      },
+      {
+       "name": "bleed",
+       "type": "number",
+       "doc": "How far color smears."
+      },
+      {
+       "name": "wobble",
+       "type": "number",
+       "doc": "How much rows wander and the tracking band rolls."
+      },
+      {
+       "name": "noise",
+       "type": "number",
+       "doc": "Tape noise."
+      },
+      {
+       "name": "curve",
+       "type": "number",
+       "doc": "How much the glass bulges."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from first: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "CRT_START",
+     "kind": "const",
+     "doc": "Where CRT / VHS's settings start.",
+     "type": "CrtChoice"
+    },
+    {
+     "name": "crtLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255); `loop` the seconds it comes round in.",
+     "signatures": [
+      {
+       "code": "crtLook(c: CrtChoice, sky?: Sky255, loop?: number, still?: boolean): CrtLook"
+      }
+     ]
+    },
+    {
+     "name": "CRT_GROUND",
+     "kind": "const",
+     "doc": "The color behind the canvas: the screen's black.",
+     "type": "\"rgb(0 0 0)\""
+    },
+    {
+     "name": "BLUEPRINT_PAPERS",
+     "kind": "const",
+     "doc": "The papers a blueprint can be drawn on, each with its lines (sRGB 0–1).",
+     "type": "{ id: string; label: string; paper: Rgb01; ink: Rgb01 }[]"
+    },
+    {
+     "name": "BlueprintChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "paper",
+       "type": "string",
+       "doc": "The paper and its lines, an id of `BLUEPRINT_PAPERS`."
+      },
+      {
+       "name": "line",
+       "type": "number",
+       "doc": "The outline's width, in CSS pixels."
+      },
+      {
+       "name": "inner",
+       "type": "number",
+       "doc": "How strong the lines between parts are."
+      },
+      {
+       "name": "grid",
+       "type": "number",
+       "doc": "How far apart the grid's lines are, in CSS pixels (0 for none)."
+      },
+      {
+       "name": "dims",
+       "type": "boolean",
+       "doc": "Whether dimension lines are drawn."
+      },
+      {
+       "name": "fill",
+       "type": "number",
+       "doc": "How strongly the subject is washed in the line color."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "A palette whose darkest color is the paper and lightest the lines, in place of `paper`: 'none' keeps the paper's own."
+      }
+     ]
+    },
+    {
+     "name": "BLUEPRINT_START",
+     "kind": "const",
+     "doc": "Where the blueprint's settings start.",
+     "type": "BlueprintChoice"
+    },
+    {
+     "name": "blueprintColors",
+     "kind": "function",
+     "doc": "The paper and lines a blueprint is drawn in: the paper's own, or a palette's darkest and lightest (sRGB 0–255).",
+     "signatures": [
+      {
+       "code": "blueprintColors(c: BlueprintChoice, palette?: readonly (readonly number[])[]): { paper: Rgb01; ink: Rgb01 }"
+      }
+     ]
+    },
+    {
+     "name": "blueprintLook",
+     "kind": "function",
+     "doc": "The look for the stage.",
+     "signatures": [
+      {
+       "code": "blueprintLook(c: BlueprintChoice, palette?: readonly (readonly number[])[]): BlueprintLook"
+      }
+     ]
+    },
+    {
+     "name": "blueprintGround",
+     "kind": "const",
+     "doc": "The color behind the canvas: the paper.",
+     "type": "(c: BlueprintChoice, palette?: readonly (readonly number[])[]) => string"
+    },
+    {
+     "name": "MOSAIC_GROUTS",
+     "kind": "const",
+     "doc": "The grouts a mosaic can be set in (sRGB 0–1).",
+     "type": "{ id: string; label: string; color: Rgb01 }[]"
+    },
+    {
+     "name": "MosaicChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "tile",
+       "type": "number",
+       "doc": "A tile's side, in CSS pixels."
+      },
+      {
+       "name": "grout",
+       "type": "number",
+       "doc": "The grout's width, in CSS pixels."
+      },
+      {
+       "name": "groutColor",
+       "type": "string",
+       "doc": "The grout, an id of `MOSAIC_GROUTS`."
+      },
+      {
+       "name": "vary",
+       "type": "number",
+       "doc": "How much tiles differ."
+      },
+      {
+       "name": "bevel",
+       "type": "number",
+       "doc": "How much each tile's edges catch light."
+      },
+      {
+       "name": "brick",
+       "type": "boolean",
+       "doc": "Rows set like bricks."
+      },
+      {
+       "name": "sky",
+       "type": "boolean",
+       "doc": "Whether the subject's sky is set behind it in tiles, or plain stone tiles."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from first: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "MOSAIC_START",
+     "kind": "const",
+     "doc": "Where the mosaic's settings start.",
+     "type": "MosaicChoice"
+    },
+    {
+     "name": "MOSAIC_SKY",
+     "kind": "const",
+     "doc": "The sky set in tiles behind a subject with no sky of its own (sRGB 0–1).",
+     "type": "Sky01"
+    },
+    {
+     "name": "mosaicLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255).",
+     "signatures": [
+      {
+       "code": "mosaicLook(c: MosaicChoice, sky?: Sky255): MosaicLook"
+      }
+     ]
+    },
+    {
+     "name": "mosaicGround",
+     "kind": "const",
+     "doc": "The color behind the canvas: the grout.",
+     "type": "(c: MosaicChoice) => string"
+    },
+    {
+     "name": "CutoutChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "shadow",
+       "type": "number",
+       "doc": "How far a layer's shadow falls, in CSS pixels."
+      },
+      {
+       "name": "soft",
+       "type": "number",
+       "doc": "How soft the shadow is."
+      },
+      {
+       "name": "light",
+       "type": "number",
+       "doc": "Where the light comes from on the screen, in degrees (0 from the right, 90 from above)."
+      },
+      {
+       "name": "grain",
+       "type": "number",
+       "doc": "The paper's fibers."
+      },
+      {
+       "name": "edge",
+       "type": "number",
+       "doc": "The pale cut edge toward the light, in CSS pixels."
+      },
+      {
+       "name": "ragged",
+       "type": "number",
+       "doc": "How ragged the cut edges are."
+      },
+      {
+       "name": "fills",
+       "type": "number",
+       "doc": "How many flat colors each part's own are gathered into (each a sheet of paper)."
+      },
+      {
+       "name": "sky",
+       "type": "boolean",
+       "doc": "Whether the subject's sky is the card behind it, or plain card."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the paper is cut from: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "CUTOUT_START",
+     "kind": "const",
+     "doc": "Where paper cutout's settings start.",
+     "type": "CutoutChoice"
+    },
+    {
+     "name": "cutoutLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255).",
+     "signatures": [
+      {
+       "code": "cutoutLook(c: CutoutChoice, sky?: Sky255): CutoutLook"
+      }
+     ]
+    },
+    {
+     "name": "cutoutGround",
+     "kind": "const",
+     "doc": "The color behind the canvas: the card.",
+     "type": "(c: CutoutChoice, sky?: Sky255) => string"
+    },
+    {
+     "name": "CLAY_RATES",
+     "kind": "const",
+     "doc": "How fast claymation moves, as the page offers it.",
+     "type": "{ id: number; label: string; about: string }[]"
+    },
+    {
+     "name": "ClayChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "fps",
+       "type": "number",
+       "doc": "Frames a second; 0 moves every frame."
+      },
+      {
+       "name": "prints",
+       "type": "number",
+       "doc": "How deep the thumbprints are."
+      },
+      {
+       "name": "size",
+       "type": "number",
+       "doc": "How big a thumbprint is, as a share of the scene."
+      },
+      {
+       "name": "smooth",
+       "type": "number",
+       "doc": "How smooth the clay is."
+      },
+      {
+       "name": "sheen",
+       "type": "number",
+       "doc": "How much the clay shines."
+      },
+      {
+       "name": "boil",
+       "type": "number",
+       "doc": "How much the thumbprints shift from frame to frame."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the clay is mixed from: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "CLAY_START",
+     "kind": "const",
+     "doc": "Where claymation's settings start.",
+     "type": "ClayChoice"
+    },
+    {
+     "name": "clayLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255). Under reduced motion it moves smoothly and the prints hold.",
+     "signatures": [
+      {
+       "code": "clayLook(c: ClayChoice, sky?: Sky255, still?: boolean): ClayLook"
+      }
+     ]
+    },
+    {
+     "name": "clayGround",
+     "kind": "const",
+     "doc": "The color behind the canvas: the backdrop.",
+     "type": "(sky?: Sky255) => string"
+    }
+   ]
+  },
+  {
    "id": "styles-knitLooks",
    "title": "Knitting, as settings",
    "group": "styles",
@@ -15436,6 +18027,75 @@
      "signatures": [
       {
        "code": "knitLook(c: KnitChoice, steady?: number): KnitLook"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "styles-anaglyphLooks",
+   "title": "3D glasses, as settings",
+   "group": "styles",
+   "doc": "",
+   "entries": [
+    {
+     "name": "ANAGLYPH",
+     "kind": "const",
+     "doc": "The chip beside the drawn looks (brushLooks.ts).",
+     "type": "{ id: \"anaglyph\"; label: string; note: string }"
+    },
+    {
+     "name": "ANAGLYPH_MIX_CHOICES",
+     "kind": "const",
+     "doc": "The mixes as the page offers them.",
+     "type": "{ id: AnaglyphMix; label: string; about: string }[]"
+    },
+    {
+     "name": "AnaglyphChoice",
+     "kind": "interface",
+     "doc": "What the page's controls make.",
+     "props": [
+      {
+       "name": "depth",
+       "type": "number",
+       "doc": "How deep it looks, as a share of the usual eyes."
+      },
+      {
+       "name": "pop",
+       "type": "number",
+       "doc": "How far the screen stands behind what the view looks at, as a share of the distance to it."
+      },
+      {
+       "name": "mix",
+       "type": "AnaglyphMix",
+       "doc": "How the two pictures are mixed."
+      },
+      {
+       "name": "palette",
+       "type": "string",
+       "doc": "The palette the scene is painted from before it is drawn: 'none' keeps its own colors, 'own' is the scene's, else a shared one."
+      }
+     ]
+    },
+    {
+     "name": "ANAGLYPH_START",
+     "kind": "const",
+     "doc": "Where 3D glasses' settings start.",
+     "type": "AnaglyphChoice"
+    },
+    {
+     "name": "anaglyphGround",
+     "kind": "const",
+     "doc": "The color to put behind the canvas before the picture is drawn (the pass covers it): the subject's sky where it has one, else the dark backdrop.",
+     "type": "(sky?: readonly [readonly number[], readonly number[]]) => string"
+    },
+    {
+     "name": "anaglyphLook",
+     "kind": "function",
+     "doc": "The look for the stage; `sky` is the subject's own, top and bottom (sRGB 0–255), which stands behind it at the screen.",
+     "signatures": [
+      {
+       "code": "anaglyphLook(c: AnaglyphChoice, sky?: readonly [readonly number[], readonly number[]]): AnaglyphLook"
       }
      ]
     }
@@ -17766,6 +20426,158 @@
        "code": "screenRadius(radius: number, depth: number, p11: number, height: number): number"
       }
      ]
+    },
+    {
+     "name": "FarRule",
+     "kind": "interface",
+     "doc": "Level of detail for blobs too small to see, blob by blob: for one actor as big as a world (an island a hundred and\nfifty meters across, the camera standing on it), where the actor's own size on screen says nothing. A blob that\nwould come under `pixels` on screen (its largest standard deviation, far off or just small) is kept by the share of\nthat it would fill, so fewer are drawn the smaller they get, each grown to cover for those left out: far ground is\ndrawn by about as many blobs as the pixels it covers, which also stops far fine detail shimmering, while a big soft\ncloud at the same distance keeps every blob. Which go is `lodRank` again, so the same blobs go each time.",
+     "props": [
+      {
+       "name": "pixels",
+       "type": "number",
+       "doc": "The least a blob's size may come to on screen (its largest standard deviation, in pixels of the picture) before blobs thin out."
+      },
+      {
+       "name": "least",
+       "type": "number",
+       "doc": "Never fewer than this share of the blobs, however small."
+      }
+     ]
+    },
+    {
+     "name": "FAR",
+     "kind": "const",
+     "doc": "Blobs thin out where they would come under about a pixel, and never under 5% of them.",
+     "type": "FarRule"
+    },
+    {
+     "name": "FAR_BAND",
+     "kind": "const",
+     "doc": "How far before it goes a blob starts to shrink, as a share of the ranks: a blob shrinks away rather than blinks out.",
+     "type": "0.1"
+    },
+    {
+     "name": "FAR_SPREAD",
+     "kind": "const",
+     "doc": "How much more than the area left out the blobs kept grow to cover, when few are kept: blobs thinned at random\nleave chance gaps between them, which a surface of opaque discs showed as specks of what lies behind (clouds of\nsmall blobs came out grainy). Eased in from nothing as blobs start to thin out, so nothing jumps.",
+     "type": "2"
+    },
+    {
+     "name": "farKeep",
+     "kind": "function",
+     "doc": "The share of blobs kept where a blob's largest standard deviation on screen squared is `px2` (pixels²).",
+     "signatures": [
+      {
+       "code": "farKeep(px2: number, options: FarRule): number"
+      }
+     ]
+    },
+    {
+     "name": "farSize",
+     "kind": "function",
+     "doc": "What a blob's covariance is multiplied by, by its `rank` (`lodRank`), where its largest standard deviation on screen\nsquared is `px2`: 0 left out, else grown by one over the area kept (and `FAR_SPREAD`), and shrinking toward 0 over `FAR_BAND` as it\nnears its turn to go. `farSizeNode` in engine.ts is its twin (in `projectSplat`); change both.",
+     "signatures": [
+      {
+       "code": "farSize(rank: number, px2: number, rule: FarRule): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "merge",
+   "title": "Merged blobs for far ground",
+   "group": "extras",
+   "doc": "",
+   "entries": [
+    {
+     "name": "MERGE_LEVELS",
+     "kind": "const",
+     "doc": "How many coarser levels: cells two and four times the blobs' own.",
+     "type": "2"
+    },
+    {
+     "name": "MERGE_PX",
+     "kind": "const",
+     "doc": "A level gives way to the next coarser one where its cells come under this many pixels across on screen.",
+     "type": "1.5"
+    },
+    {
+     "name": "MERGE_BAND",
+     "kind": "const",
+     "doc": "Over how much of `MERGE_PX` (either side) one level hands over to the next.",
+     "type": "0.25"
+    },
+    {
+     "name": "MERGE_GROW",
+     "kind": "const",
+     "doc": "How much wider a merged blob is than the spread of what it stands for (standard deviations): the mean and spread\nof a cell of touching discs is a blob a third the cell wide, which left the far ground see-through between cells.",
+     "type": "1.35"
+    },
+    {
+     "name": "levelCode",
+     "kind": "function",
+     "doc": "The byte a blob carries for its level: 0 for a blob in no level (drawn at every distance), else its level and the coarsest.",
+     "signatures": [
+      {
+       "code": "levelCode(level: number, top: number): number"
+      }
+     ]
+    },
+    {
+     "name": "levelWeight",
+     "kind": "function",
+     "doc": "How much of a blob is drawn (0 to 1, opacity) where a cell of the finest level is `px` pixels across on screen\n(its side over its distance, at the blob), for its `levelCode`: a level shows from where its finer level's cells\ncome under `MERGE_PX` to where its own do, coming in fully over the band before the finer one starts to go.",
+     "signatures": [
+      {
+       "code": "levelWeight(px: number, code: number): number"
+      }
+     ]
+    },
+    {
+     "name": "Mergeable",
+     "kind": "interface",
+     "doc": "An actor's blobs and what rides with each, as `mergeLevels` takes and gives them.",
+     "props": [
+      {
+       "name": "blobs",
+       "type": "Blobs",
+       "doc": "The blobs in the rest pose."
+      },
+      {
+       "name": "skin",
+       "type": "Skin",
+       "doc": "Which bones move each blob: only a blob wholly on one bone is merged."
+      },
+      {
+       "name": "partOf",
+       "optional": true,
+       "type": "ArrayLike<number>",
+       "doc": "Which part each blob belongs to (the engine's `Actor.partOf`)."
+      },
+      {
+       "name": "seen",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of each of the first four lights each blob sees, four bytes a blob (`Actor.seen`)."
+      },
+      {
+       "name": "glow",
+       "optional": true,
+       "type": "Uint8Array<ArrayBufferLike>",
+       "doc": "How much of its own light each blob gives, a byte a blob (`Actor.glow`)."
+      }
+     ]
+    },
+    {
+     "name": "mergeLevels",
+     "kind": "function",
+     "doc": "The blobs with coarser levels added after them: on grids of `cell` (the side the blobs were cut on) times 2, 4 …\n(`levels` of them), cells counted from the origin of the blobs' own frame so a coarse cell holds whole finer ones,\none blob a cell and bone from the blobs on that bone alone. A blob on more than one bone, or clear, stays in no\nlevel and is drawn at every distance. Each blob counts by its opacity times the area of its two widest axes; a\nmerged blob takes their weighted color, opacity, glow and sight of lamps, the part of the heaviest, and their mean\nand spread (each blob's own shape plus where it stands), grown by `MERGE_GROW`. `levels` is each blob's `levelCode`.",
+     "signatures": [
+      {
+       "code": "mergeLevels(a: Mergeable, cell: number, levels?: number): Mergeable & { levels: Uint8Array }"
+      }
+     ]
     }
    ]
   },
@@ -17885,6 +20697,16 @@
      "signatures": [
       {
        "code": "bakeEdits(b: Blobs, edits: readonly ShapeEdit[]): Blobs"
+      }
+     ]
+    },
+    {
+     "name": "exactFalloff",
+     "kind": "function",
+     "doc": "Exact shapes (`EngineOptions.exactShapes`): how much of a blob the line of sight from `from` along `dir` meets, as\nthe Gaussian's falloff at the densest point along it, 1 through the middle. `cov` is the world covariance (xx, xy,\nxz, yy, yz, zz) and `widen` is added to its diagonal first (the draw adds a pixel's `KERNEL_2D` at the blob's depth,\nwhich gives a flat disc a thickness). Measured from the densest point, not as the center's distance less the part\nalong the ray, which a small blob far away loses to rounding. CPU twin of the draw's `exactFalloff`; change both.",
+     "signatures": [
+      {
+       "code": "exactFalloff(from: ArrayLike<number>, dir: ArrayLike<number>, center: ArrayLike<number>, cov: ArrayLike<number>, widen?: number): number"
       }
      ]
     }
@@ -18286,6 +21108,115 @@
      "signatures": [
       {
        "code": "rolledOff(brightest: number, start: number): number"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "peel",
+   "title": "See-through blobs that cross",
+   "group": "extras",
+   "doc": "",
+   "entries": [
+    {
+     "name": "MAX_PEEL",
+     "kind": "const",
+     "doc": "The most layers `SplatPeel` takes from the front of each pixel.",
+     "type": "6"
+    },
+    {
+     "name": "Peelable",
+     "kind": "interface",
+     "doc": "What a world hands a peel (a `SplatWorld` made with `peel`): its draw's material, and the switches its fragment reads.",
+     "props": [
+      {
+       "name": "material",
+       "type": "Material",
+       "doc": "The material it draws with; the peel swaps in its own for the layers and puts this back."
+      },
+      {
+       "name": "hold",
+       "type": "boolean",
+       "doc": "While true it draws the last frame's blobs without moving or sorting them again: the layers after the first."
+      },
+      {
+       "name": "peelMode",
+       "type": "number",
+       "doc": "0 off; 1 a layer (only the nearest blob still in front of `prev` is kept); 2 the rest (only what lies behind `prev`)."
+      },
+      {
+       "name": "peelFirst",
+       "type": "boolean",
+       "doc": "Whether this layer is the first, with nothing in front of it to be behind."
+      }
+     ],
+     "methods": [
+      {
+       "name": "peelBehind",
+       "doc": "The depth of the layer before, read where each pixel is.",
+       "signatures": [
+        {
+         "code": "peelBehind(depth: DepthTexture): void"
+        }
+       ]
+      },
+      {
+       "name": "buildFor",
+       "doc": "Builds its draw's shaders for the backend, so the peel can draw with them.",
+       "signatures": [
+        {
+         "code": "buildFor(renderer: WebGPURenderer): void"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "SplatPeel",
+     "kind": "class",
+     "doc": "See-through blobs in the right order where they cross (after Silicon Jungle's Ink Studio's surface order, by\nagreement; our own method). The engine sorts blobs by their middles and lays them back to front, which is right\nuntil two see-through blobs cross: then one is wholly in front of the other where they overlap, and as the view\nturns past where their middles change places, that flips all at once. Here each pixel's nearest `layers` blobs are\ntaken off the front one at a time (depth peeling), each at its own depth on its own plane (`placeQuad` slopes a\nblob's corners), so where two cross each is in front on its own side; whatever lies behind the last layer is laid as\nbefore, and the layers go over it front to back. Costs a draw of the blobs per layer and one more.\n\nEverything else in the scene (a floor, meshes) is drawn first, under all the blobs: it suits a creature or a\njellyfish over a floor or a sky, not blobs among solid things.",
+     "ctor": [
+      {
+       "code": "new SplatPeel(layers?: number)"
+      }
+     ],
+     "methods": [
+      {
+       "name": "setLayers",
+       "doc": "How many blobs to take off the front of each pixel, 1 to `MAX_PEEL`.",
+       "signatures": [
+        {
+         "code": "setLayers(layers: number): void"
+        }
+       ]
+      },
+      {
+       "name": "setSize",
+       "doc": "Sizes the targets, in pixels.",
+       "signatures": [
+        {
+         "code": "setSize(width: number, height: number): void"
+        }
+       ]
+      },
+      {
+       "name": "render",
+       "doc": "Draws `scene` from `camera` into the renderer's current target, with every world in it peeled.",
+       "signatures": [
+        {
+         "code": "render(renderer: WebGPURenderer, scene: Object3D, camera: Camera): void"
+        }
+       ]
+      },
+      {
+       "name": "dispose",
+       "doc": "Frees its targets and materials.",
+       "signatures": [
+        {
+         "code": "dispose(): void"
+        }
+       ]
       }
      ]
     }

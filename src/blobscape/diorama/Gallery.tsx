@@ -1,6 +1,9 @@
 import { LOOP_SIZE, LOOPS, loopSrc } from './loops.ts'
 
-/** One recorded loop, scaled up with no smoothing; anyone who asks for less motion gets its first frame. */
+/**
+ * One recorded loop; anyone who asks for less motion gets its first frame. Pixel art's loops (at most `LOOP_SIZE`
+ * wide) are scaled up with no smoothing; a loop recorded wider is a style other than pixel art, drawn smoothly.
+ */
 export function Loop({ id }: { id: string }) {
   return (
     <picture>
@@ -12,6 +15,7 @@ export function Loop({ id }: { id: string }) {
         height={LOOP_SIZE.height}
         loading="lazy"
         decoding="async"
+        onLoad={(e) => { if (e.currentTarget.naturalWidth > LOOP_SIZE.width) e.currentTarget.style.imageRendering = 'auto' }}
         className="block aspect-[410/307] h-auto w-full case rounded-xl bg-paper ring-1 ring-rule [image-rendering:pixelated]"
       />
     </picture>

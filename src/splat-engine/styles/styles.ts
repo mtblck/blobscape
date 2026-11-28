@@ -5,16 +5,28 @@ import { BLOCKS } from './blockLooks.ts'
 import { NEON } from './neonLooks.ts'
 import { GLASS } from './glassLooks.ts'
 import { WASH } from './washLooks.ts'
+import { HALFTONE } from './halftoneLooks.ts'
 import { KNIT } from './knitLooks.ts'
 import { GLITCH } from './glitchLooks.ts'
+import { ANAGLYPH } from './anaglyphLooks.ts'
+import { FILTERS } from './filterLooks.ts'
 
 const PIXEL = { id: 'pixel' as const, label: 'Pixel art', note: 'Drawn small, snapped to a palette and scaled up in whole pixels.' }
 
 /** How a scene is drawn: as pixel art (plain or glitching), or as one of Brush and Ink's looks. */
-export type Style = typeof PIXEL.id | typeof GLITCH.id | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof KNIT.id | (typeof LOOKS)[number]['id']
+export type Style = typeof PIXEL.id | typeof GLITCH.id | typeof CEL.id | typeof BLOCKS.id | typeof NEON.id | typeof GLASS.id | typeof WASH.id | typeof KNIT.id | typeof ANAGLYPH.id | typeof HALFTONE.id | (typeof FILTERS)[number]['id'] | (typeof LOOKS)[number]['id']
 
 /** Blocks first, then pixel art and tech glitch (pixel art too), then the looks in Brush and Ink's own order (the plain blobs last). */
-export const STYLES: { id: Style; label: string; note: string }[] = [BLOCKS, PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, NEON, GLASS, WASH, KNIT, LOOKS[LOOKS.length - 1]]
+export const STYLES: { id: Style; label: string; note: string }[] = [BLOCKS, PIXEL, GLITCH, ...LOOKS.slice(0, -1), CEL, NEON, GLASS, WASH, KNIT, ANAGLYPH, HALFTONE, ...FILTERS, LOOKS[LOOKS.length - 1]]
+
+/** Styles kept in the code, the address and kept scenes but offered in no picker (Matt, 2026-11-25: claymation is not ready yet). */
+export const HIDDEN_STYLES: readonly Style[] = ['clay']
+
+/** Whether a style is offered in a picker. */
+export const offered = (style: string): boolean => !HIDDEN_STYLES.includes(style as Style)
+
+/** The styles a picker offers: `STYLES` without the hidden ones. */
+export const PICKED_STYLES = STYLES.filter((s) => offered(s.id))
 
 /** The style a page starts in, and the one a plain address means: blocks. Every other style is named in the address (`?style=pixel`). */
 export const DEFAULT_STYLE: Style = BLOCKS.id
@@ -39,11 +51,19 @@ export function styleWords(style: Style): string {
   if (style === 'ascii') return 'as text'
   if (style === 'boxart') return 'as box art'
   if (style === 'knit') return 'as knitting'
+  if (style === 'anaglyph') return 'in red and cyan 3D'
+  if (style === 'halftone') return 'as a halftone print'
+  if (style === 'clay') return 'in clay'
+  if (style === 'blueprint') return 'as a blueprint'
+  if (style === 'thermal') return 'through a thermal camera'
+  if (style === 'cutout') return 'in cut paper'
+  if (style === 'mosaic') return 'as a mosaic'
+  if (style === 'crt') return 'on an old television'
   return `in ${STYLES.find((s) => s.id === style)!.label.toLowerCase()}`
 }
 
 /** Whether a style is drawn as pixel art underneath (pixel mode, its palette and finish): pixel art itself and tech glitch. */
 export const isPixelStyle = (style: Style): style is 'pixel' | 'glitch' => style === 'pixel' || style === 'glitch'
 
-/** Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass, blocks and knitting (which wants each thing in its own flat colors). */
-export const lightsItself = (style: Style | undefined): boolean => style === 'cel' || style === 'neon' || style === 'glass' || style === 'blocks' || style === 'knit'
+/** Whether a style lights the scene itself, so the scene is cut with no light baked in: cel shading, neon, stained glass, blocks, knitting and paper cutout (which want each thing in its own flat colors). */
+export const lightsItself = (style: Style | undefined): boolean => style === 'cel' || style === 'neon' || style === 'glass' || style === 'blocks' || style === 'knit' || style === 'cutout'

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { STEADY } from '../splat-core/pixel.ts'
+import { FULL_LEVELS, STEADY, rampPalette } from '../splat-core/pixel.ts'
 import { readFileSync } from 'node:fs'
 import { cutAsk, detailStart, pixelSizeAt, pixelZoomAsked, pixelCelLook, pixelFlags, pixelFor, pixelFrom, pixelLookOf, pixelStart, styleStart, type Finish } from './styleSettings.ts'
 
@@ -10,7 +10,7 @@ const sky: [[number, number, number], [number, number, number]] = [[0, 0, 40], [
 
 test('a scene’s finish starts pixel art, and the address overrides it', () => {
   const s = pixelStart(FINISH)
-  assert.equal(s.palette, 'own')
+  assert.equal(s.palette, 'none')
   assert.equal(s.dither, 0.5)
   assert.equal(s.glow, 1.5)
   assert.equal(s.outline, true)
@@ -28,7 +28,7 @@ test('a scene’s finish starts pixel art, and the address overrides it', () => 
 test('a new scene brings its own finish and keeps the visitor’s other choices', () => {
   const was = { ...pixelStart(FINISH), palette: 'gameboy', size: 4, own: false, shade: true }
   const next = pixelFor(was, { ...FINISH, dither: 0.2, outline: false, heat: undefined })
-  assert.deepEqual([next.palette, next.dither, next.outline, next.heat], ['own', 0.2, false, 0])
+  assert.deepEqual([next.palette, next.dither, next.outline, next.heat], ['none', 0.2, false, 0])
   assert.deepEqual([next.size, next.own, next.shade], [4, false, true])
 })
 
@@ -43,10 +43,20 @@ test('settings kept by an older page are read back over a start', () => {
 })
 
 test('the pixel look follows the settings and the scene', () => {
-  const s = pixelStart(FINISH)
+  const s = { ...pixelStart(FINISH), palette: 'own' }
   const look = pixelLookOf(s, { colors: own, sky, finish: FINISH, loop: 12 })
-  assert.deepEqual(look.palette, own)
+  // the scene's own palette with its ramp (a step darker and lighter of each color), and only its own
+  assert.deepEqual(look.palette, rampPalette(own))
+  assert.deepEqual(look.palette.slice(0, own.length), own)
+  assert.deepEqual(pixelLookOf(s, { colors: own, finish: FINISH, loop: 12 }, pixelFlags(new URLSearchParams('ramps=0'))).palette, own)
+  assert.deepEqual(pixelLookOf({ ...s, palette: 'gameboy' }, { colors: own, finish: FINISH, loop: 12 }).palette, own)
   assert.deepEqual(look.outline, [10, 20, 30])
+  // full color rounds to even steps; a palette has none
+  assert.equal(look.levels, undefined)
+  assert.equal(pixelLookOf({ ...s, palette: 'none' }, { colors: [], finish: FINISH, loop: 12 }).levels, FULL_LEVELS)
+  // Full color is no palette whatever colors a page hands in, with the outline still the darkest of them
+  const full = pixelLookOf({ ...s, palette: 'none' }, { colors: own, finish: FINISH, loop: 12 })
+  assert.deepEqual([full.palette, full.levels, full.outline], [[], FULL_LEVELS, [10, 20, 30]])
   assert.deepEqual(look.sky, sky)
   assert.equal(look.edges, 1)
   assert.equal(look.parts, true)

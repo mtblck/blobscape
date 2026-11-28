@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { STAGE_FOV, type Orbit } from '../splat-core/orbit.ts'
-import { STEADY, countColors, darkest, type PixelLook } from '../splat-core/pixel.ts'
+import { FULL_LEVELS, STEADY, countColors, darkest, type PixelLook } from '../splat-core/pixel.ts'
 import { useStyleOnStage } from './useStyleOnStage.ts'
 import type { Built } from '../splat-engine/body.ts'
 import type { Skeleton } from '../splat-engine/rig.ts'
@@ -79,7 +79,7 @@ export function FourWays() {
   const [box, setBox] = useState<{ width: number; height: number }>()
 
   const look = useMemo<PixelLook>(() => ({
-    ...scene.look, outline: outline ? darkest(scene.palette) : null, steady: steady ? STEADY : 0, tidy: true, fine: true, own: true, parts: false,
+    ...scene.look, palette: [], levels: FULL_LEVELS, outline: outline ? darkest(scene.palette) : null, steady: steady ? STEADY : 0, tidy: true, fine: true, own: true, parts: false,
   }), [scene, outline, steady])
 
   // how big one art pixel is: a whole number of device pixels, so every panel's pixels are the same size
@@ -102,7 +102,7 @@ export function FourWays() {
   useEffect(() => {
     let live: CreatureStage | undefined, gone = false
     import('./creature/stage.ts')
-      .then(({ CreatureStage }) => CreatureStage.start(stageCanvas.current!, { offscreen, lights: true, webgl: params().get('webgl') === '1', shadowDensity: Number(params().get('density') ?? SHADOW_DENSITY) }))
+      .then(({ CreatureStage }) => CreatureStage.start(stageCanvas.current!, { offscreen, lights: true, timer: true, webgl: params().get('webgl') === '1', shadowDensity: Number(params().get('density') ?? SHADOW_DENSITY) }))
       .then((s) => {
         if (gone) { s.dispose(); return }
         live = s
@@ -223,8 +223,10 @@ export function FourWays() {
       if (stage && built && shown('blobscape') && now - lastTimed > 1000) {
         lastTimed = now
         timing = true
-        // several frames to one wait where a frame is quick (see `timed`), one where it is slow
-        stage.timed((spent.current.blobscape ?? 100) > 25 ? 1 : 8).then((took) => { spent.current.blobscape = spent.current.blobscape === undefined ? took : spent.current.blobscape * 0.7 + took * 0.3 }, () => {}).finally(() => { timing = false })
+        // the GPU's own clock where it has one (a frame takes the longer of the CPU's share and the GPU's, which overlap); else several frames to one wait where a frame is quick (see `timed`), one where it is slow
+        const frames = (spent.current.blobscape ?? 100) > 25 ? 1 : 8
+        const took = stage.timesGpu ? stage.gpuTimes(frames).then((g) => (g ? Math.max(g.cpu, g.compute + g.render) : stage.timed(frames))) : stage.timed(frames)
+        took.then((took) => { spent.current.blobscape = spent.current.blobscape === undefined ? took : spent.current.blobscape * 0.7 + took * 0.3 }, () => {}).finally(() => { timing = false })
       }
     }
     raf = requestAnimationFrame(tick)
@@ -338,7 +340,7 @@ export function FourWays() {
         </>}
         status={<>
           <span>{built ? <><span className="tabular-nums text-ink" data-testid="four-blobs">{built.built.blobs.count.toLocaleString()}</span> blobs, made in {built.seconds.toFixed(1)} s, for Blobscape and Spark{built.scene.made(built.built) ? `: ${built.scene.made(built.built)}` : ''}.</> : 'Making the scene’s blobs…'}</span>
-          <span>{planned ? `Each picture ${planned.width} × ${planned.height}, ${scene.palette.length} colors` : ''}</span>
+          <span>{planned ? `Each picture ${planned.width} × ${planned.height}, full color` : ''}</span>
         </>}
         tabsLabel="Options"
         tabs={[
@@ -374,7 +376,7 @@ export function FourWays() {
                   <div className="flex flex-wrap gap-1.5" data-testid="four-across">
                     {ACROSS.map((a) => <Chip key={a.id} active={across === a.id} onClick={() => setAcross(a.id)}>{a.label}</Chip>)}
                   </div>
-                  <p className="mt-1.5 text-xs text-ink-faint">The same for all four, with the scene’s own palette and Diorama’s dither.</p>
+                  <p className="mt-1.5 text-xs text-ink-faint">The same for all four, in full color with Diorama’s dither.</p>
                 </Field>
                 <Toggle label="Outline" checked={outline} onChange={setOutline} />
                 <div>

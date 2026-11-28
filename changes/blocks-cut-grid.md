@@ -1,0 +1,1 @@
+Blocks snap to the grid a scene was cut on wherever it is drawn: a cut now records its grid (`Built.grid`) and `gridOf` takes it before guessing from the subject's size, which left rows of gaps between the cubes in Style Morph.

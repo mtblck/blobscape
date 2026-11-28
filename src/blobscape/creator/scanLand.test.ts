@@ -48,3 +48,20 @@ test('a scan land opens as a project the checker takes', () => {
   assert.deepEqual(checkProject(p, known), [])
   assert.equal(p.props.length, 0)
 })
+
+test('a scan land takes the scene\'s sun (#463): baked under it, and its paint alone where light is live', async () => {
+  const { cut } = await import('./cut.ts')
+  const { modelFrom } = await import('./models.ts')
+  const { stillActor } = await import('../scan/studio.ts')
+  const land = landFromScan(sampleScan(7, 0.3).blobs)
+  const m = modelFrom({ name: 'Desk', ...stillActor(land), clips: [] }, 'desk.ply', new Uint8Array([7, 7]))
+  const project = scanProject(m.id, 'Desk')
+  const job = (light: object | undefined, plain = false) => cut({ kind: 'land', project: { ...project, light }, spacing: 0.05, plain, model: { kind: 'splats', rest: m.rest } }).blobs
+  const paint = job(undefined, true)
+  const low = job({ sun: { turn: 0, height: 10 }, shade: 0.2 }), high = job({ sun: { turn: 0, height: 80 }, shade: 0.2 })
+  assert.equal(paint.count, land.count)
+  // the table's top faces up: a high sun lights it more than a low one
+  let hi = 0, lo = 0
+  for (let i = 0; i < land.count; i++) if (Math.abs(land.center[i * 3 + 1]) < 0.03) { hi += high.color[i * 3 + 1]; lo += low.color[i * 3 + 1] }
+  assert.ok(hi > lo * 1.2, `${hi} vs ${lo}`)
+})

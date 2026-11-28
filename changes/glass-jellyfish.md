@@ -1,0 +1,1 @@
+Glass Jellyfish: a see-through moon jelly of nearly clear Gaussian splats drifting in space, with pulses of light that run from the top of its bell down its canals and along its tentacles, in one color or a rainbow.
